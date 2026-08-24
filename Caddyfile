@@ -1,0 +1,15 @@
+# Followa reverse proxy — automatic HTTPS via Let's Encrypt when real
+# domains are set in WEB_DOMAIN / API_DOMAIN. Falls back to plain :80
+# (IP-only access) otherwise.
+
+{$WEB_DOMAIN} {
+	# API first: /api/* and uploaded file streams go to Fastify
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+
+	# everything else → Next.js
+	handle {
+		reverse_proxy web:3000
+	}
+}

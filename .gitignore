@@ -34,3 +34,6 @@ coverage/
 .turbo/
 
 # prisma client generated output is inside node_modules by default; keep migrations in VCS
+
+# production env (filled on VM)
+.env.prod
