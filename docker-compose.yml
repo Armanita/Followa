@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: followa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: followa
+      POSTGRES_PASSWORD: followa_dev_password
+      POSTGRES_DB: followa
+    ports:
+      - "5433:5432"
+    volumes:
+      - followa_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U followa -d followa"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  followa_pgdata:
