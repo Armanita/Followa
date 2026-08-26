@@ -4,8 +4,14 @@
     {
       "name": "followa-web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "apps/web", "start"],
+      "runtimeArgs": ["--dir", "apps/web", "dev"],
       "port": 3000
+    },
+    {
+      "name": "followa-api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/api", "dev"],
+      "port": 3001
     }
   ]
 }

@@ -41,6 +41,33 @@ sudo bash scripts/oci-bootstrap.sh          # docker + compose + ufw (22/80/443 
 
 ## 4. Configure and launch
 
+### 4a. Fetch pnpm seed tarballs (required before first build)
+
+`apps/api/Dockerfile` pre-seeds the pnpm store with the two Prisma packages
+(`prisma` + `@prisma/client`, ~43 MB combined) to work around a Docker NAT/MTU
+issue that causes large tarball downloads to fail intermittently inside
+`docker build`. These files are **not committed to git** — fetch them once on
+the server before the initial build:
+
+```bash
+cd /opt/followa
+bash scripts/fetch-pnpm-seed.sh
+# downloads prisma-6.19.3.tgz and client-6.19.3.tgz into docker/pnpm-seed/
+# verifies each file's SHA-512 against pnpm-lock.yaml — fails loudly on mismatch
+# idempotent: re-running is safe, already-valid files are left untouched
+```
+
+On **Windows** (local development only):
+```powershell
+pwsh -File scripts\fetch-pnpm-seed.ps1
+```
+
+The script reads exact versions and integrity hashes from `pnpm-lock.yaml` —
+nothing is "latest", no credentials are required, and a hash mismatch is a
+hard failure.
+
+### 4b. Set secrets and start the stack
+
 ```bash
 cd /opt/followa
 cp .env.prod.example .env

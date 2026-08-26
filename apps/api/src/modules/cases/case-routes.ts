@@ -14,6 +14,10 @@ const actorFrom = (request: { actor: { id: string; companyId?: string; role?: st
   role: (request.actor.role ?? 'EMPLOYEE') as Actor['role'],
 });
 
+function isClosedStatus(status: string): boolean {
+  return status === 'DONE' || status === 'CANCELLED';
+}
+
 const createCaseSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().max(5000).optional(),
@@ -145,10 +149,16 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
 
     // Employee sees activities but assignment history is included via /assignments;
     // both are visible per spec §10 (participants can read their history).
+    const isManager = actor.role === 'COMPANY_MANAGER';
+    const isOwner = full.currentOwnerId === actor.userId;
     return {
       ...full,
-      canEdit:
-        actor.role === 'COMPANY_MANAGER' || full.currentOwnerId === actor.userId,
+      canEdit: isManager || isOwner,
+      // Managers oversee; employees execute. Operational actions are
+      // employee-only; managers get transfer/reassignment.
+      canTransfer: !isClosedStatus(full.status),
+      isManager,
+      isCurrentOwner: isOwner,
       hasPendingAcceptanceForMe: Boolean(pendingForMe),
       totalWorkSeconds: full.workSessions.reduce(
         (sum, s) => sum + (s.durationSeconds ?? 0),

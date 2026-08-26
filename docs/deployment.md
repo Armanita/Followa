@@ -42,6 +42,19 @@ Tests: `pnpm test` (21 tests; requires the database up).
 
 ## 4. Production Deployment
 
+> **Docker-based production (recommended):** see `docs/oci-deploy-runbook.md`
+> for the full Oracle Cloud / any Linux VM flow.
+>
+> **Required pre-build step:** `apps/api/Dockerfile` vendors two large Prisma
+> packages into the build context to avoid Docker NAT/MTU download failures.
+> Run once before `docker compose … build` on any clean clone:
+> ```bash
+> bash scripts/fetch-pnpm-seed.sh          # Linux / macOS / WSL
+> pwsh -File scripts\fetch-pnpm-seed.ps1   # Windows PowerShell
+> ```
+> Versions and SHA-512 hashes are read from `pnpm-lock.yaml`; a mismatch is a
+> hard failure. The script is idempotent — re-running leaves valid files alone.
+
 ### Backend
 ```bash
 pnpm install --prod=false

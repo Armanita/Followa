@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, downloadFile, getFileObjectUrl } from '@/lib/api';
 import {
   btnPrimary,
   btnSecondary,
@@ -16,7 +16,8 @@ import {
   PriorityBadge,
   Spinner,
   StatusBadge,
-  Toast,
+  useConfirm,
+  useToast,
 } from '@/components/ui';
 import { ActivityTimeline, AssignmentHistory } from '@/components/timeline';
 import { faDate, faDateTime, faDuration, toFa } from '@/lib/jalali';
@@ -33,6 +34,9 @@ interface CaseDetail {
   resultAt: string | null;
   createdAt: string;
   canEdit: boolean;
+  canTransfer: boolean;
+  isManager: boolean;
+  isCurrentOwner: boolean;
   hasPendingAcceptanceForMe: boolean;
   totalWorkSeconds: number;
   currentOwner?: { id: string; firstName: string; lastName: string } | null;
@@ -44,34 +48,32 @@ interface CaseDetail {
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [data, setData] = useState<CaseDetail | null>(null);
   const [activities, setActivities] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
-  const [myActiveSession, setMyActiveSession] = useState<any | null>(null);
+  const [workSessions, setWorkSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
-  const [modal, setModal] = useState<'' | 'result' | 'transfer' | 'reminder' | 'reject'>('');
-  const fileInput = useRef<HTMLInputElement>(null);
-
-  const showToast = (message: string, tone: 'success' | 'error') => {
-    setToast({ message, tone });
-    setTimeout(() => setToast(null), 3500);
-  };
+  const [modal, setModal] = useState<'' | 'transfer' | 'reject' | 'result'>('');
+  const [busyAction, setBusyAction] = useState(false);
+  const [preview, setPreview] = useState<{ url: string; type: string; name: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setError('');
       const detail = await api.get<CaseDetail>(`/cases/${id}`);
       setData(detail);
-      const [acts, asgns, active] = await Promise.all([
+      const [acts, asgns, sessions] = await Promise.all([
         api.get<any[]>(`/cases/${id}/activities`),
         api.get<{ items: any[] }>(`/cases/${id}/assignments`),
-        api.get<{ items: any[] }>('/work-sessions/active').catch(() => ({ items: [] })),
+        api.get<{ items: any[] }>(`/cases/${id}/work-sessions`).catch(() => ({ items: [] })),
       ]);
       setActivities(acts);
       setAssignments(asgns.items);
-      setMyActiveSession(active.items.find((s) => s.caseId === id) ?? null);
+      setWorkSessions(sessions.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'خطا');
     } finally {
@@ -98,21 +100,61 @@ export default function CaseDetailPage() {
   if (!data) return null;
 
   const isClosed = data.status === 'DONE' || data.status === 'CANCELLED';
+  // Managers oversee and reassign only; employees execute.
+  const showEmployeeActions = !data.isManager && !isClosed;
 
-  const action = async (fn: () => Promise<unknown>, successMsg: string) => {
+  /** Runs an async action with busy state + toast feedback. */
+  const runAction = async (fn: () => Promise<unknown>, successMsg: string) => {
+    if (busyAction) return;
+    setBusyAction(true);
     try {
       await fn();
-      showToast(successMsg, 'success');
+      toast.success(successMsg);
       await load();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'خطا', 'error');
+      toast.error(err instanceof Error ? err.message : 'خطای غیرمنتظره');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleTransferClick = async () => {
+    if (!data.currentOwner && data.status !== 'WAITING_ACCEPTANCE') return;
+    const ok = await confirm({
+      title: 'انتقال پرونده',
+      message:
+        data.isManager
+          ? 'پرونده برای مسئول جدید ارجاع می‌شود و در تاریخچه ثبت خواهد شد.'
+          : 'تا زمان پذیرش گیرنده، شما مسئولیت را از دست می‌دهید.',
+      confirmLabel: 'ادامه',
+    });
+    if (ok) setModal('transfer');
+  };
+
+  const openAttachment = async (f: CaseDetail['files'][number]) => {
+    setPreviewLoading(true);
+    try {
+      if (f.mimeType.startsWith('image/') || f.mimeType.startsWith('audio/') || f.mimeType === 'application/pdf') {
+        const { url, type } = await getFileObjectUrl(`/files/${f.id}/download`);
+        if (type === 'application/pdf') {
+          // PDFs open best in a new tab via blob URL
+          window.open(url, '_blank', 'noopener');
+        } else {
+          setPreview({ url, type, name: f.filename });
+        }
+      } else {
+        await downloadFile(`/files/${f.id}/download`, f.filename);
+        toast.success('فایل دانلود شد');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'خطا در باز کردن فایل');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
   return (
     <div className="space-y-5">
-      {toast && <Toast message={toast.message} tone={toast.tone} />}
-
       <button onClick={() => router.back()} className="text-sm font-medium text-slate-500 hover:text-slate-700">
         → بازگشت
       </button>
@@ -187,146 +229,242 @@ export default function CaseDetailPage() {
         )}
       </Card>
 
-      {/* pending acceptance banner */}
-      {data.hasPendingAcceptanceForMe && data.status === 'WAITING_ACCEPTANCE' && (
-        <Card className="border-amber-200 bg-amber-50/70 p-4 ring-amber-200">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-amber-800">
-              این پرونده به شما ارجاع شده است. آن را می‌پذیرید؟
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => action(() => api.post(`/cases/${id}/accept`), 'پرونده پذیرفته شد')}
-                className={`${btnPrimary.replace('w-full', '')} !bg-emerald-600 hover:!bg-emerald-700`}
-              >
-                ✓ پذیرش
-              </button>
-              <button onClick={() => setModal('reject')} className={`${btnSecondary} !border-red-200 !text-red-600 hover:!bg-red-50`}>
-                ✕ رد کردن
-              </button>
-            </div>
-          </div>
-        </Card>
+      {/* pending acceptance banner (employees who received the case) */}
+      {!data.isManager && data.hasPendingAcceptanceForMe && data.status === 'WAITING_ACCEPTANCE' && (
+        <PendingBanner caseId={id} runAction={runAction} busy={busyAction} onReject={() => setModal('reject')} />
       )}
 
       {/* action bar */}
-      {!isClosed && (
+      {(showEmployeeActions || (data.canTransfer && data.isManager)) && (
         <Card className="p-4">
-          <div className="flex flex-wrap gap-2.5">
-            {myActiveSession ? (
-              <button
-                onClick={() => action(() => api.post('/work-sessions/end', { caseId: id }), 'پایان کار ثبت شد')}
-                className={`${btnSecondary} !border-red-200 !text-red-600`}
-              >
-                ⏹ پایان کار
-              </button>
-            ) : (
-              data.currentOwner?.id === myUserId() && (
-                <button
-                  onClick={() => action(() => api.post('/work-sessions/start', { caseId: id }), 'کار شروع شد')}
-                  className={`${btnSecondary} !border-emerald-200 !text-emerald-700`}
-                >
-                  ▶ شروع کار
-                </button>
-              )
-            )}
-            {(data.canEdit || data.currentOwner?.id === myUserId()) && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            {showEmployeeActions && (
               <>
-                <button onClick={() => setModal('result')} className={btnSecondary}>
-                  📝 ثبت نتیجه / تکمیل
-                </button>
-                <button onClick={() => setModal('transfer')} className={btnSecondary}>
-                  📤 انتقال به همکار
-                </button>
-                <button onClick={() => setModal('reminder')} className={btnSecondary}>
-                  ⏰ یادآوری
-                </button>
+                {data.canEdit || data.isCurrentOwner ? (
+                  <button onClick={() => setModal('result')} className={btnSecondary}>
+                    📝 ثبت نتیجه / تکمیل
+                  </button>
+                ) : null}
               </>
             )}
-            <input
-              ref={fileInput}
-              type="file"
-              hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                const fd = new FormData();
-                fd.append('file', f);
-                action(
-                  () => fetch(`/api/v1/cases/${id}/files`, {
-                    method: 'POST',
-                    headers: { authorization: `Bearer ${localStorage.getItem('followa_token')}` },
-                    body: fd,
-                  }).then(async (r) => {
-                    if (!r.ok) {
-                      const j = await r.json().catch(() => null);
-                      throw new Error(j?.message ?? 'خطا در آپلود');
-                    }
-                  }),
-                  'فایل پیوست شد',
-                );
-                e.target.value = '';
-              }}
-            />
-            <button onClick={() => fileInput.current?.click()} className={btnSecondary}>
-              📎 پیوست فایل
-            </button>
+            {data.canTransfer && (
+              <button
+                onClick={handleTransferClick}
+                disabled={busyAction}
+                className={`${btnSecondary} !border-brand-200 !text-brand-700 hover:!bg-brand-50`}
+              >
+                {busyAction ? '…' : '📤'} انتقال / ارجاع مجدد
+              </button>
+            )}
+            {data.isManager && (
+              <p className="mr-auto hidden text-xs text-slate-400 sm:block">
+                حالت مدیریت: مشاهده کامل + ارجاع مجدد
+              </p>
+            )}
           </div>
         </Card>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="mb-4 font-bold">گردش ارجاع</h2>
-          <AssignmentHistory items={assignments} />
-        </Card>
-        <Card className="p-5">
-          <h2 className="mb-4 font-bold">خط زمان فعالیت‌ها</h2>
-          <ActivityTimeline items={activities} />
-        </Card>
-      </div>
+      {/* ===== manager read-only case story ===== */}
+      <CaseStory
+        description={data.description}
+        result={data.result}
+        activities={activities}
+        assignments={assignments}
+        workSessions={workSessions}
+      />
 
-      {/* files */}
+      {/* files (read-only for everyone; upload lives in employee flow) */}
       <Card className="p-5">
         <h2 className="mb-4 font-bold">فایل‌ها</h2>
         {data.files.length === 0 ? (
-          <EmptyState title="فایلی پیوست نشده است" hint="با دکمه «پیوست فایل» سند، عکس یا صوت اضافه کنید." />
+          <EmptyState title="فایلی پیوست نشده است" hint="فایل‌های پیوست کارکنان اینجا نمایش داده می‌شود." />
         ) : (
           <ul className="divide-y divide-slate-100">
             {data.files.map((f) => (
               <li key={f.id} className="flex items-center gap-3 py-2.5">
                 <span className="text-lg">{f.mimeType.startsWith('audio') ? '🎧' : f.mimeType.startsWith('image') ? '🖼️' : '📄'}</span>
-                <a
-                  href={`/api/v1/files/${f.id}/download`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-w-0 flex-1 truncate text-sm font-medium text-brand-700 hover:underline"
+                <button
+                  onClick={() => openAttachment(f)}
+                  className="min-w-0 flex-1 truncate text-right text-sm font-medium text-brand-700 hover:underline"
                 >
                   {f.filename}
-                </a>
+                  <span className="mr-2 text-xs font-normal text-slate-400">
+                    ({f.uploader.firstName} {f.uploader.lastName})
+                  </span>
+                </button>
                 <span className="tnum shrink-0 text-xs text-slate-400">{toFa((f.size / 1024).toFixed(0))} کیلوبایت</span>
                 <span className="tnum hidden shrink-0 text-xs text-slate-400 sm:block">{faDateTime(f.createdAt)}</span>
+                <button
+                  onClick={() =>
+                    downloadFile(`/files/${f.id}/download`, f.filename)
+                      .then(() => toast.success('فایل دانلود شد'))
+                      .catch((e) => toast.error(e instanceof Error ? e.message : 'خطا در دانلود'))
+                  }
+                  className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  دانلود
+                </button>
               </li>
             ))}
           </ul>
         )}
       </Card>
 
-      <RejectModal open={modal === 'reject'} onClose={() => setModal('')} caseId={id} onDone={load} showToast={showToast} />
-      <ResultModal open={modal === 'result'} onClose={() => setModal('')} caseId={id} onDone={load} showToast={showToast} />
-      <TransferModal open={modal === 'transfer'} onClose={() => setModal('')} caseId={id} onDone={load} showToast={showToast} />
-      <ReminderModal open={modal === 'reminder'} onClose={() => setModal('')} caseId={id} onDone={load} showToast={showToast} />
+      {previewLoading && <Spinner label="در حال باز کردن فایل…" />}
+
+      {preview && (
+        <Modal open onClose={() => setPreview(null)} title={preview.name} wide>
+          {preview.type.startsWith('image/') ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={preview.url} alt={preview.name} className="mx-auto max-h-[70vh] rounded-xl" />
+          ) : (
+            <audio controls src={preview.url} className="w-full" />
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <a href={preview.url} download={preview.name} className={`${btnSecondary} !py-1.5 !text-xs`}>
+              ذخیره فایل
+            </a>
+          </div>
+        </Modal>
+      )}
+
+      <RejectModal open={modal === 'reject'} onClose={() => setModal('')} caseId={id} onDone={load} />
+      <ResultModal open={modal === 'result'} onClose={() => setModal('')} caseId={id} onDone={load} />
+      <TransferModal open={modal === 'transfer'} onClose={() => setModal('')} caseId={id} onDone={load} />
     </div>
   );
 }
 
-function myUserId(): string {
-  if (typeof window === 'undefined') return '';
-  try {
-    return JSON.parse(localStorage.getItem('followa_user') ?? '{}').id ?? '';
-  } catch {
-    return '';
-  }
+function PendingBanner({
+  caseId,
+  runAction,
+  busy,
+  onReject,
+}: {
+  caseId: string;
+  runAction: (fn: () => Promise<unknown>, m: string) => Promise<void>;
+  busy: boolean;
+  onReject: () => void;
+}) {
+  return (
+    <Card className="border-amber-200 bg-amber-50/70 p-4 ring-amber-200">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-amber-800">این پرونده به شما ارجاع شده است. آن را می‌پذیرید؟</p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => runAction(() => api.post(`/cases/${caseId}/accept`), 'پرونده پذیرفته شد')}
+            disabled={busy}
+            className={`${btnPrimary.replace('w-full', '')} !bg-emerald-600 hover:!bg-emerald-700`}
+          >
+            ✓ پذیرش
+          </button>
+          <button onClick={onReject} className={`${btnSecondary} !border-red-200 !text-red-600 hover:!bg-red-50`}>
+            ✕ رد کردن
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/** Unified read-only story: description → timeline → transfers → work log. */
+function CaseStory({
+  description,
+  result,
+  activities,
+  assignments,
+  workSessions,
+}: {
+  description: string | null;
+  result: string | null;
+  activities: any[];
+  assignments: any[];
+  workSessions: any[];
+}) {
+  const totalSeconds = (workSessions ?? []).reduce(
+    (sum: number, s: any) => sum + (s.durationSeconds ?? 0),
+    0,
+  );
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-3.5">
+        <h2 className="font-bold text-slate-800">📖 شرح کامل پرونده</h2>
+        <p className="mt-0.5 text-xs text-slate-500">تمام رویدادها، یادداشت‌ها و گردش کار — فقط خواندنی</p>
+      </div>
+
+      <div className="space-y-5 p-5">
+        {/* narrative summary strip */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StoryStat label="رویدادها" value={toFa(activities.length)} icon='🧾' />
+          <StoryStat label="گردش ارجاع" value={toFa(assignments.length)} icon='📤' />
+          <StoryStat label="نشست کاری" value={toFa((workSessions ?? []).length)} icon='⏱️' />
+          <StoryStat label="زمان کل" value={faDuration(totalSeconds)} icon='⏳' />
+        </div>
+
+        {description && (
+          <section>
+            <h3 className="mb-2 text-sm font-bold text-slate-700">شرح اولیه</h3>
+            <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3.5 text-sm leading-relaxed text-slate-600">
+              {description}
+            </p>
+          </section>
+        )}
+        {result && (
+          <section>
+            <h3 className="mb-2 text-sm font-bold text-emerald-700">نتیجه نهایی</h3>
+            <p className="whitespace-pre-wrap rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5 text-sm leading-relaxed text-emerald-900">
+              {result}
+            </p>
+          </section>
+        )}
+
+        <section>
+          <h3 className="mb-3 text-sm font-bold text-slate-700">خط زمان رویدادها</h3>
+          <ActivityTimeline items={activities} />
+        </section>
+
+        <section>
+          <h3 className="mb-3 text-sm font-bold text-slate-700">گردش ارجاع بین افراد</h3>
+          <AssignmentHistory items={assignments} />
+        </section>
+
+        {(workSessions ?? []).length > 0 && (
+          <section>
+            <h3 className="mb-3 text-sm font-bold text-slate-700">گزارش کار واقعی</h3>
+            <div className="space-y-2">
+              {[...workSessions]
+                .sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+                .map((s: any) => (
+                  <div key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-2.5 text-xs">
+                    <span className="font-semibold text-slate-700">
+                      {s.user?.firstName} {s.user?.lastName}
+                    </span>
+                    <span className="tnum text-slate-500">{faDateTime(s.startedAt)}</span>
+                    <span className="text-slate-300">→</span>
+                    <span className="tnum text-slate-500">{s.endedAt ? faDateTime(s.endedAt) : 'در جریان'}</span>
+                    <span className="tnum mr-auto rounded-full bg-violet-50 px-2 py-0.5 font-bold text-violet-700">
+                      {faDuration(s.durationSeconds ?? 0)}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function StoryStat({ label, value, icon }: { label: string; value: string; icon: string }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+      <p className="text-[11px] text-slate-400">
+        {icon} {label}
+      </p>
+      <p className="tnum mt-0.5 text-sm font-extrabold text-slate-700">{value}</p>
+    </div>
+  );
 }
 
 function RejectModal({
@@ -334,16 +472,16 @@ function RejectModal({
   onClose,
   caseId,
   onDone,
-  showToast,
 }: {
   open: boolean;
   onClose: () => void;
   caseId: string;
   onDone: () => void;
-  showToast: (m: string, t: 'success' | 'error') => void;
 }) {
+  const toast = useToast();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  if (!open) return null;
   return (
     <Modal open={open} onClose={onClose} title="رد کردن ارجاع">
       <form
@@ -352,11 +490,11 @@ function RejectModal({
           setBusy(true);
           try {
             await api.post(`/cases/${caseId}/reject`, { reason });
-            showToast('پرونده رد و به ارجاع‌دهنده بازگشت', 'success');
+            toast.success('پرونده رد و به ارجاع‌دهنده بازگشت');
             onClose();
             onDone();
           } catch (err) {
-            showToast(err instanceof Error ? err.message : 'خطا', 'error');
+            toast.error(err instanceof Error ? err.message : 'خطا');
           } finally {
             setBusy(false);
           }
@@ -384,37 +522,46 @@ function ResultModal({
   onClose,
   caseId,
   onDone,
-  showToast,
 }: {
   open: boolean;
   onClose: () => void;
   caseId: string;
   onDone: () => void;
-  showToast: (m: string, t: 'success' | 'error') => void;
 }) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [result, setResult] = useState('');
   const [complete, setComplete] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (complete) {
+      const ok = await confirm({
+        title: 'تکمیل پرونده',
+        message: 'با تکمیل، پرونده بسته می‌شود و دیگر قابل تغییر نیست. مطمئن هستید؟',
+        confirmLabel: 'بله، تکمیل کن',
+      });
+      if (!ok) return;
+    }
+    setBusy(true);
+    try {
+      await api.post(`/cases/${caseId}/result`, { result, complete });
+      toast.success(complete ? 'پرونده تکمیل شد' : 'نتیجه ثبت شد');
+      setResult('');
+      onClose();
+      onDone();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'خطا');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) return null;
   return (
     <Modal open={open} onClose={onClose} title="ثبت نتیجه">
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          try {
-            await api.post(`/cases/${caseId}/result`, { result, complete });
-            showToast(complete ? 'پرونده تکمیل شد' : 'نتیجه ثبت شد', 'success');
-            setResult('');
-            onClose();
-            onDone();
-          } catch (err) {
-            showToast(err instanceof Error ? err.message : 'خطا', 'error');
-          } finally {
-            setBusy(false);
-          }
-        }}
-        className="space-y-4"
-      >
+      <form onSubmit={submit} className="space-y-4">
         <Field label="نتیجه پیگیری" required>
           <textarea
             className={`${inputClass} min-h-32`}
@@ -439,47 +586,51 @@ function TransferModalImpl({
   onClose,
   caseId,
   onDone,
-  showToast,
 }: {
   open: boolean;
   onClose: () => void;
   caseId: string;
   onDone: () => void;
-  showToast: (m: string, t: 'success' | 'error') => void;
 }) {
-  const [members, setMembers] = useState<{ userId: string; fullName: string }[]>([]);
+  const toast = useToast();
+  const [members, setMembers] = useState<{ userId: string; fullName: string; role?: string }[]>([]);
   const [toUser, setToUser] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const meId = typeof window === 'undefined' ? '' : safeUserId();
 
   useEffect(() => {
     if (!open) return;
     api
-      .get<{ items: { userId: string; fullName: string; isActive: boolean }[] }>('/members')
-      .then((r) => setMembers(r.items.filter((m) => m.isActive)))
-      .catch(() =>
-        // fallback for employees: derive colleagues from company members via profile company
-        api.get<{ company: { name: string } | null }>('/profile').then(async () => {
-          showToast('برای انتخاب مقصد با مدیر هماهنگ کنید یا از لیست داشبورد استفاده کنید', 'error');
-        }),
-      );
-  }, [open, showToast]);
+      .get<{ items: { userId: string; fullName: string; isActive: boolean; role: string }[] }>('/members')
+      .then((r) =>
+        setMembers(r.items.filter((m) => m.isActive).map((m) => ({ userId: m.userId, fullName: m.fullName, role: m.role }))),
+      )
+      .catch(() => toast.error('دریافت فهرست همکاران ناموفق بود'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
+  // managers cannot transfer to themselves or to other managers
+  const eligible = members.filter(
+    (m) => m.userId !== meId && m.role !== 'COMPANY_MANAGER',
+  );
+
+  if (!open) return null;
   return (
-    <Modal open={open} onClose={onClose} title="انتقال پرونده">
+    <Modal open={open} onClose={onClose} title="انتقال / ارجاع مجدد پرونده">
       <form
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
           try {
             await api.post(`/cases/${caseId}/transfer`, { toUserId: toUser, note: note || undefined });
-            showToast('پرونده ارجاع شد', 'success');
+            toast.success('پرونده ارجاع شد');
             setToUser('');
             setNote('');
             onClose();
             onDone();
           } catch (err) {
-            showToast(err instanceof Error ? err.message : 'خطا', 'error');
+            toast.error(err instanceof Error ? err.message : 'خطا');
           } finally {
             setBusy(false);
           }
@@ -489,18 +640,18 @@ function TransferModalImpl({
         <Field label="ارجاع به" required>
           <select className={inputClass} value={toUser} onChange={(e) => setToUser(e.target.value)} autoFocus>
             <option value="">— انتخاب همکار —</option>
-            {members.map((m) => (
+            {eligible.map((m) => (
               <option key={m.userId} value={m.userId}>{m.fullName}</option>
             ))}
           </select>
         </Field>
-        <Field label="توضیح">
-          <textarea className={`${inputClass} min-h-20`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="وضعیت فعلی و ادامه کار…" />
+        <Field label="یادداشت انتقال">
+          <textarea className={`${inputClass} min-h-20`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="وضعیت فعلی، نکات مهم برای گیرنده…" />
         </Field>
         <p className="text-xs text-slate-400">
-          تا زمانی که گیرنده پرونده را بپذیرد، وضعیت «در انتظار پذیرش» خواهد بود.
+          تا زمانی که گیرنده پرونده را بپذیرد، وضعیت «در انتظار پذیرش» خواهد بود. این انتقال در تاریخچه ثبت می‌شود.
         </p>
-        <button disabled={busy || !toUser} className={btnPrimary}>انتقال</button>
+        <button disabled={busy || !toUser} className={btnPrimary}>{busy ? 'در حال ارجاع…' : 'ارجاع پرونده'}</button>
       </form>
     </Modal>
   );
@@ -508,70 +659,10 @@ function TransferModalImpl({
 
 const TransferModal = TransferModalImpl;
 
-function ReminderModal({
-  open,
-  onClose,
-  caseId,
-  onDone,
-  showToast,
-}: {
-  open: boolean;
-  onClose: () => void;
-  caseId: string;
-  onDone: () => void;
-  showToast: (m: string, t: 'success' | 'error') => void;
-}) {
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('09:00');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const tomorrow = new Date(Date.now() + 86400_000);
-  useEffect(() => {
-    if (open && !date) {
-      setDate(tomorrow.toISOString().slice(0, 10));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  return (
-    <Modal open={open} onClose={onClose} title="ساخت یادآوری">
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          try {
-            await api.post('/reminders', {
-              caseId,
-              remindAt: new Date(`${date}T${time}:00`).toISOString(),
-              note: note || undefined,
-            });
-            showToast('یادآوری ساخته شد', 'success');
-            setNote('');
-            onClose();
-            onDone();
-          } catch (err) {
-            showToast(err instanceof Error ? err.message : 'خطا', 'error');
-          } finally {
-            setBusy(false);
-          }
-        }}
-        className="space-y-4"
-      >
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="تاریخ" required>
-            <input type="date" dir="ltr" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
-          <Field label="ساعت" required>
-            <input type="time" dir="ltr" className={inputClass} value={time} onChange={(e) => setTime(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="یادداشت">
-          <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثلاً: تماس دوم با مشتری" />
-        </Field>
-        <p className="text-xs text-slate-400">در زمان مقرر در بخش یادآوری‌ها و اعلان‌ها نمایش داده می‌شود.</p>
-        <button disabled={busy} className={btnPrimary}>ساخت یادآوری</button>
-      </form>
-    </Modal>
-  );
+function safeUserId(): string {
+  try {
+    return JSON.parse(localStorage.getItem('followa_user') ?? '{}').id ?? '';
+  } catch {
+    return '';
+  }
 }

@@ -158,4 +158,49 @@ describe('Auth & permission tests', () => {
     const shortTitle = await api(fixture.manager.token, 'POST', '/cases', { title: 'ab' });
     expect(shortTitle.statusCode).toBe(400);
   });
+
+  it('manager cannot create/assign a case to self or to another manager', async () => {
+    const selfAssign = await api(fixture.manager.token, 'POST', '/cases', {
+      title: 'پرونده برای خودم',
+      assignToUserId: fixture.manager.id,
+    });
+    expect(selfAssign.statusCode).toBe(400);
+
+    // manager → other manager also blocked
+    const mgr2 = await api(fixture.manager.token, 'POST', '/members', {
+      firstName: 'مدیر',
+      lastName: 'دوم',
+      mobile: `0912${String(Date.now()).slice(-7)}`,
+      role: 'COMPANY_MANAGER',
+      password: 'Manager!234',
+    });
+    expect(mgr2.statusCode).toBe(200);
+    const mgr2Id = mgr2.json().userId;
+    const toManager = await api(fixture.manager.token, 'POST', '/cases', {
+      title: 'پرونده برای مدیر دیگر',
+      assignToUserId: mgr2Id,
+    });
+    expect(toManager.statusCode).toBe(400);
+  });
+
+  it('manager case detail exposes isManager/canTransfer flags (no employee actions)', async () => {
+    const created = await api(fixture.manager.token, 'POST', '/cases', {
+      title: 'پرونده بررسی مدیریتی',
+      assignToUserId: fixture.employees[0].id,
+    });
+    const caseId = created.json().case.id;
+    const detail = await api(fixture.manager.token, 'GET', `/cases/${caseId}`);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().isManager).toBe(true);
+    expect(detail.json().canTransfer).toBe(true);
+    // employee view keeps operational capability
+    const empDetail = await api(fixture.employees[0].token, 'GET', `/cases/${caseId}`);
+    expect(empDetail.json().isManager).toBe(false);
+    // employee can still register a result on their own case
+    const result = await api(fixture.employees[0].token, 'POST', `/cases/${caseId}/result`, {
+      result: 'انجام شد',
+      complete: true,
+    });
+    expect(result.statusCode).toBe(200);
+  });
 });

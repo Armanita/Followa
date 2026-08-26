@@ -16,6 +16,7 @@ import {
   StatCard,
   StatusBadge,
   btnPrimary,
+  useToast,
 } from '@/components/ui';
 import { faDate, isLate, toFa } from '@/lib/jalali';
 import { CASE_STATUS_LABELS } from '@/lib/labels';
@@ -200,32 +201,38 @@ function CreateCaseModalImpl({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const toast = useToast();
+  const meId = typeof window === 'undefined' ? '' : safeUserId();
+  const isManager = typeof window === 'undefined' ? false : safeIsManager();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('NORMAL');
   const [caseTypeId, setCaseTypeId] = useState('');
-  const [dueDate, setDueDate] = useState('');
   const [assignTo, setAssignTo] = useState('');
   const [assignNote, setAssignNote] = useState('');
-  const [members, setMembers] = useState<{ userId: string; fullName: string }[]>([]);
+  const [members, setMembers] = useState<{ userId: string; fullName: string; role: string }[]>([]);
   const [caseTypes, setCaseTypes] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open) return;
     api.get<{ caseTypes: { id: string; name: string }[] }>('/companies/current').then((r) => setCaseTypes(r.caseTypes)).catch(() => {});
     api
-      .get<{ items: { userId: string; fullName: string; isActive: boolean }[] }>('/members')
+      .get<{ items: { userId: string; fullName: string; isActive: boolean; role: string }[] }>('/members')
       .then((r) => setMembers(r.items.filter((m) => m.isActive)))
       .catch(() => {
         // employees can't list members — they can still self-create unassigned
       });
   }, [open]);
 
+  // Managers create cases FOR employees — never for themselves or other managers.
+  const eligibleAssignees =
+    isManager
+      ? members.filter((m) => m.userId !== meId && m.role !== 'COMPANY_MANAGER')
+      : members;
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
     try {
       await api.post('/cases', {
@@ -233,17 +240,19 @@ function CreateCaseModalImpl({
         description: description || undefined,
         priority,
         caseTypeId: caseTypeId || undefined,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+        // no manual date entry: server records creation time; due dates are
+        // an employee-execution concern, not part of the manager create flow
         assignToUserId: assignTo || undefined,
         assignNote: assignNote || undefined,
       });
+      toast.success('پرونده ساخته شد');
       setTitle('');
       setDescription('');
       setAssignTo('');
       setAssignNote('');
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'خطا در ایجاد پرونده');
+      toast.error(err instanceof Error ? err.message : 'خطا در ایجاد پرونده');
     } finally {
       setLoading(false);
     }
@@ -258,7 +267,7 @@ function CreateCaseModalImpl({
         <Field label="توضیحات">
           <textarea className={`${inputClass} min-h-24`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="شرح موضوع، انتظارات و مراحل…" />
         </Field>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="نوع پرونده">
             <select className={inputClass} value={caseTypeId} onChange={(e) => setCaseTypeId(e.target.value)}>
               <option value="">— بدون نوع —</option>
@@ -275,17 +284,16 @@ function CreateCaseModalImpl({
               <option value="URGENT">فوری</option>
             </select>
           </Field>
-          <Field label="سررسید">
-            <input type="date" className={inputClass} dir="ltr" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-          </Field>
         </div>
 
         <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
-          <p className="mb-3 text-sm font-semibold text-slate-700">ارجاع (اختیاری)</p>
+          <p className="mb-3 text-sm font-semibold text-slate-700">ارجاع به کارمند (اختیاری)</p>
           <Field label="ارجاع به">
             <select className={inputClass} value={assignTo} onChange={(e) => setAssignTo(e.target.value)}>
-              <option value="">خودم پیگیری می‌کنم</option>
-              {members.filter((m) => m.userId !== assignTo).map((m) => (
+              <option value="">
+                {isManager ? 'بدون ارجاع — فقط ثبت پرونده' : 'خودم پیگیری می‌کنم'}
+              </option>
+              {eligibleAssignees.map((m) => (
                 <option key={m.userId} value={m.userId}>{m.fullName}</option>
               ))}
             </select>
@@ -299,7 +307,6 @@ function CreateCaseModalImpl({
           )}
         </div>
 
-        {error && <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>}
         <div className="flex gap-3">
           <button type="submit" disabled={loading || title.length < 3} className={btnPrimary}>
             {loading ? 'در حال ثبت…' : 'ایجاد پرونده'}
@@ -309,6 +316,22 @@ function CreateCaseModalImpl({
       </form>
     </Modal>
   );
+}
+
+function safeUserId(): string {
+  try {
+    return JSON.parse(localStorage.getItem('followa_user') ?? '{}').id ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function safeIsManager(): boolean {
+  try {
+    return JSON.parse(localStorage.getItem('followa_user') ?? '{}').role === 'COMPANY_MANAGER';
+  } catch {
+    return false;
+  }
 }
 
 export default function CasesPage() {

@@ -11,7 +11,8 @@ import {
   inputClass,
   Modal,
   Spinner,
-  Toast,
+  useConfirm,
+  useToast,
 } from '@/components/ui';
 import { faDate, toFa } from '@/lib/jalali';
 
@@ -29,17 +30,14 @@ interface MemberRow {
 }
 
 export default function EmployeesPage() {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [items, setItems] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<MemberRow | null>(null);
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
-
-  const showToast = (message: string, tone: 'success' | 'error') => {
-    setToast({ message, tone });
-    setTimeout(() => setToast(null), 3500);
-  };
 
   const load = useCallback(async () => {
     try {
@@ -58,12 +56,26 @@ export default function EmployeesPage() {
   }, [load]);
 
   const toggleActive = async (m: MemberRow) => {
+    if (busyId) return;
+    const suspending = m.isActive;
+    const ok = await confirm({
+      title: suspending ? `تعلیق ${m.fullName}؟` : `فعال‌سازی ${m.fullName}؟`,
+      message: suspending
+        ? 'این کارمند تا فعال‌سازی مجدد به سیستم دسترسی نخواهد داشت.'
+        : 'دسترسی این کارمند به سیستم بازمی‌گردد.',
+      confirmLabel: suspending ? 'تعلیق' : 'فعال‌سازی',
+      danger: suspending,
+    });
+    if (!ok) return;
+    setBusyId(m.membershipId);
     try {
       await api.patch(`/members/${m.membershipId}`, { isActive: !m.isActive });
-      showToast(m.isActive ? `${m.fullName} غیرفعال شد` : `${m.fullName} فعال شد`, 'success');
-      void load();
+      toast.success(suspending ? `${m.fullName} غیرفعال شد` : `${m.fullName} فعال شد`);
+      await load();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'خطا', 'error');
+      toast.error(err instanceof Error ? err.message : 'خطا');
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -72,7 +84,6 @@ export default function EmployeesPage() {
 
   return (
     <div className="space-y-5">
-      {toast && <Toast message={toast.message} tone={toast.tone} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-extrabold">کارکنان</h1>
@@ -166,8 +177,8 @@ export default function EmployeesPage() {
         </Card>
       )}
 
-      <CreateEmployeeModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} showToast={showToast} />
-      <ResetPasswordModal target={resetTarget} onClose={() => setResetTarget(null)} showToast={showToast} />
+      <CreateEmployeeModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} />
+      <ResetPasswordModal target={resetTarget} onClose={() => setResetTarget(null)} />
     </div>
   );
 }
@@ -182,13 +193,12 @@ function CreateEmployeeModal({
   open,
   onClose,
   onCreated,
-  showToast,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
-  showToast: (m: string, t: 'success' | 'error') => void;
 }) {
+  const toast = useToast();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState('');
@@ -212,7 +222,7 @@ function CreateEmployeeModal({
               jobTitle: jobTitle || undefined,
               password: password || undefined,
             });
-            showToast(res.message, 'success');
+            toast.success(res.message);
             setFirstName('');
             setLastName('');
             setMobile('');
@@ -220,7 +230,7 @@ function CreateEmployeeModal({
             onClose();
             onCreated();
           } catch (err) {
-            showToast(err instanceof Error ? err.message : 'خطا', 'error');
+            toast.error(err instanceof Error ? err.message : 'خطا');
           } finally {
             setBusy(false);
           }
@@ -264,12 +274,11 @@ function CreateEmployeeModal({
 function ResetPasswordModal({
   target,
   onClose,
-  showToast,
 }: {
   target: MemberRow | null;
   onClose: () => void;
-  showToast: (m: string, t: 'success' | 'error') => void;
 }) {
+  const toast = useToast();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   return (
@@ -281,11 +290,11 @@ function ResetPasswordModal({
             setBusy(true);
             try {
               await api.post(`/members/${target.membershipId}/reset-password`, { newPassword: password });
-              showToast(`رمز ${target.fullName} بازنشانی شد`, 'success');
+              toast.success(`رمز ${target.fullName} بازنشانی شد`);
               setPassword('');
               onClose();
             } catch (err) {
-              showToast(err instanceof Error ? err.message : 'خطا', 'error');
+              toast.error(err instanceof Error ? err.message : 'خطا');
             } finally {
               setBusy(false);
             }

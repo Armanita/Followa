@@ -23,7 +23,9 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: "no"
-    command: ["npx", "prisma", "migrate", "deploy"]
+    # direct invocation of the prisma CLI shipped in the image — no npx, no
+    # registry access at runtime; explicit schema path because workdir is /app
+    command: ["node", "apps/api/node_modules/prisma/build/index.js", "migrate", "deploy", "--schema", "apps/api/prisma/schema.prisma"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-followa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-followa}?schema=public
     depends_on:
@@ -35,7 +37,8 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: "no"
-    command: ["npx", "tsx", "prisma/seed.ts"]
+    # direct invocation of tsx shipped in the image — no npx, no registry access
+    command: ["node", "apps/api/node_modules/tsx/dist/cli.mjs", "apps/api/prisma/seed.ts"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-followa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-followa}?schema=public
       SYSTEM_ADMIN_USERNAME: ${SYSTEM_ADMIN_USERNAME:-admin}
@@ -76,6 +79,8 @@ services:
         NEXT_PUBLIC_API_BASE: /api/v1
     container_name: followa-web
     restart: unless-stopped
+    # next start resolves .next relative to cwd — must run inside apps/web
+    working_dir: /app/apps/web
     environment:
       NODE_ENV: production
       API_PROXY_URL: http://api:3001

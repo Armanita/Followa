@@ -7,3 +7,7 @@ allowBuilds:
   esbuild: true
   prisma: true
   sharp: true
+# Skip pnpm's per-install supply-chain metadata re-check (473 registry
+# requests per install). The lockfile is authored in-repo and hash-pinned;
+# Docker builds treat it as trusted.
+trustLockfile: true

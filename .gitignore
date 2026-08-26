@@ -14,9 +14,15 @@ build/
 .env.*.local
 *.pem
 
-# storage (uploaded files)
+# storage (uploaded files) — runtime data, never versioned
 storage/files/
+apps/api/storage/
 uploads/
+
+# vendored pnpm seed tarballs for the production API image (~43 MB).
+# Reproduce with scripts/fetch-pnpm-seed.sh (or .ps1) before a clean build.
+docker/pnpm-seed/*
+!docker/pnpm-seed/.gitkeep
 
 # flutter / dart
 apps/mobile/.dart_tool/

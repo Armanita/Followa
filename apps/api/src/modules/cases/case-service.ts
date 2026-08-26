@@ -89,10 +89,17 @@ export const caseService = {
 
     let assigneeId: string | null = null;
     if (input.assignToUserId) {
+      // Managers create cases for employees; assigning to self is not allowed.
+      if (input.assignToUserId === actor.userId && actor.role === 'COMPANY_MANAGER') {
+        throw badRequest('ارجاع پرونده به خودتان مجاز نیست. برای کارکنان ارجاع دهید.');
+      }
       const membership = await prisma.companyMembership.findFirst({
         where: { userId: input.assignToUserId, companyId: actor.companyId, isActive: true },
       });
       if (!membership) throw badRequest('کاربر مقصد در شرکت فعال نیست');
+      if (actor.role === 'COMPANY_MANAGER' && membership.role === 'COMPANY_MANAGER') {
+        throw badRequest('مدیر نمی‌تواند پرونده را به مدیر دیگر ارجاع دهد');
+      }
       assigneeId = input.assignToUserId;
     }
 

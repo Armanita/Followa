@@ -1,0 +1,3 @@
+# Kept so the directory exists on a clean clone — apps/api/Dockerfile does
+# `COPY docker/pnpm-seed/ /tmp/seed/` and that COPY fails if the path is absent.
+# Populate with: bash scripts/fetch-pnpm-seed.sh   (or scripts/fetch-pnpm-seed.ps1)

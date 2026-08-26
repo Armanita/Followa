@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   CASE_STATUS_LABELS,
   CASE_STATUS_STYLES,
@@ -193,13 +193,159 @@ export const btnSecondary =
   'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60';
 
 export function Toast({ message, tone }: { message: string; tone: 'success' | 'error' }) {
+  const icons = { success: '✓', error: '⚠' };
+  const styles = {
+    success: 'bg-emerald-600',
+    error: 'bg-red-600',
+  };
   return (
-    <div
-      className={`fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium text-white shadow-pop ${
-        tone === 'success' ? 'bg-emerald-600' : 'bg-red-600'
-      }`}
-    >
-      {message}
+    <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex flex-col items-center gap-2 px-4">
+      <div
+        role="status"
+        className={`flex max-w-md items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-pop ${styles[tone]}`}
+      >
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 text-xs">
+          {icons[tone]}
+        </span>
+        {message}
+      </div>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Global toast + confirm infrastructure
+// ---------------------------------------------------------------------------
+
+interface ToastContextValue {
+  success: (message: string) => void;
+  error: (message: string) => void;
+}
+
+const ToastContext = createContext<ToastContextValue | null>(null);
+
+/** Wrap the app once; useToast() everywhere else. */
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<{ id: number; message: string; tone: 'success' | 'error' }[]>([]);
+
+  const push = useCallback((message: string, tone: 'success' | 'error') => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t.slice(-2), { id, message, tone }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+  }, []);
+
+  const value = useMemo<ToastContextValue>(
+    () => ({
+      success: (m) => push(m, 'success'),
+      error: (m) => {
+        // never surface raw backend JSON — map common codes to friendly Persian text
+        const friendly = m?.includes('{') || m?.includes('"statusCode"')
+          ? 'خطایی رخ داد. لطفاً دوباره تلاش کنید.'
+          : m || 'خطای غیرمنتظره';
+        push(friendly, 'error');
+      },
+    }),
+    [push],
+  );
+
+  return (
+    <ToastContext.Provider value={value}>
+      {children}
+      {toasts.map((t) => (
+        <Toast key={t.id} message={t.message} tone={t.tone} />
+      ))}
+    </ToastContext.Provider>
+  );
+}
+
+export function useToast(): ToastContextValue {
+  const ctx = useContext(ToastContext);
+  if (!ctx) throw new Error('useToast must be used inside ToastProvider');
+  return ctx;
+}
+
+/**
+ * Confirmation dialog for important actions.
+ * Usage: const confirm = useConfirm(); if (await confirm({title, message})) {...}
+ */
+interface ConfirmOptions {
+  title: string;
+  message?: string;
+  confirmLabel?: string;
+  danger?: boolean;
+}
+
+const ConfirmContext = createContext<((o: ConfirmOptions) => Promise<boolean>) | null>(null);
+
+export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<
+    (ConfirmOptions & { resolve: (v: boolean) => void }) | null
+  >(null);
+
+  const confirm = useCallback(
+    (o: ConfirmOptions) =>
+      new Promise<boolean>((resolve) => setState({ ...o, resolve })),
+    [],
+  );
+
+  const close = (result: boolean) => {
+    state?.resolve(result);
+    setState(null);
+  };
+
+  return (
+    <ConfirmContext.Provider value={confirm}>
+      {children}
+      {state && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/40 backdrop-blur-[2px] sm:items-center sm:p-6"
+          onClick={() => close(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-t-3xl bg-white p-6 shadow-pop sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start gap-3">
+              <span
+                className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg ${
+                  state.danger ? 'bg-red-50' : 'bg-brand-50'
+                }`}
+              >
+                {state.danger ? '⚠️' : '❓'}
+              </span>
+              <div>
+                <h3 className="font-bold text-slate-900">{state.title}</h3>
+                {state.message && (
+                  <p className="mt-1 text-sm leading-relaxed text-slate-500">{state.message}</p>
+                )}
+              </div>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => close(true)}
+                autoFocus
+                className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-60 ${
+                  state.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'
+                }`}
+              >
+                {state.confirmLabel ?? 'تأیید'}
+              </button>
+              <button
+                onClick={() => close(false)}
+                className={`${btnSecondary} flex-1`}
+              >
+                انصراف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </ConfirmContext.Provider>
+  );
+}
+
+export function useConfirm() {
+  const ctx = useContext(ConfirmContext);
+  if (!ctx) throw new Error('useConfirm must be used inside ConfirmProvider');
+  return ctx;
 }

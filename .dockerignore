@@ -1,0 +1,17 @@
+# keep host artifacts out of the build context — pnpm must own node_modules
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.dart_tool
+**/.gradle
+storage/
+.env
+.env.*
+!.env.example
+!.env.prod.example
+.git
+.claude
+docs/
+apps/mobile
+*.log

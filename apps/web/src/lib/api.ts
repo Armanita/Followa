@@ -71,3 +71,50 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
 };
+
+/**
+ * Authenticated file download: fetches with the bearer token, then hands the
+ * blob to the browser as a download. Never exposes a raw auth error page.
+ */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) {
+    let err: ApiErrorShape | null = null;
+    try {
+      err = await res.json();
+    } catch {}
+    throw new ApiError(res.status, err?.code ?? 'ERROR', err?.message ?? 'خطا در دریافت فایل');
+  }
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const serverName = match ? decodeURIComponent(match[1]) : filename;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = serverName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Authenticated inline view of images/audio — returns an object URL for <img>/<audio>. */
+export async function getFileObjectUrl(path: string): Promise<{ url: string; type: string }> {
+  const token = getToken();
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) {
+    let err: ApiErrorShape | null = null;
+    try {
+      err = await res.json();
+    } catch {}
+    throw new ApiError(res.status, err?.code ?? 'ERROR', err?.message ?? 'خطا در دریافت فایل');
+  }
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), type: blob.type };
+}
