@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { getTestApp, closeTestApp, seedFixture, cleanup } from './helpers.js';
+import { getTestApp, closeTestApp, seedFixture } from './helpers.js';
 import { prisma } from '../src/lib/prisma.js';
 
 let fixture: Awaited<ReturnType<typeof seedFixture>>;
@@ -202,5 +202,65 @@ describe('Auth & permission tests', () => {
       complete: true,
     });
     expect(result.statusCode).toBe(200);
+  });
+
+  it('records result effort and atomically rolls the employee reminder forward', async () => {
+    const employee = fixture.employees[0];
+    const created = await api(employee.token, 'POST', '/cases', {
+      title: 'پیگیری مرحله‌ای برای تست زمان و یادآوری',
+    });
+    expect(created.statusCode).toBe(200);
+    const caseId = created.json().case.id as string;
+
+    const oldReminderAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const oldReminder = await api(employee.token, 'POST', '/reminders', {
+      caseId,
+      remindAt: oldReminderAt,
+      note: 'پیگیری فعلی',
+    });
+    expect(oldReminder.statusCode).toBe(200);
+    const oldReminderId = oldReminder.json().reminder.id as string;
+
+    const nextReminderAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const result = await api(employee.token, 'POST', `/cases/${caseId}/result`, {
+      result: 'مشتری پاسخ داد و برای مرحله بعدی زمان خواست',
+      complete: false,
+      effortMinutes: 25,
+      nextReminder: {
+        remindAt: nextReminderAt,
+        note: 'تماس مجدد با مشتری',
+      },
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().message).toBe('نتیجه و یادآوری بعدی ثبت شد');
+
+    const resultActivity = await prisma.caseActivity.findFirstOrThrow({
+      where: { caseId, type: 'RESULT_ADDED' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(resultActivity.payload).toMatchObject({
+      result: 'مشتری پاسخ داد و برای مرحله بعدی زمان خواست',
+      effortMinutes: 25,
+    });
+
+    const oldReminderAfter = await prisma.reminder.findUniqueOrThrow({ where: { id: oldReminderId } });
+    expect(oldReminderAfter.status).toBe('DONE');
+    expect(oldReminderAfter.completedAt).not.toBeNull();
+
+    const activeReminders = await prisma.reminder.findMany({
+      where: { caseId, assigneeId: employee.id, status: 'ACTIVE' },
+    });
+    expect(activeReminders).toHaveLength(1);
+    expect(activeReminders[0].note).toBe('تماس مجدد با مشتری');
+
+    const completeWithReminder = await api(employee.token, 'POST', `/cases/${caseId}/result`, {
+      result: 'تلاش نامعتبر برای بستن همراه یادآوری',
+      complete: true,
+      effortMinutes: 5,
+      nextReminder: {
+        remindAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+      },
+    });
+    expect(completeWithReminder.statusCode).toBe(400);
   });
 });
