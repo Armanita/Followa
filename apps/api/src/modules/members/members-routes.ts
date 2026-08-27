@@ -1,9 +1,14 @@
-import type { FastifyInstance } from 'fastify';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../lib/prisma.js';
 import { parseWith } from '../../lib/validation.js';
-import { conflict, forbidden, notFound } from '../../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../../lib/errors.js';
+import { config } from '../../config.js';
+import { changedFields, recordSensitiveAudit } from '../../lib/sensitive-audit.js';
 import { normalizeMobile } from '../auth/auth-service.js';
 
 const createMemberSchema = z.object({
@@ -40,6 +45,157 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(8).max(72),
 });
 
+const PROFILE_AUDIT_FIELDS = [
+  'firstName',
+  'lastName',
+  'nationalId',
+  'birthDate',
+  'phone',
+  'address',
+  'maritalStatus',
+  'bankCardNumber',
+  'bankIban',
+  'bankName',
+];
+
+const PERSONNEL_PHOTO_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+const PERSONNEL_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+function profileUpdateData(body: z.infer<typeof profileSchema>) {
+  return {
+    ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
+    ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
+    ...(body.nationalId !== undefined ? { nationalId: body.nationalId } : {}),
+    ...(body.birthDate !== undefined
+      ? { birthDate: body.birthDate ? new Date(body.birthDate) : null }
+      : {}),
+    ...(body.phone !== undefined ? { phone: body.phone } : {}),
+    ...(body.address !== undefined ? { address: body.address } : {}),
+    ...(body.maritalStatus !== undefined ? { maritalStatus: body.maritalStatus } : {}),
+    ...(body.bankCardNumber !== undefined ? { bankCardNumber: body.bankCardNumber } : {}),
+    ...(body.bankIban !== undefined ? { bankIban: body.bankIban } : {}),
+    ...(body.bankName !== undefined ? { bankName: body.bankName } : {}),
+  };
+}
+
+function publicProfileUser(user: Awaited<ReturnType<typeof prisma.user.findUniqueOrThrow>>) {
+  const { passwordHash: _passwordHash, personnelPhotoPath, ...safe } = user;
+  return {
+    ...safe,
+    hasPersonnelPhoto: Boolean(personnelPhotoPath),
+  };
+}
+
+function missingRequiredProfileFields(user: Awaited<ReturnType<typeof prisma.user.findUniqueOrThrow>>) {
+  const required: Array<[string, unknown]> = [
+    ['نام', user.firstName],
+    ['نام خانوادگی', user.lastName],
+    ['کد ملی', user.nationalId],
+    ['تاریخ تولد', user.birthDate],
+    ['تلفن', user.phone],
+    ['آدرس', user.address],
+    ['وضعیت تأهل', user.maritalStatus],
+    ['شماره کارت', user.bankCardNumber],
+    ['شماره شبا', user.bankIban],
+    ['نام بانک', user.bankName],
+  ];
+  return required
+    .filter(([, value]) => value === null || value === undefined || (typeof value === 'string' && value.trim() === ''))
+    .map(([label]) => label);
+}
+
+async function getManagerTargetMembership(companyId: string, membershipId: string) {
+  const membership = await prisma.companyMembership.findFirst({
+    where: { id: membershipId, companyId },
+    include: { user: true, company: true },
+  });
+  if (!membership) throw notFound('عضو یافت نشد');
+  return membership;
+}
+
+function removeStoredFile(relativePath: string | null | undefined) {
+  if (!relativePath) return;
+  const root = path.resolve(config.storageDir);
+  const abs = path.resolve(root, relativePath);
+  if (abs !== root && abs.startsWith(`${root}${path.sep}`) && existsSync(abs)) {
+    try {
+      unlinkSync(abs);
+    } catch {}
+  }
+}
+
+async function storePersonnelPhoto(request: FastifyRequest, userId: string) {
+  const file = await request.file();
+  if (!file) throw badRequest('عکس پرسنلی ارسال نشده است');
+  const ext = PERSONNEL_PHOTO_MIME[file.mimetype];
+  if (!ext) throw badRequest('عکس پرسنلی باید JPG، PNG یا WebP باشد');
+
+  const root = path.resolve(config.storageDir);
+  const dir = path.join(root, 'personnel', userId);
+  mkdirSync(dir, { recursive: true });
+  const storedName = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}${ext}`;
+  const abs = path.join(dir, storedName);
+
+  let bytesWritten = 0;
+  let tooLarge = false;
+  file.file.on('data', (chunk: Buffer) => {
+    bytesWritten += chunk.length;
+    if (bytesWritten > PERSONNEL_PHOTO_MAX_BYTES && !tooLarge) {
+      tooLarge = true;
+      file.file.destroy(new Error('PERSONNEL_PHOTO_TOO_LARGE'));
+    }
+  });
+
+  try {
+    await pipeline(file.file, createWriteStream(abs));
+  } catch (err) {
+    removeStoredFile(path.relative(root, abs));
+    if ((err as Error).message === 'PERSONNEL_PHOTO_TOO_LARGE') {
+      throw badRequest('حجم عکس پرسنلی نباید بیشتر از ۵ مگابایت باشد');
+    }
+    throw err;
+  }
+  if (tooLarge || file.file.truncated) {
+    removeStoredFile(path.relative(root, abs));
+    throw badRequest('حجم عکس پرسنلی نباید بیشتر از ۵ مگابایت باشد');
+  }
+
+  return {
+    personnelPhotoFilename: file.filename.slice(0, 200),
+    personnelPhotoPath: path.relative(root, abs),
+    personnelPhotoMimeType: file.mimetype,
+    personnelPhotoSize: bytesWritten,
+  };
+}
+
+function sendPersonnelPhoto(
+  user: {
+    personnelPhotoPath: string | null;
+    personnelPhotoMimeType: string | null;
+    personnelPhotoFilename: string | null;
+  },
+  reply: FastifyReply,
+) {
+  if (!user.personnelPhotoPath || !user.personnelPhotoMimeType) {
+    throw notFound('عکس پرسنلی ثبت نشده است');
+  }
+  const root = path.resolve(config.storageDir);
+  const abs = path.resolve(root, user.personnelPhotoPath);
+  if (abs === root || !abs.startsWith(`${root}${path.sep}`) || !existsSync(abs)) {
+    throw notFound('فایل عکس پرسنلی یافت نشد');
+  }
+  reply.header('Content-Type', user.personnelPhotoMimeType);
+  reply.header(
+    'Content-Disposition',
+    `inline; filename="${encodeURIComponent(user.personnelPhotoFilename ?? 'personnel-photo')}"`,
+  );
+  return reply.send(createReadStream(abs));
+}
+
 export async function memberRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', async (request) => {
     if (request.actor?.kind === 'COMPANY_USER') {
@@ -53,7 +209,7 @@ export async function memberRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** List members of my company. Manager sees all; employee gets company case-types too. */
+  /** List members of my company. */
   app.get('/members', async (request) => {
     if (request.actor.role !== 'COMPANY_MANAGER') {
       throw forbidden('این بخش مخصوص مدیر شرکت است');
@@ -77,6 +233,8 @@ export async function memberRoutes(app: FastifyInstance): Promise<void> {
         hasPassword: Boolean(m.user.passwordHash),
         jobTitle: m.jobTitle,
         employeeCode: m.employeeCode,
+        profileFinalizedAt: m.user.profileFinalizedAt,
+        hasPersonnelPhoto: Boolean(m.user.personnelPhotoPath),
         createdAt: m.createdAt,
       })),
     };
@@ -178,9 +336,89 @@ export async function memberRoutes(app: FastifyInstance): Promise<void> {
       where: { id: membership.userId },
       data: { passwordHash },
     });
-    // Force OTP re-setup next time the manager clears a password? Not needed:
-    // new password is immediately valid.
     return { message: 'رمز عبور بازنشانی شد' };
+  });
+
+  /** Manager-only personnel profile view/edit, scoped to the current company. */
+  app.get('/members/:membershipId/profile', async (request) => {
+    if (request.actor.role !== 'COMPANY_MANAGER') {
+      throw forbidden('فقط مدیر می‌تواند اطلاعات پرسنلی کارکنان را مشاهده کند');
+    }
+    const { membershipId } = request.params as { membershipId: string };
+    const membership = await getManagerTargetMembership(request.actor.companyId!, membershipId);
+    return {
+      user: publicProfileUser(membership.user),
+      membership: {
+        id: membership.id,
+        role: membership.role,
+        isActive: membership.isActive,
+        jobTitle: membership.jobTitle,
+        employeeCode: membership.employeeCode,
+      },
+      company: { id: membership.company.id, name: membership.company.name },
+    };
+  });
+
+  app.patch('/members/:membershipId/profile', async (request) => {
+    if (request.actor.role !== 'COMPANY_MANAGER') {
+      throw forbidden('فقط مدیر می‌تواند اطلاعات پرسنلی کارکنان را ویرایش کند');
+    }
+    const { membershipId } = request.params as { membershipId: string };
+    const membership = await getManagerTargetMembership(request.actor.companyId!, membershipId);
+    const body = parseWith(profileSchema, request.body);
+    const before = membership.user;
+    const updated = await prisma.user.update({
+      where: { id: membership.userId },
+      data: profileUpdateData(body),
+    });
+    const fields = changedFields(
+      before as unknown as Record<string, unknown>,
+      updated as unknown as Record<string, unknown>,
+      PROFILE_AUDIT_FIELDS,
+    );
+    if (fields.length > 0) {
+      await recordSensitiveAudit({
+        companyId: request.actor.companyId!,
+        actorId: request.actor.id,
+        entityType: 'USER_PROFILE',
+        entityId: updated.id,
+        action: 'MANAGER_PROFILE_UPDATE',
+        changedFields: fields,
+      });
+    }
+    return { message: 'اطلاعات پرسنلی به‌روزرسانی شد', user: publicProfileUser(updated) };
+  });
+
+  app.get('/members/:membershipId/photo', async (request, reply) => {
+    if (request.actor.role !== 'COMPANY_MANAGER') {
+      throw forbidden('فقط مدیر می‌تواند عکس پرسنلی کارکنان را مشاهده کند');
+    }
+    const { membershipId } = request.params as { membershipId: string };
+    const membership = await getManagerTargetMembership(request.actor.companyId!, membershipId);
+    return sendPersonnelPhoto(membership.user, reply);
+  });
+
+  app.post('/members/:membershipId/photo', async (request) => {
+    if (request.actor.role !== 'COMPANY_MANAGER') {
+      throw forbidden('فقط مدیر می‌تواند عکس پرسنلی کارکنان را تغییر دهد');
+    }
+    const { membershipId } = request.params as { membershipId: string };
+    const membership = await getManagerTargetMembership(request.actor.companyId!, membershipId);
+    const stored = await storePersonnelPhoto(request, membership.userId);
+    const updated = await prisma.user.update({
+      where: { id: membership.userId },
+      data: stored,
+    });
+    removeStoredFile(membership.user.personnelPhotoPath);
+    await recordSensitiveAudit({
+      companyId: request.actor.companyId!,
+      actorId: request.actor.id,
+      entityType: 'USER_PROFILE',
+      entityId: updated.id,
+      action: 'MANAGER_PERSONNEL_PHOTO_UPDATE',
+      changedFields: ['personnelPhoto'],
+    });
+    return { message: 'عکس پرسنلی به‌روزرسانی شد', user: publicProfileUser(updated) };
   });
 
   /** Own profile (any active member). */
@@ -192,9 +430,8 @@ export async function memberRoutes(app: FastifyInstance): Promise<void> {
       where: { id: request.actor.membershipId },
       include: { company: true },
     });
-    const { passwordHash: _ph, ...safeUser } = user;
     return {
-      user: safeUser,
+      user: publicProfileUser(user),
       company: membership?.company
         ? { id: membership.company.id, name: membership.company.name }
         : null,
@@ -207,26 +444,88 @@ export async function memberRoutes(app: FastifyInstance): Promise<void> {
   app.patch('/profile', async (request) => {
     const userId = request.actor.id;
     const body = parseWith(profileSchema, request.body);
+    const before = await prisma.user.findUnique({ where: { id: userId } });
+    if (!before) throw notFound('کاربر یافت نشد');
+    if (request.actor.role === 'EMPLOYEE' && before.profileFinalizedAt) {
+      throw forbidden('اطلاعات پرسنلی شما ثبت نهایی شده و فقط مدیر می‌تواند آن را ویرایش کند');
+    }
     const user = await prisma.user.update({
       where: { id: userId },
-      data: {
-        ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
-        ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
-        ...(body.nationalId !== undefined ? { nationalId: body.nationalId } : {}),
-        ...(body.birthDate !== undefined
-          ? { birthDate: body.birthDate ? new Date(body.birthDate) : null }
-          : {}),
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-        ...(body.address !== undefined ? { address: body.address } : {}),
-        ...(body.maritalStatus !== undefined ? { maritalStatus: body.maritalStatus } : {}),
-        ...(body.bankCardNumber !== undefined
-          ? { bankCardNumber: body.bankCardNumber }
-          : {}),
-        ...(body.bankIban !== undefined ? { bankIban: body.bankIban } : {}),
-        ...(body.bankName !== undefined ? { bankName: body.bankName } : {}),
-      },
+      data: profileUpdateData(body),
     });
-    const { passwordHash: _ph, ...safeUser } = user;
-    return { message: 'پروفایل به‌روزرسانی شد', user: safeUser };
+    const fields = changedFields(
+      before as unknown as Record<string, unknown>,
+      user as unknown as Record<string, unknown>,
+      PROFILE_AUDIT_FIELDS,
+    );
+    if (fields.length > 0) {
+      await recordSensitiveAudit({
+        companyId: request.actor.companyId!,
+        actorId: request.actor.id,
+        entityType: 'USER_PROFILE',
+        entityId: user.id,
+        action: request.actor.role === 'COMPANY_MANAGER' ? 'MANAGER_SELF_PROFILE_UPDATE' : 'EMPLOYEE_PROFILE_UPDATE',
+        changedFields: fields,
+      });
+    }
+    return { message: 'پروفایل به‌روزرسانی شد', user: publicProfileUser(user) };
+  });
+
+  app.post('/profile/finalize', async (request) => {
+    if (request.actor.role !== 'EMPLOYEE') {
+      throw forbidden('ثبت نهایی اطلاعات برای پروفایل کارمند است');
+    }
+    const user = await prisma.user.findUnique({ where: { id: request.actor.id } });
+    if (!user) throw notFound('کاربر یافت نشد');
+    if (user.profileFinalizedAt) throw conflict('اطلاعات پرسنلی قبلاً ثبت نهایی شده است');
+    const missing = missingRequiredProfileFields(user);
+    if (missing.length > 0) {
+      throw badRequest(`برای ثبت نهایی این موارد را تکمیل کنید: ${missing.join('، ')}`);
+    }
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { profileFinalizedAt: new Date() },
+    });
+    await recordSensitiveAudit({
+      companyId: request.actor.companyId!,
+      actorId: request.actor.id,
+      entityType: 'USER_PROFILE',
+      entityId: user.id,
+      action: 'EMPLOYEE_PROFILE_FINALIZED',
+      changedFields: ['profileFinalizedAt'],
+    });
+    return {
+      message: 'اطلاعات پرسنلی ثبت نهایی شد. از این پس تغییرات فقط توسط مدیر انجام می‌شود.',
+      user: publicProfileUser(updated),
+    };
+  });
+
+  app.get('/profile/photo', async (request, reply) => {
+    const user = await prisma.user.findUnique({ where: { id: request.actor.id } });
+    if (!user) throw notFound('کاربر یافت نشد');
+    return sendPersonnelPhoto(user, reply);
+  });
+
+  app.post('/profile/photo', async (request) => {
+    const user = await prisma.user.findUnique({ where: { id: request.actor.id } });
+    if (!user) throw notFound('کاربر یافت نشد');
+    if (request.actor.role === 'EMPLOYEE' && user.profileFinalizedAt) {
+      throw forbidden('پس از ثبت نهایی، تغییر عکس پرسنلی فقط توسط مدیر انجام می‌شود');
+    }
+    const stored = await storePersonnelPhoto(request, user.id);
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: stored,
+    });
+    removeStoredFile(user.personnelPhotoPath);
+    await recordSensitiveAudit({
+      companyId: request.actor.companyId!,
+      actorId: request.actor.id,
+      entityType: 'USER_PROFILE',
+      entityId: user.id,
+      action: request.actor.role === 'COMPANY_MANAGER' ? 'MANAGER_SELF_PERSONNEL_PHOTO_UPDATE' : 'EMPLOYEE_PERSONNEL_PHOTO_UPDATE',
+      changedFields: ['personnelPhoto'],
+    });
+    return { message: 'عکس پرسنلی ذخیره شد', user: publicProfileUser(updated) };
   });
 }
