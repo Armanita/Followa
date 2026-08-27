@@ -185,10 +185,11 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/cases/:id/result', async (request) => {
-    const { result, complete } = parseWith(
+    const { result, complete, effortMinutes } = parseWith(
       z.object({
         result: z.string().min(2).max(5000),
         complete: z.boolean().default(true),
+        effortMinutes: z.number().int().min(1).max(1440).optional(),
       }),
       request.body,
     );
@@ -197,6 +198,7 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
       (request.params as { id: string }).id,
       result,
       complete,
+      effortMinutes,
     );
     return { message: complete ? 'پرونده تکمیل شد' : 'نتیجه ثبت شد', case: updated };
   });
