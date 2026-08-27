@@ -38,6 +38,20 @@ export function faDateInput(date: string | Date): string {
   return toFa(format(d, 'yyyy/MM/dd'));
 }
 
+/** Converts a Jalali date-only value to an ISO timestamp without exposing Gregorian UI. */
+export function jalaliDateToIso(dateText: string): string {
+  const normalizedDate = toEn(dateText.trim()).replace(/-/g, '/');
+  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(normalizedDate)) {
+    throw new Error('تاریخ را به شکل ۱۴۰۵/۰۶/۰۷ وارد کنید');
+  }
+  // Noon avoids accidental calendar-day shifts when a date-only value is serialized.
+  const parsed = parse(`${normalizedDate} 12:00`, 'yyyy/MM/dd HH:mm', new Date());
+  if (Number.isNaN(parsed.getTime()) || format(parsed, 'yyyy/MM/dd') !== normalizedDate) {
+    throw new Error('تاریخ شمسی معتبر نیست');
+  }
+  return parsed.toISOString();
+}
+
 /**
  * Converts a Jalali date + 24-hour time entered by the user to an ISO timestamp.
  * Accepts Persian, Arabic, or Latin digits and `/` or `-` date separators.
