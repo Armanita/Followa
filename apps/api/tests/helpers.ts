@@ -93,8 +93,10 @@ export async function cleanup() {
     select: { id: true },
   });
   const ids = testCompanies.map((c) => c.id);
-  // cases first (case→company FK has no cascade), children of cases cascade
+  // audit rows use RESTRICT by design; remove test-only audit evidence before fixture teardown.
   if (ids.length > 0) {
+    await prisma.sensitiveAuditLog.deleteMany({ where: { companyId: { in: ids } } });
+    // cases first (case→company FK has no cascade), children of cases cascade
     await prisma.case.deleteMany({ where: { companyId: { in: ids } } });
     await prisma.company.deleteMany({ where: { id: { in: ids } } });
   }
