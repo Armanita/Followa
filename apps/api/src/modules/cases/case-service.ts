@@ -209,16 +209,6 @@ export const caseService = {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      if (nextReminder) {
-        const activeReminder = await tx.reminder.findFirst({
-          where: { caseId, status: 'ACTIVE' },
-          select: { id: true },
-        });
-        if (activeReminder) {
-          throw conflict('برای این پرونده یک یادآوری فعال وجود دارد');
-        }
-      }
-
       const nextCase = await tx.case.update({
         where: { id: caseId },
         data: {
@@ -244,6 +234,31 @@ export const caseService = {
         },
       });
 
+      // Recording a result means the employee handled the current follow-up.
+      // Close their active reminder(s) for this case before optionally creating
+      // exactly one next reminder.
+      const activeReminders = await tx.reminder.findMany({
+        where: { caseId, assigneeId: actor.userId, status: 'ACTIVE' },
+        select: { id: true },
+      });
+      if (activeReminders.length > 0) {
+        const completedAt = new Date();
+        await tx.reminder.updateMany({
+          where: { id: { in: activeReminders.map((reminder) => reminder.id) } },
+          data: { status: 'DONE', completedAt },
+        });
+        for (const reminder of activeReminders) {
+          await tx.caseActivity.create({
+            data: {
+              caseId,
+              type: 'REMINDER_DONE',
+              actorId: actor.userId,
+              payload: { reminderId: reminder.id },
+            },
+          });
+        }
+      }
+
       if (nextReminder) {
         const reminder = await tx.reminder.create({
           data: {
@@ -261,7 +276,7 @@ export const caseService = {
             actorId: actor.userId,
             payload: {
               reminderId: reminder.id,
-              remindAt: nextReminder.remindAt,
+              remindAt: nextReminder.remindAt.toISOString(),
               note: nextReminder.note,
             },
           },
