@@ -14,6 +14,7 @@ import {
   useConfirm,
   useToast,
 } from '@/components/ui';
+import { PersonnelProfileModal, type PersonnelTarget } from '@/components/personnel-profile-modal';
 import { faDate, toFa } from '@/lib/jalali';
 
 interface MemberRow {
@@ -26,6 +27,8 @@ interface MemberRow {
   hasPassword: boolean;
   jobTitle: string | null;
   employeeCode: string | null;
+  profileFinalizedAt: string | null;
+  hasPersonnelPhoto: boolean;
   createdAt: string;
 }
 
@@ -38,6 +41,7 @@ export default function EmployeesPage() {
   const [error, setError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<MemberRow | null>(null);
+  const [personnelTarget, setPersonnelTarget] = useState<PersonnelTarget | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -101,13 +105,14 @@ export default function EmployeesPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-right text-sm">
+            <table className="w-full min-w-[720px] text-right text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60 text-xs text-slate-500">
                   <th className="px-4 py-3 font-semibold">نام</th>
                   <th className="px-4 py-3 font-semibold">موبایل</th>
                   <th className="px-4 py-3 font-semibold">سمت</th>
                   <th className="px-4 py-3 font-semibold">وضعیت</th>
+                  <th className="px-4 py-3 font-semibold">اطلاعات پرسنلی</th>
                   <th className="px-4 py-3 font-semibold">عضویت از</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -147,9 +152,31 @@ export default function EmployeesPage() {
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      {m.role === 'EMPLOYEE' ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${m.profileFinalizedAt ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                            {m.profileFinalizedAt ? 'ثبت نهایی' : 'در حال تکمیل'}
+                          </span>
+                          {m.hasPersonnelPhoto && (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">عکس دارد</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="tnum px-4 py-3 text-xs text-slate-400">{faDate(m.createdAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
+                        {m.role === 'EMPLOYEE' && (
+                          <button
+                            onClick={() => setPersonnelTarget({ membershipId: m.membershipId, fullName: m.fullName })}
+                            className="rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+                          >
+                            اطلاعات پرسنلی
+                          </button>
+                        )}
                         <button
                           onClick={() => setResetTarget(m)}
                           className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
@@ -179,6 +206,11 @@ export default function EmployeesPage() {
 
       <CreateEmployeeModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} />
       <ResetPasswordModal target={resetTarget} onClose={() => setResetTarget(null)} />
+      <PersonnelProfileModal
+        target={personnelTarget}
+        onClose={() => setPersonnelTarget(null)}
+        onUpdated={load}
+      />
     </div>
   );
 }
