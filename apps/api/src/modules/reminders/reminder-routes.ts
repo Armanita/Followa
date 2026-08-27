@@ -31,9 +31,20 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     });
     const c = await prisma.case.findUnique({ where: { id: body.caseId } });
     if (!c) throw notFound('پرونده یافت نشد');
+    if (c.status === 'DONE' || c.status === 'CANCELLED') {
+      throw conflict('برای پرونده بسته‌شده یادآوری جدید ثبت نمی‌شود');
+    }
     const remindAt = new Date(body.remindAt);
     if (remindAt.getTime() < Date.now() - 60 * 1000) {
       throw badRequest('زمان یادآوری نمی‌تواند در گذشته باشد');
+    }
+
+    const activeReminder = await prisma.reminder.findFirst({
+      where: { caseId: body.caseId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    if (activeReminder) {
+      throw conflict('برای این پرونده یک یادآوری فعال وجود دارد');
     }
 
     const reminder = await prisma.reminder.create({
@@ -46,7 +57,8 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
       },
     });
     await logActivity(body.caseId, 'REMINDER_CREATED', userId, {
-      remindAt,
+      reminderId: reminder.id,
+      remindAt: remindAt.toISOString(),
       note: body.note,
     });
     return { message: 'یادآوری ساخته شد', reminder };
@@ -86,8 +98,9 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * Complete a reminder → record result on the case (spec §13 flow: trigger →
-   * record result → optionally create next reminder).
+   * Complete a reminder. The primary employee flow records results from the
+   * case result form; this endpoint remains for reminder-list compatibility.
+   * It must never reopen a DONE/CANCELLED case.
    */
   app.post('/reminders/:id/complete', async (request) => {
     const userId = request.actor.id;
@@ -102,19 +115,23 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     if (reminder.assigneeId !== userId) throw forbidden('این یادآوری متعلق به شما نیست');
     if (reminder.status !== 'ACTIVE') throw conflict('این یادآوری قبلاً بسته شده است');
 
+    const c = await prisma.case.findUnique({ where: { id: reminder.caseId } });
+    if (!c) throw notFound('پرونده یافت نشد');
+    const caseIsClosed = c.status === 'DONE' || c.status === 'CANCELLED';
+
     await prisma.$transaction([
       prisma.reminder.update({
         where: { id },
         data: { status: 'DONE', completedAt: new Date() },
       }),
-      ...(body.result
+      ...(body.result && !caseIsClosed
         ? [
             prisma.case.update({
               where: { id: reminder.caseId },
               data: {
                 result: body.result,
                 resultAt: new Date(),
-                status: 'IN_PROGRESS',
+                ...(c.status === 'OPEN' ? { status: 'IN_PROGRESS' as const } : {}),
               },
             }),
           ]
@@ -132,6 +149,8 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Reminder-due notifications are generated on dashboard fetch (MVP approach):
+  // This lazy mechanism will be replaced by the approved persistent worker in
+  // the Bale/notification reliability phase.
   app.get('/reminders/due-check', async (request) => {
     const userId = request.actor.id;
     const now = new Date();
