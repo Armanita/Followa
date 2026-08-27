@@ -188,7 +188,9 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     const { result, complete, effortMinutes, nextReminder } = parseWith(
       z.object({
         result: z.string().min(2).max(5000),
-        complete: z.boolean().default(false),
+        // Keep the API default for older clients; the new employee UI sends
+        // an explicit value and defaults its checkbox to "not complete".
+        complete: z.boolean().default(true),
         effortMinutes: z.number().int().min(1).max(1440).optional(),
         nextReminder: z
           .object({
