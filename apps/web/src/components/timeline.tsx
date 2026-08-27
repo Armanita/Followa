@@ -49,6 +49,16 @@ export function ActivityTimeline({ items }: { items: TimelineEntry[] }) {
               )}
             </p>
             <p className="mt-0.5 text-xs text-slate-400">{faDateTime(item.createdAt)}</p>
+            {item.type === 'RESULT_ADDED' && typeof item.payload?.result === 'string' && (
+              <p className="mt-2 whitespace-pre-wrap rounded-lg bg-emerald-50 px-3 py-2 text-sm leading-relaxed text-emerald-900">
+                {String(item.payload.result)}
+              </p>
+            )}
+            {item.type === 'RESULT_ADDED' && typeof item.payload?.effortMinutes === 'number' && (
+              <p className="tnum mt-1 text-xs text-slate-500">
+                زمان صرف‌شده اعلامی: {toFa(item.payload.effortMinutes as number)} دقیقه
+              </p>
+            )}
             {item.type === 'REJECT' && typeof item.payload?.rejectReason === 'string' && (
               <p className="mt-1 rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">
                 دلیل رد: {String(item.payload.rejectReason)}
@@ -60,7 +70,6 @@ export function ActivityTimeline({ items }: { items: TimelineEntry[] }) {
                   مدت: {faDuration(item.payload.durationSeconds as number)}
                 </p>
               )}
-            {typeof item.payload?.durationSeconds === 'number' && item.type === 'END_WORK' && null}
           </div>
         </li>
       ))}
