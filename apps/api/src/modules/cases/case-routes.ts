@@ -185,11 +185,17 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/cases/:id/result', async (request) => {
-    const { result, complete, effortMinutes } = parseWith(
+    const { result, complete, effortMinutes, nextReminder } = parseWith(
       z.object({
         result: z.string().min(2).max(5000),
-        complete: z.boolean().default(true),
+        complete: z.boolean().default(false),
         effortMinutes: z.number().int().min(1).max(1440).optional(),
+        nextReminder: z
+          .object({
+            remindAt: z.string().datetime(),
+            note: z.string().max(1000).optional(),
+          })
+          .optional(),
       }),
       request.body,
     );
@@ -199,8 +205,18 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
       result,
       complete,
       effortMinutes,
+      nextReminder
+        ? { remindAt: new Date(nextReminder.remindAt), note: nextReminder.note }
+        : undefined,
     );
-    return { message: complete ? 'پرونده تکمیل شد' : 'نتیجه ثبت شد', case: updated };
+    return {
+      message: complete
+        ? 'پرونده تکمیل شد'
+        : nextReminder
+          ? 'نتیجه و یادآوری بعدی ثبت شد'
+          : 'نتیجه ثبت شد',
+      case: updated,
+    };
   });
 
   app.post('/cases/:id/cancel', async (request) => {
