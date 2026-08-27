@@ -188,8 +188,14 @@ export const caseService = {
     return updated;
   },
 
-  /** Register final result and complete the case. Current owner or manager. */
-  async addResult(actor: Actor, caseId: string, result: string, complete: boolean) {
+  /** Register a work result and optionally complete the case. Current owner or manager. */
+  async addResult(
+    actor: Actor,
+    caseId: string,
+    result: string,
+    complete: boolean,
+    effortMinutes?: number,
+  ) {
     const c = await assertCanEditCase(caseId, actor);
     if (c.status === 'DONE') throw conflict('پرونده قبلاً تکمیل شده است');
 
@@ -205,7 +211,10 @@ export const caseService = {
             : {}),
       },
     });
-    await logActivity(caseId, 'RESULT_ADDED', actor.userId, { result });
+    await logActivity(caseId, 'RESULT_ADDED', actor.userId, {
+      result,
+      ...(effortMinutes !== undefined ? { effortMinutes } : {}),
+    });
 
     if (complete) {
       await logActivity(caseId, 'COMPLETE', actor.userId);
