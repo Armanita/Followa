@@ -221,26 +221,54 @@ describe('Mandatory E2E scenario (runbook §7)', () => {
     expect(e2row.completedCases).toBeGreaterThanOrEqual(1);
   });
 
-  it('13. reminder create → complete → notification generated', async () => {
-    const future = new Date(Date.now() + 60_000).toISOString();
-    const created = await api(employee2Token, 'POST', '/reminders', {
+  it('13. reminder lifecycle works on an open case and closed cases reject new reminders', async () => {
+    const closedReminder = await api(employee2Token, 'POST', '/reminders', {
       caseId,
-      remindAt: future,
+      remindAt: new Date(Date.now() + 60_000).toISOString(),
+      note: 'نباید روی پرونده بسته ساخته شود',
+    });
+    expect(closedReminder.statusCode).toBe(409);
+
+    const reminderCase = await api(employee2Token, 'POST', '/cases', {
+      title: 'پرونده مستقل برای تست یادآوری',
+    });
+    expect(reminderCase.statusCode).toBe(200);
+    const reminderCaseId = reminderCase.json().case.id;
+
+    const dueTime = new Date(Date.now() - 30_000).toISOString();
+    const created = await api(employee2Token, 'POST', '/reminders', {
+      caseId: reminderCaseId,
+      remindAt: dueTime,
       note: 'چک کردن واریز',
     });
     expect(created.statusCode).toBe(200);
+    const reminderId = created.json().reminder.id;
 
-    const list = await api(employee2Token, 'GET', '/reminders?status=ACTIVE');
-    expect(list.json().items.length).toBeGreaterThan(0);
-    const reminderId = list.json().items[0].id;
+    const duplicate = await api(employee2Token, 'POST', '/reminders', {
+      caseId: reminderCaseId,
+      remindAt: new Date(Date.now() + 120_000).toISOString(),
+      note: 'یادآوری دوم نباید پذیرفته شود',
+    });
+    expect(duplicate.statusCode).toBe(409);
+
+    const dueCheck = await api(employee2Token, 'GET', '/reminders/due-check');
+    expect(dueCheck.statusCode).toBe(200);
+    expect(dueCheck.json().dueCount).toBeGreaterThanOrEqual(1);
+
+    const notifs = await api(employee2Token, 'GET', '/notifications?unread=true');
+    expect(notifs.statusCode).toBe(200);
+    expect(
+      notifs
+        .json()
+        .items.some((n: { type: string; linkId?: string }) => n.type === 'REMINDER_DUE' && n.linkId === reminderId),
+    ).toBe(true);
 
     const done = await api(employee2Token, 'POST', `/reminders/${reminderId}/complete`, {
       result: 'واریز انجام شد',
     });
     expect(done.statusCode).toBe(200);
 
-    const notifs = await api(employee2Token, 'GET', '/notifications?unread=true');
-    expect(notifs.statusCode).toBe(200);
-    expect(Array.isArray(notifs.json().items)).toBe(true);
+    const list = await api(employee2Token, 'GET', '/reminders?status=ACTIVE');
+    expect(list.json().items.some((r: { id: string }) => r.id === reminderId)).toBe(false);
   });
 });
