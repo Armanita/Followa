@@ -21,21 +21,26 @@ model SystemAdmin {
 }
 
 model User {
-  id             String         @id @default(cuid())
-  mobile         String         @unique
-  passwordHash   String?
-  firstName      String
-  lastName       String
-  nationalId     String?
-  birthDate      DateTime?
-  phone          String?
-  address        String?
-  maritalStatus  MaritalStatus?
-  bankCardNumber String?
-  bankIban       String?
-  bankName       String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id                     String         @id @default(cuid())
+  mobile                 String         @unique
+  passwordHash           String?
+  firstName              String
+  lastName               String
+  nationalId             String?
+  birthDate              DateTime?
+  phone                  String?
+  address                String?
+  maritalStatus          MaritalStatus?
+  bankCardNumber         String?
+  bankIban               String?
+  bankName               String?
+  profileFinalizedAt     DateTime?
+  personnelPhotoFilename String?
+  personnelPhotoPath     String?
+  personnelPhotoMimeType String?
+  personnelPhotoSize     Int?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   memberships    CompanyMembership[]
   assignedCases  Case[]              @relation("CaseCurrentOwner")
@@ -48,6 +53,7 @@ model User {
   notifications  Notification[]
   activities     CaseActivity[]
   uploadedFiles  File[]
+  auditActions   SensitiveAuditLog[] @relation("SensitiveAuditActor")
 
   @@map("users")
 }
@@ -70,9 +76,10 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships CompanyMembership[]
-  caseTypes   CaseType[]
-  cases       Case[]
+  memberships       CompanyMembership[]
+  caseTypes         CaseType[]
+  cases             Case[]
+  sensitiveAuditLog SensitiveAuditLog[]
 
   @@map("companies")
 }
@@ -101,6 +108,28 @@ enum CompanyRole {
   EMPLOYEE
 
   @@map("company_role")
+}
+
+// ---------------------------------------------------------------------------
+// Sensitive audit trail (personnel now; customer reuse in later phases)
+// ---------------------------------------------------------------------------
+
+model SensitiveAuditLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  actorId    String
+  entityType String
+  entityId   String
+  action     String
+  changes    Json?
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  actor   User    @relation("SensitiveAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("sensitive_audit_logs")
 }
 
 // ---------------------------------------------------------------------------
