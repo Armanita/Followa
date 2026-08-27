@@ -188,49 +188,106 @@ export const caseService = {
     return updated;
   },
 
-  /** Register a work result and optionally complete the case. Current owner or manager. */
+  /**
+   * Register one employee work entry: result text + self-reported effort and,
+   * when work remains, an optional next reminder. Result/reminder persistence
+   * is atomic so a result cannot be saved without its requested reminder.
+   */
   async addResult(
     actor: Actor,
     caseId: string,
     result: string,
     complete: boolean,
     effortMinutes?: number,
+    nextReminder?: { remindAt: Date; note?: string },
   ) {
     const c = await assertCanEditCase(caseId, actor);
     if (c.status === 'DONE') throw conflict('پرونده قبلاً تکمیل شده است');
+    if (complete && nextReminder) throw badRequest('برای پرونده تکمیل‌شده یادآوری بعدی ثبت نمی‌شود');
+    if (nextReminder && nextReminder.remindAt.getTime() < Date.now() - 60 * 1000) {
+      throw badRequest('زمان یادآوری نمی‌تواند در گذشته باشد');
+    }
 
-    await prisma.case.update({
-      where: { id: caseId },
-      data: {
-        result,
-        resultAt: new Date(),
-        ...(complete
-          ? { status: 'DONE' as const }
-          : c.status === 'OPEN'
-            ? { status: 'IN_PROGRESS' as const }
-            : {}),
-      },
-    });
-    await logActivity(caseId, 'RESULT_ADDED', actor.userId, {
-      result,
-      ...(effortMinutes !== undefined ? { effortMinutes } : {}),
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      if (nextReminder) {
+        const activeReminder = await tx.reminder.findFirst({
+          where: { caseId, status: 'ACTIVE' },
+          select: { id: true },
+        });
+        if (activeReminder) {
+          throw conflict('برای این پرونده یک یادآوری فعال وجود دارد');
+        }
+      }
 
-    if (complete) {
-      await logActivity(caseId, 'COMPLETE', actor.userId);
-      // notify creator if different from completer
-      if (c.createdById !== actor.userId) {
-        await notificationService.notify({
-          userId: c.createdById,
-          type: 'CASE_COMPLETED',
-          title: 'پرونده تکمیل شد',
-          body: c.title,
-          linkType: 'CASE',
-          linkId: caseId,
+      const nextCase = await tx.case.update({
+        where: { id: caseId },
+        data: {
+          result,
+          resultAt: new Date(),
+          ...(complete
+            ? { status: 'DONE' as const }
+            : c.status === 'OPEN'
+              ? { status: 'IN_PROGRESS' as const }
+              : {}),
+        },
+      });
+
+      await tx.caseActivity.create({
+        data: {
+          caseId,
+          type: 'RESULT_ADDED',
+          actorId: actor.userId,
+          payload: {
+            result,
+            ...(effortMinutes !== undefined ? { effortMinutes } : {}),
+          },
+        },
+      });
+
+      if (nextReminder) {
+        const reminder = await tx.reminder.create({
+          data: {
+            caseId,
+            assigneeId: actor.userId,
+            creatorId: actor.userId,
+            remindAt: nextReminder.remindAt,
+            note: nextReminder.note,
+          },
+        });
+        await tx.caseActivity.create({
+          data: {
+            caseId,
+            type: 'REMINDER_CREATED',
+            actorId: actor.userId,
+            payload: {
+              reminderId: reminder.id,
+              remindAt: nextReminder.remindAt,
+              note: nextReminder.note,
+            },
+          },
         });
       }
+
+      if (complete) {
+        await tx.caseActivity.create({
+          data: { caseId, type: 'COMPLETE', actorId: actor.userId },
+        });
+      }
+
+      return nextCase;
+    });
+
+    if (complete && c.createdById !== actor.userId) {
+      await notificationService.notify({
+        userId: c.createdById,
+        type: 'CASE_COMPLETED',
+        title: 'پرونده تکمیل شد',
+        body: c.title,
+        linkType: 'CASE',
+        linkId: caseId,
+      });
     }
-    return prisma.case.findUniqueOrThrow({ where: { id: caseId } });
+    return updated;
   },
 
   /** Cancel — manager only, or owner-employee when still open. */
