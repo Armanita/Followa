@@ -23,21 +23,19 @@ export async function recordSensitiveAudit(input: {
   });
 }
 
-export function changedFields<T extends Record<string, unknown>>(
-  before: T,
-  after: T,
-  keys: (keyof T)[],
+export function changedFields(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  keys: string[],
 ): string[] {
-  return keys
-    .filter((key) => {
-      const left = before[key];
-      const right = after[key];
-      if (left instanceof Date || right instanceof Date) {
-        const l = left instanceof Date ? left.getTime() : left;
-        const r = right instanceof Date ? right.getTime() : right;
-        return l !== r;
-      }
-      return left !== right;
-    })
-    .map(String);
+  return keys.filter((key) => {
+    const left = before[key];
+    const right = after[key];
+    if (left instanceof Date || right instanceof Date) {
+      const l = left instanceof Date ? left.getTime() : left;
+      const r = right instanceof Date ? right.getTime() : right;
+      return l !== r;
+    }
+    return left !== right;
+  });
 }
