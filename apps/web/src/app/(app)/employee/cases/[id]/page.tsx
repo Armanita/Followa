@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, downloadFile, getFileObjectUrl } from '@/lib/api';
 import {
   btnPrimary,
   btnSecondary,
@@ -19,7 +19,7 @@ import {
   Toast,
 } from '@/components/ui';
 import { ActivityTimeline, AssignmentHistory } from '@/components/timeline';
-import { faDate, faDateTime, faDuration, toFa } from '@/lib/jalali';
+import { faDate, faDateInput, faDateTime, jalaliDateTimeToIso, toFa } from '@/lib/jalali';
 
 interface CaseDetail {
   id: string;
@@ -34,11 +34,17 @@ interface CaseDetail {
   createdAt: string;
   canEdit: boolean;
   hasPendingAcceptanceForMe: boolean;
-  totalWorkSeconds: number;
   currentOwner?: { id: string; firstName: string; lastName: string } | null;
   createdBy: { id: string; firstName: string; lastName: string };
   caseType?: { id: string; name: string; color: string | null } | null;
-  files: { id: string; filename: string; size: number; mimeType: string; createdAt: string; uploader: { firstName: string; lastName: string } }[];
+  files: {
+    id: string;
+    filename: string;
+    size: number;
+    mimeType: string;
+    createdAt: string;
+    uploader: { firstName: string; lastName: string };
+  }[];
 }
 
 export default function CaseDetailPage() {
@@ -47,11 +53,10 @@ export default function CaseDetailPage() {
   const [data, setData] = useState<CaseDetail | null>(null);
   const [activities, setActivities] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
-  const [myActiveSession, setMyActiveSession] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
-  const [modal, setModal] = useState<'' | 'result' | 'transfer' | 'reminder' | 'reject'>('');
+  const [modal, setModal] = useState<'' | 'result' | 'transfer' | 'reject'>('');
   const fileInput = useRef<HTMLInputElement>(null);
 
   const showToast = (message: string, tone: 'success' | 'error') => {
@@ -64,14 +69,12 @@ export default function CaseDetailPage() {
       setError('');
       const detail = await api.get<CaseDetail>(`/cases/${id}`);
       setData(detail);
-      const [acts, asgns, active] = await Promise.all([
+      const [acts, asgns] = await Promise.all([
         api.get<any[]>(`/cases/${id}/activities`),
         api.get<{ items: any[] }>(`/cases/${id}/assignments`),
-        api.get<{ items: any[] }>('/work-sessions/active').catch(() => ({ items: [] })),
       ]);
       setActivities(acts);
       setAssignments(asgns.items);
-      setMyActiveSession(active.items.find((s) => s.caseId === id) ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'خطا');
     } finally {
@@ -109,6 +112,30 @@ export default function CaseDetailPage() {
     }
   };
 
+  const viewFile = async (file: CaseDetail['files'][number]) => {
+    try {
+      const { url } = await getFileObjectUrl(`/files/${file.id}/download`);
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'خطا در مشاهده فایل', 'error');
+    }
+  };
+
+  const handleDownload = async (file: CaseDetail['files'][number]) => {
+    try {
+      await downloadFile(`/files/${file.id}/download`, file.filename);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'خطا در دانلود فایل', 'error');
+    }
+  };
+
   return (
     <div className="space-y-5">
       {toast && <Toast message={toast.message} tone={toast.tone} />}
@@ -117,7 +144,6 @@ export default function CaseDetailPage() {
         → بازگشت
       </button>
 
-      {/* header card */}
       <Card className="p-5">
         <div className="flex flex-wrap items-start gap-3">
           <span className="tnum rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">
@@ -142,13 +168,16 @@ export default function CaseDetailPage() {
             </span>
           )}
           {data.dueDate && (
-            <span className={`tnum rounded-full px-2.5 py-0.5 text-xs font-medium ${new Date(data.dueDate) < new Date() && !isClosed ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+            <span
+              className={`tnum rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                new Date(data.dueDate) < new Date() && !isClosed
+                  ? 'bg-red-50 text-red-600'
+                  : 'bg-slate-100 text-slate-500'
+              }`}
+            >
               سررسید: {faDate(data.dueDate)}
             </span>
           )}
-          <span className="tnum rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">
-            زمان کار: {faDuration(data.totalWorkSeconds)}
-          </span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500 sm:grid-cols-4">
           <div>
@@ -169,7 +198,7 @@ export default function CaseDetailPage() {
           </div>
           {data.resultAt && (
             <div>
-              <p className="text-slate-400">زمان نتیجه</p>
+              <p className="text-slate-400">آخرین ثبت نتیجه</p>
               <p className="tnum mt-0.5 font-semibold text-slate-700">{faDateTime(data.resultAt)}</p>
             </div>
           )}
@@ -181,13 +210,12 @@ export default function CaseDetailPage() {
         )}
         {data.result && (
           <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
-            <p className="mb-1 text-xs font-bold text-emerald-700">نتیجه ثبت‌شده</p>
+            <p className="mb-1 text-xs font-bold text-emerald-700">آخرین نتیجه ثبت‌شده</p>
             <p className="whitespace-pre-wrap text-sm text-emerald-900">{data.result}</p>
           </div>
         )}
       </Card>
 
-      {/* pending acceptance banner */}
       {data.hasPendingAcceptanceForMe && data.status === 'WAITING_ACCEPTANCE' && (
         <Card className="border-amber-200 bg-amber-50/70 p-4 ring-amber-200">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -201,7 +229,10 @@ export default function CaseDetailPage() {
               >
                 ✓ پذیرش
               </button>
-              <button onClick={() => setModal('reject')} className={`${btnSecondary} !border-red-200 !text-red-600 hover:!bg-red-50`}>
+              <button
+                onClick={() => setModal('reject')}
+                className={`${btnSecondary} !border-red-200 !text-red-600 hover:!bg-red-50`}
+              >
                 ✕ رد کردن
               </button>
             </div>
@@ -209,62 +240,25 @@ export default function CaseDetailPage() {
         </Card>
       )}
 
-      {/* action bar */}
-      {!isClosed && (
+      {!isClosed && data.canEdit && (
         <Card className="p-4">
           <div className="flex flex-wrap gap-2.5">
-            {myActiveSession ? (
-              <button
-                onClick={() => action(() => api.post('/work-sessions/end', { caseId: id }), 'پایان کار ثبت شد')}
-                className={`${btnSecondary} !border-red-200 !text-red-600`}
-              >
-                ⏹ پایان کار
-              </button>
-            ) : (
-              data.currentOwner?.id === myUserId() && (
-                <button
-                  onClick={() => action(() => api.post('/work-sessions/start', { caseId: id }), 'کار شروع شد')}
-                  className={`${btnSecondary} !border-emerald-200 !text-emerald-700`}
-                >
-                  ▶ شروع کار
-                </button>
-              )
-            )}
-            {(data.canEdit || data.currentOwner?.id === myUserId()) && (
-              <>
-                <button onClick={() => setModal('result')} className={btnSecondary}>
-                  📝 ثبت نتیجه / تکمیل
-                </button>
-                <button onClick={() => setModal('transfer')} className={btnSecondary}>
-                  📤 انتقال به همکار
-                </button>
-                <button onClick={() => setModal('reminder')} className={btnSecondary}>
-                  ⏰ یادآوری
-                </button>
-              </>
-            )}
+            <button onClick={() => setModal('result')} className={btnSecondary}>
+              📝 ثبت نتیجه / ادامه پیگیری
+            </button>
+            <button onClick={() => setModal('transfer')} className={btnSecondary}>
+              📤 انتقال به همکار
+            </button>
             <input
               ref={fileInput}
               type="file"
               hidden
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                const fd = new FormData();
-                fd.append('file', f);
-                action(
-                  () => fetch(`/api/v1/cases/${id}/files`, {
-                    method: 'POST',
-                    headers: { authorization: `Bearer ${localStorage.getItem('followa_token')}` },
-                    body: fd,
-                  }).then(async (r) => {
-                    if (!r.ok) {
-                      const j = await r.json().catch(() => null);
-                      throw new Error(j?.message ?? 'خطا در آپلود');
-                    }
-                  }),
-                  'فایل پیوست شد',
-                );
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                void action(() => api.post(`/cases/${id}/files`, formData), 'فایل پیوست شد');
                 e.target.value = '';
               }}
             />
@@ -272,6 +266,9 @@ export default function CaseDetailPage() {
               📎 پیوست فایل
             </button>
           </div>
+          <p className="mt-3 text-xs text-slate-400">
+            زمان صرف‌شده و پیگیری بعدی هنگام «ثبت نتیجه» ثبت می‌شوند؛ تایمر شروع/پایان کار حذف شده است.
+          </p>
         </Card>
       )}
 
@@ -286,47 +283,67 @@ export default function CaseDetailPage() {
         </Card>
       </div>
 
-      {/* files */}
       <Card className="p-5">
         <h2 className="mb-4 font-bold">فایل‌ها</h2>
         {data.files.length === 0 ? (
           <EmptyState title="فایلی پیوست نشده است" hint="با دکمه «پیوست فایل» سند، عکس یا صوت اضافه کنید." />
         ) : (
           <ul className="divide-y divide-slate-100">
-            {data.files.map((f) => (
-              <li key={f.id} className="flex items-center gap-3 py-2.5">
-                <span className="text-lg">{f.mimeType.startsWith('audio') ? '🎧' : f.mimeType.startsWith('image') ? '🖼️' : '📄'}</span>
-                <a
-                  href={`/api/v1/files/${f.id}/download`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-w-0 flex-1 truncate text-sm font-medium text-brand-700 hover:underline"
+            {data.files.map((file) => (
+              <li key={file.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                <span className="text-lg">
+                  {file.mimeType.startsWith('audio') ? '🎧' : file.mimeType.startsWith('image') ? '🖼️' : '📄'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void viewFile(file)}
+                  className="min-w-0 flex-1 truncate text-right text-sm font-medium text-brand-700 hover:underline"
                 >
-                  {f.filename}
-                </a>
-                <span className="tnum shrink-0 text-xs text-slate-400">{toFa((f.size / 1024).toFixed(0))} کیلوبایت</span>
-                <span className="tnum hidden shrink-0 text-xs text-slate-400 sm:block">{faDateTime(f.createdAt)}</span>
+                  {file.filename}
+                </button>
+                <span className="tnum shrink-0 text-xs text-slate-400">
+                  {toFa((file.size / 1024).toFixed(0))} کیلوبایت
+                </span>
+                <span className="tnum hidden shrink-0 text-xs text-slate-400 sm:block">
+                  {faDateTime(file.createdAt)}
+                </span>
+                <div className="flex shrink-0 gap-1.5">
+                  <button type="button" onClick={() => void viewFile(file)} className={btnSecondary}>
+                    مشاهده
+                  </button>
+                  <button type="button" onClick={() => void handleDownload(file)} className={btnSecondary}>
+                    دانلود
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </Card>
 
-      <RejectModal open={modal === 'reject'} onClose={() => setModal('')} caseId={id} onDone={load} showToast={showToast} />
-      <ResultModal open={modal === 'result'} onClose={() => setModal('')} caseId={id} onDone={load} showToast={showToast} />
-      <TransferModal open={modal === 'transfer'} onClose={() => setModal('')} caseId={id} onDone={load} showToast={showToast} />
-      <ReminderModal open={modal === 'reminder'} onClose={() => setModal('')} caseId={id} onDone={load} showToast={showToast} />
+      <RejectModal
+        open={modal === 'reject'}
+        onClose={() => setModal('')}
+        caseId={id}
+        onDone={load}
+        showToast={showToast}
+      />
+      <ResultModal
+        open={modal === 'result'}
+        onClose={() => setModal('')}
+        caseId={id}
+        onDone={load}
+        showToast={showToast}
+      />
+      <TransferModal
+        open={modal === 'transfer'}
+        onClose={() => setModal('')}
+        caseId={id}
+        onDone={load}
+        showToast={showToast}
+      />
     </div>
   );
-}
-
-function myUserId(): string {
-  if (typeof window === 'undefined') return '';
-  try {
-    return JSON.parse(localStorage.getItem('followa_user') ?? '{}').id ?? '';
-  } catch {
-    return '';
-  }
 }
 
 function RejectModal({
@@ -353,6 +370,7 @@ function RejectModal({
           try {
             await api.post(`/cases/${caseId}/reject`, { reason });
             showToast('پرونده رد و به ارجاع‌دهنده بازگشت', 'success');
+            setReason('');
             onClose();
             onDone();
           } catch (err) {
@@ -373,7 +391,9 @@ function RejectModal({
           />
         </Field>
         <p className="text-xs text-slate-400">پرونده پس از رد شدن به ارجاع‌دهنده بازمی‌گردد.</p>
-        <button disabled={busy || reason.length < 3} className={btnPrimary}>ثبت رد</button>
+        <button disabled={busy || reason.length < 3} className={btnPrimary}>
+          ثبت رد
+        </button>
       </form>
     </Modal>
   );
@@ -393,18 +413,60 @@ function ResultModal({
   showToast: (m: string, t: 'success' | 'error') => void;
 }) {
   const [result, setResult] = useState('');
-  const [complete, setComplete] = useState(true);
+  const [effortMinutes, setEffortMinutes] = useState('');
+  const [complete, setComplete] = useState(false);
+  const [createNextReminder, setCreateNextReminder] = useState(false);
+  const [reminderDate, setReminderDate] = useState(() => faDateInput(new Date(Date.now() + 86400_000)));
+  const [reminderTime, setReminderTime] = useState('09:00');
+  const [reminderNote, setReminderNote] = useState('');
   const [busy, setBusy] = useState(false);
+
   return (
-    <Modal open={open} onClose={onClose} title="ثبت نتیجه">
+    <Modal open={open} onClose={onClose} title="ثبت نتیجه پیگیری">
       <form
         onSubmit={async (e) => {
           e.preventDefault();
+          const effort = Number(effortMinutes);
+          if (!Number.isInteger(effort) || effort < 1 || effort > 1440) {
+            showToast('زمان صرف‌شده را بین ۱ تا ۱۴۴۰ دقیقه وارد کنید', 'error');
+            return;
+          }
+
           setBusy(true);
           try {
-            await api.post(`/cases/${caseId}/result`, { result, complete });
-            showToast(complete ? 'پرونده تکمیل شد' : 'نتیجه ثبت شد', 'success');
+            let nextReminder: { remindAt: string; note?: string } | undefined;
+            if (!complete && createNextReminder) {
+              const remindAt = jalaliDateTimeToIso(reminderDate, reminderTime);
+              if (new Date(remindAt).getTime() < Date.now() - 60_000) {
+                throw new Error('زمان یادآوری نمی‌تواند در گذشته باشد');
+              }
+              nextReminder = {
+                remindAt,
+                ...(reminderNote.trim() ? { note: reminderNote.trim() } : {}),
+              };
+            }
+
+            await api.post(`/cases/${caseId}/result`, {
+              result,
+              complete,
+              effortMinutes: effort,
+              ...(nextReminder ? { nextReminder } : {}),
+            });
+            showToast(
+              complete
+                ? 'نتیجه ثبت و پرونده تکمیل شد'
+                : nextReminder
+                  ? 'نتیجه و یادآوری بعدی ثبت شد'
+                  : 'نتیجه ثبت شد',
+              'success',
+            );
             setResult('');
+            setEffortMinutes('');
+            setComplete(false);
+            setCreateNextReminder(false);
+            setReminderNote('');
+            setReminderDate(faDateInput(new Date(Date.now() + 86400_000)));
+            setReminderTime('09:00');
             onClose();
             onDone();
           } catch (err) {
@@ -420,15 +482,96 @@ function ResultModal({
             className={`${inputClass} min-h-32`}
             value={result}
             onChange={(e) => setResult(e.target.value)}
-            placeholder="چه اتفاقی افتاد؟ نتیجه مذاکره، قرار بعدی…"
+            placeholder="چه کاری انجام شد و نتیجه چه بود؟"
             autoFocus
           />
         </Field>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={complete} onChange={(e) => setComplete(e.target.checked)} className="accent-brand-600" />
+
+        <Field label="زمان صرف‌شده (دقیقه)" required>
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            inputMode="numeric"
+            dir="ltr"
+            className={inputClass}
+            value={effortMinutes}
+            onChange={(e) => setEffortMinutes(e.target.value)}
+            placeholder="مثلاً ۲۰"
+          />
+        </Field>
+        <p className="text-xs text-slate-400">
+          این مقدار تخمین خود کارمند از زمان صرف‌شده برای همین مرحله است و جایگزین تایمر شروع/پایان شده است.
+        </p>
+
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={complete}
+            onChange={(e) => {
+              setComplete(e.target.checked);
+              if (e.target.checked) setCreateNextReminder(false);
+            }}
+            className="accent-brand-600"
+          />
           موضوع کاملاً بسته شده — پرونده تکمیل شود
         </label>
-        <button disabled={busy || result.length < 2} className={btnPrimary}>ثبت</button>
+
+        {!complete && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={createNextReminder}
+                onChange={(e) => setCreateNextReminder(e.target.checked)}
+                className="accent-brand-600"
+              />
+              برای پیگیری بعدی یادآوری ثبت شود
+            </label>
+
+            {createNextReminder && (
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="تاریخ شمسی" required>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      dir="ltr"
+                      className={inputClass}
+                      value={reminderDate}
+                      onChange={(e) => setReminderDate(e.target.value)}
+                      placeholder="۱۴۰۵/۰۶/۰۷"
+                    />
+                  </Field>
+                  <Field label="ساعت" required>
+                    <input
+                      type="time"
+                      dir="ltr"
+                      className={inputClass}
+                      value={reminderTime}
+                      onChange={(e) => setReminderTime(e.target.value)}
+                    />
+                  </Field>
+                </div>
+                <Field label="یادداشت پیگیری بعدی">
+                  <input
+                    className={inputClass}
+                    value={reminderNote}
+                    onChange={(e) => setReminderNote(e.target.value)}
+                    placeholder="مثلاً: تماس برای تأیید قرارداد"
+                  />
+                </Field>
+                <p className="text-xs text-slate-400">
+                  تاریخ به‌صورت شمسی وارد می‌شود؛ تبدیل زمان برای ذخیره‌سازی در سرور انجام می‌شود.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <button disabled={busy || result.trim().length < 2 || !effortMinutes} className={btnPrimary}>
+          {busy ? 'در حال ثبت…' : complete ? 'ثبت نتیجه و تکمیل پرونده' : 'ثبت نتیجه'}
+        </button>
       </form>
     </Modal>
   );
@@ -456,9 +599,8 @@ function TransferModalImpl({
     if (!open) return;
     api
       .get<{ items: { userId: string; fullName: string; isActive: boolean }[] }>('/members')
-      .then((r) => setMembers(r.items.filter((m) => m.isActive)))
+      .then((response) => setMembers(response.items.filter((member) => member.isActive)))
       .catch(() =>
-        // fallback for employees: derive colleagues from company members via profile company
         api.get<{ company: { name: string } | null }>('/profile').then(async () => {
           showToast('برای انتخاب مقصد با مدیر هماهنگ کنید یا از لیست داشبورد استفاده کنید', 'error');
         }),
@@ -487,91 +629,37 @@ function TransferModalImpl({
         className="space-y-4"
       >
         <Field label="ارجاع به" required>
-          <select className={inputClass} value={toUser} onChange={(e) => setToUser(e.target.value)} autoFocus>
+          <select
+            className={inputClass}
+            value={toUser}
+            onChange={(e) => setToUser(e.target.value)}
+            autoFocus
+          >
             <option value="">— انتخاب همکار —</option>
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>{m.fullName}</option>
+            {members.map((member) => (
+              <option key={member.userId} value={member.userId}>
+                {member.fullName}
+              </option>
             ))}
           </select>
         </Field>
         <Field label="توضیح">
-          <textarea className={`${inputClass} min-h-20`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="وضعیت فعلی و ادامه کار…" />
+          <textarea
+            className={`${inputClass} min-h-20`}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="وضعیت فعلی و ادامه کار…"
+          />
         </Field>
         <p className="text-xs text-slate-400">
           تا زمانی که گیرنده پرونده را بپذیرد، وضعیت «در انتظار پذیرش» خواهد بود.
         </p>
-        <button disabled={busy || !toUser} className={btnPrimary}>انتقال</button>
+        <button disabled={busy || !toUser} className={btnPrimary}>
+          انتقال
+        </button>
       </form>
     </Modal>
   );
 }
 
 const TransferModal = TransferModalImpl;
-
-function ReminderModal({
-  open,
-  onClose,
-  caseId,
-  onDone,
-  showToast,
-}: {
-  open: boolean;
-  onClose: () => void;
-  caseId: string;
-  onDone: () => void;
-  showToast: (m: string, t: 'success' | 'error') => void;
-}) {
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('09:00');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const tomorrow = new Date(Date.now() + 86400_000);
-  useEffect(() => {
-    if (open && !date) {
-      setDate(tomorrow.toISOString().slice(0, 10));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  return (
-    <Modal open={open} onClose={onClose} title="ساخت یادآوری">
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          try {
-            await api.post('/reminders', {
-              caseId,
-              remindAt: new Date(`${date}T${time}:00`).toISOString(),
-              note: note || undefined,
-            });
-            showToast('یادآوری ساخته شد', 'success');
-            setNote('');
-            onClose();
-            onDone();
-          } catch (err) {
-            showToast(err instanceof Error ? err.message : 'خطا', 'error');
-          } finally {
-            setBusy(false);
-          }
-        }}
-        className="space-y-4"
-      >
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="تاریخ" required>
-            <input type="date" dir="ltr" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
-          <Field label="ساعت" required>
-            <input type="time" dir="ltr" className={inputClass} value={time} onChange={(e) => setTime(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="یادداشت">
-          <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثلاً: تماس دوم با مشتری" />
-        </Field>
-        <p className="text-xs text-slate-400">در زمان مقرر در بخش یادآوری‌ها و اعلان‌ها نمایش داده می‌شود.</p>
-        <button disabled={busy} className={btnPrimary}>ساخت یادآوری</button>
-      </form>
-    </Modal>
-  );
-}
