@@ -55,7 +55,7 @@ const NAV_EMPLOYEE: NavEntry[] = [
 function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-op-danger px-1.5 text-[11px] font-bold text-white">
+    <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white shadow-sm">
       {count.toLocaleString('fa-IR')}
     </span>
   );
@@ -63,13 +63,13 @@ function UnreadBadge({ count }: { count: number }) {
 
 function BrandBlock() {
   return (
-    <div className="flex items-center gap-3 border-b border-workspace-border px-5 py-5">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-op-brand text-base font-black text-white shadow-sm">
+    <div className="flex items-center gap-3 border-b border-workspace-shell-border px-5 py-5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-base font-black text-white shadow-lg shadow-blue-950/30">
         ف
       </div>
       <div className="min-w-0">
-        <p className="text-base font-extrabold leading-none text-workspace-ink">فالوآ</p>
-        <p className="mt-1.5 truncate text-[11px] text-workspace-ink-muted">فضای عملیاتی پیگیری شرکت</p>
+        <p className="text-base font-extrabold leading-none text-white">فالوآ</p>
+        <p className="mt-1.5 truncate text-[11px] text-workspace-shell-muted">فضای عملیاتی پیگیری شرکت</p>
       </div>
     </div>
   );
@@ -148,13 +148,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             key={item.href}
             href={item.href}
             onClick={() => setSidebarOpen(false)}
-            className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-op-brand/25 ${
+            className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 ${
               active
-                ? 'bg-op-brand-soft text-op-brand'
-                : 'text-workspace-ink-muted hover:bg-workspace-muted hover:text-workspace-ink'
+                ? 'bg-workspace-shell-active text-white ring-1 ring-inset ring-white/10'
+                : 'text-workspace-shell-muted hover:bg-workspace-shell-hover hover:text-white'
             }`}
           >
-            {active && <span className="absolute inset-y-2 right-0 w-0.5 rounded-l-full bg-op-brand" aria-hidden="true" />}
+            {active && <span className="absolute inset-y-2 right-0 w-0.5 rounded-l-full bg-brand-400" aria-hidden="true" />}
             <span className="flex h-5 w-5 shrink-0 items-center justify-center [&>svg]:h-5 [&>svg]:w-5">{item.icon}</span>
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
             {item.href === '/notifications' ? <UnreadBadge count={unread} /> : null}
@@ -166,14 +166,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-workspace-canvas text-workspace-ink">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-l border-workspace-border bg-workspace-surface lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-l border-workspace-shell-border bg-workspace-shell shadow-xl shadow-slate-950/10 lg:flex">
         <BrandBlock />
         <div className="flex-1 overflow-y-auto">{navList}</div>
-        <div className="border-t border-workspace-border p-3">
+        <div className="border-t border-workspace-shell-border p-3">
           <button
             type="button"
             onClick={logout}
-            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-op-danger transition hover:bg-op-danger-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-op-danger/20"
+            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-950/35 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/35"
           >
             <LogoutIcon className="h-5 w-5" />
             <span>خروج از حساب</span>
@@ -183,12 +183,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setSidebarOpen(false)}>
-          <div className="absolute inset-0 bg-slate-950/35" aria-hidden="true" />
+          <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[1px]" aria-hidden="true" />
           <aside
             role="dialog"
             aria-modal="true"
             aria-label="منوی اصلی"
-            className="absolute right-0 top-0 flex h-full w-[min(19rem,88vw)] flex-col border-l border-workspace-border bg-workspace-surface shadow-workspace-pop"
+            className="absolute right-0 top-0 flex h-full w-[min(19rem,88vw)] flex-col border-l border-workspace-shell-border bg-workspace-shell shadow-workspace-pop"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-end px-3 pt-3">
@@ -197,18 +197,18 @@ export function AppShell({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={() => setSidebarOpen(false)}
                 aria-label="بستن منو"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-workspace-ink-muted transition hover:bg-workspace-muted hover:text-workspace-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-op-brand/25"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-workspace-shell-muted transition hover:bg-workspace-shell-hover hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50"
               >
                 <CloseIcon className="h-5 w-5" />
               </button>
             </div>
             <BrandBlock />
             <div className="flex-1 overflow-y-auto">{navList}</div>
-            <div className="border-t border-workspace-border p-3">
+            <div className="border-t border-workspace-shell-border p-3">
               <button
                 type="button"
                 onClick={logout}
-                className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-op-danger transition hover:bg-op-danger-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-op-danger/20"
+                className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-950/35 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/35"
               >
                 <LogoutIcon className="h-5 w-5" />
                 <span>خروج از حساب</span>
@@ -219,29 +219,29 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-workspace-border bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-workspace-shell-border bg-workspace-shell px-4 py-3 shadow-sm lg:hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
             aria-label="باز کردن منو"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-workspace-border text-workspace-ink-muted transition hover:bg-workspace-muted hover:text-workspace-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-op-brand/25"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-workspace-shell-muted transition hover:bg-workspace-shell-hover hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50"
           >
             <MenuIcon className="h-5 w-5" />
           </button>
-          <span className="font-extrabold text-op-brand">فالوآ</span>
-          <span className="mr-auto truncate text-sm font-medium text-workspace-ink-muted">
+          <span className="font-extrabold text-white">فالوآ</span>
+          <span className="mr-auto truncate text-sm font-medium text-workspace-shell-muted">
             {user.firstName} {user.lastName}
           </span>
         </header>
 
-        <header className="sticky top-0 z-20 hidden h-16 items-center justify-between border-b border-workspace-border bg-white/95 px-8 backdrop-blur lg:flex">
-          <div className="text-sm text-workspace-ink-muted">فضای عملیاتی پیگیری و اجرای کار</div>
+        <header className="sticky top-0 z-20 hidden h-16 items-center justify-between border-b border-workspace-shell-border bg-workspace-shell px-8 shadow-sm lg:flex">
+          <div className="text-sm text-workspace-shell-muted">فضای عملیاتی پیگیری و اجرای کار</div>
           <div className="flex items-center gap-4">
             {!isManager && (
               <Link
                 href="/notifications"
                 aria-label="اعلان‌ها"
-                className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-workspace-border text-workspace-ink-muted transition hover:bg-workspace-muted hover:text-workspace-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-op-brand/25"
+                className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-workspace-shell-muted transition hover:bg-workspace-shell-hover hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50"
               >
                 <BellIcon className="h-5 w-5" />
                 {unread > 0 && (
@@ -252,12 +252,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             )}
             <div className="text-left">
-              <p className="text-sm font-semibold text-workspace-ink">
+              <p className="text-sm font-semibold text-white">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="mt-0.5 text-xs text-workspace-ink-muted">{isManager ? 'مدیر شرکت' : 'کارمند'}</p>
+              <p className="mt-0.5 text-xs text-workspace-shell-muted">{isManager ? 'مدیر شرکت' : 'کارمند'}</p>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-op-brand-soft font-bold text-op-brand" aria-hidden="true">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 font-bold text-white ring-1 ring-inset ring-white/10" aria-hidden="true">
               {user.firstName.charAt(0)}
             </div>
           </div>
