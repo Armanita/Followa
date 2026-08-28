@@ -8,12 +8,6 @@ export interface Actor {
   role: 'COMPANY_MANAGER' | 'EMPLOYEE';
 }
 
-/**
- * Visibility rule (spec §11/§12):
- * - Manager: every case in the company.
- * - Employee: cases currently owned by them + cases they created + cases where
- *   they appear in assignment history (as sender or receiver).
- */
 export async function assertCanViewCase(caseId: string, actor: Actor) {
   const c = await prisma.case.findUnique({
     where: { id: caseId },
@@ -30,7 +24,6 @@ export async function assertCanViewCase(caseId: string, actor: Actor) {
   return c;
 }
 
-/** Write access: manager always; employee only while they are the current owner. */
 export async function assertCanEditCase(caseId: string, actor: Actor) {
   const c = await assertCanViewCase(caseId, actor);
   if (actor.role === 'COMPANY_MANAGER') return c;
@@ -64,17 +57,13 @@ export async function logActivity(
 }
 
 export const caseService = {
-  /**
-   * Creates a case. If `assignToUserId` is provided the case goes to
-   * WAITING_ACCEPTANCE and a PENDING assignment is recorded; otherwise it stays
-   * OPEN owned by the creator.
-   */
   async createCase(
     actor: Actor,
     input: {
       title: string;
       description?: string;
       caseTypeId?: string;
+      customerId?: string;
       priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
       dueDate?: Date;
       assignToUserId?: string;
@@ -87,9 +76,16 @@ export const caseService = {
         throw badRequest('نوع پرونده معتبر نیست');
     }
 
+    if (input.customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: input.customerId, companyId: actor.companyId, isActive: true },
+        select: { id: true },
+      });
+      if (!customer) throw badRequest('مشتری فعال معتبر نیست');
+    }
+
     let assigneeId: string | null = null;
     if (input.assignToUserId) {
-      // Managers create cases for employees; assigning to self is not allowed.
       if (input.assignToUserId === actor.userId && actor.role === 'COMPANY_MANAGER') {
         throw badRequest('ارجاع پرونده به خودتان مجاز نیست. برای کارکنان ارجاع دهید.');
       }
@@ -107,6 +103,7 @@ export const caseService = {
       const c = await tx.case.create({
         data: {
           companyId: actor.companyId,
+          customerId: input.customerId,
           title: input.title,
           description: input.description,
           caseTypeId: input.caseTypeId,
@@ -155,7 +152,6 @@ export const caseService = {
     return created;
   },
 
-  /** Manager can edit any case; current-owner employee may edit title/desc/type/priority/due. */
   async updateCase(
     actor: Actor,
     caseId: string,
@@ -167,32 +163,24 @@ export const caseService = {
       dueDate?: Date | null;
     },
   ) {
-    const c = await assertCanEditCase(caseId, actor);
+    await assertCanEditCase(caseId, actor);
     if (input.caseTypeId) {
       const type = await prisma.caseType.findUnique({ where: { id: input.caseTypeId } });
       if (!type || type.companyId !== actor.companyId)
         throw badRequest('نوع پرونده معتبر نیست');
     }
-    const updated = await prisma.case.update({
+    return prisma.case.update({
       where: { id: caseId },
       data: {
         ...(input.title !== undefined ? { title: input.title } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.caseTypeId !== undefined ? { caseTypeId: input.caseTypeId } : {}),
         ...(input.priority !== undefined ? { priority: input.priority } : {}),
-        ...(input.dueDate !== undefined
-          ? { dueDate: input.dueDate }
-          : {}),
+        ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
       },
     });
-    return updated;
   },
 
-  /**
-   * Register one employee work entry: result text + self-reported effort and,
-   * when work remains, an optional next reminder. Result/reminder persistence
-   * is atomic so a result cannot be saved without its requested reminder.
-   */
   async addResult(
     actor: Actor,
     caseId: string,
@@ -227,16 +215,10 @@ export const caseService = {
           caseId,
           type: 'RESULT_ADDED',
           actorId: actor.userId,
-          payload: {
-            result,
-            ...(effortMinutes !== undefined ? { effortMinutes } : {}),
-          },
+          payload: { result, ...(effortMinutes !== undefined ? { effortMinutes } : {}) },
         },
       });
 
-      // Recording a result means the employee handled the current follow-up.
-      // Close their active reminder(s) for this case before optionally creating
-      // exactly one next reminder.
       const activeReminders = await tx.reminder.findMany({
         where: { caseId, assigneeId: actor.userId, status: 'ACTIVE' },
         select: { id: true },
@@ -288,7 +270,6 @@ export const caseService = {
           data: { caseId, type: 'COMPLETE', actorId: actor.userId },
         });
       }
-
       return nextCase;
     });
 
@@ -305,7 +286,6 @@ export const caseService = {
     return updated;
   },
 
-  /** Cancel — manager only, or owner-employee when still open. */
   async cancelCase(actor: Actor, caseId: string) {
     const c = await assertCanViewCase(caseId, actor);
     if (actor.role !== 'COMPANY_MANAGER' && c.createdById !== actor.userId) {

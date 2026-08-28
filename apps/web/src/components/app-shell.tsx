@@ -16,6 +16,7 @@ interface SessionUser {
 const NAV_MANAGER = [
   { href: '/dashboard', label: 'داشبورد', icon: '🏠' },
   { href: '/cases', label: 'پرونده‌ها', icon: '📁' },
+  { href: '/customers', label: 'مشتریان', icon: '🤝' },
   { href: '/employees', label: 'کارکنان', icon: '👥' },
   { href: '/reports', label: 'گزارش‌ها', icon: '📊' },
   { href: '/settings', label: 'تنظیمات', icon: '⚙️' },
@@ -54,7 +55,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .catch(() => {});
   }, [router]);
 
-  // poll unread count every minute
   useEffect(() => {
     const t = setInterval(() => {
       api
@@ -106,7 +106,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-l border-slate-200 bg-white lg:flex">
         <BrandHeader />
         {NavList}
@@ -120,7 +119,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}>
           <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
@@ -142,7 +140,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
           <button

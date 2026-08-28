@@ -8,6 +8,7 @@ import { authRoutes } from './modules/auth/auth-routes.js';
 import { adminRoutes } from './modules/admin/admin-routes.js';
 import { memberRoutes } from './modules/members/members-routes.js';
 import { companyRoutes } from './modules/companies/company-routes.js';
+import { customerRoutes } from './modules/customers/customer-routes.js';
 import { caseRoutes } from './modules/cases/case-routes.js';
 import { assignmentRoutes } from './modules/assignments/assignment-routes.js';
 import { workSessionRoutes } from './modules/work-sessions/work-session-routes.js';
@@ -45,6 +46,7 @@ export async function buildServer() {
   await app.register(adminRoutes, { prefix: `${apiPrefix}/admin` });
   await app.register(memberRoutes, { prefix: apiPrefix });
   await app.register(companyRoutes, { prefix: apiPrefix });
+  await app.register(customerRoutes, { prefix: apiPrefix });
   await app.register(caseRoutes, { prefix: apiPrefix });
   await app.register(assignmentRoutes, { prefix: apiPrefix });
   await app.register(workSessionRoutes, { prefix: apiPrefix });

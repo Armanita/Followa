@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { CustomerPicker } from '@/components/customer-picker';
 import {
   btnSecondary,
   EmptyState,
@@ -13,7 +14,6 @@ import {
   Modal,
   PriorityBadge,
   Spinner,
-  StatCard,
   StatusBadge,
   btnPrimary,
   useToast,
@@ -32,12 +32,11 @@ interface CaseRow {
   currentOwner?: { id: string; firstName: string; lastName: string } | null;
   createdBy?: { id: string; firstName: string; lastName: string };
   caseType?: { name: string; color: string | null } | null;
+  customer?: { id: string; type: 'INDIVIDUAL' | 'LEGAL'; name: string; isActive: boolean } | null;
 }
 
 function CasesPageInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-
   const [items, setItems] = useState<CaseRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -154,6 +153,11 @@ function CasesPageInner() {
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
                   <span>مسئول: {c.currentOwner ? `${c.currentOwner.firstName} ${c.currentOwner.lastName}` : 'در انتظار پذیرش'}</span>
+                  {c.customer && (
+                    <span className={c.customer.isActive ? '' : 'text-amber-600'}>
+                      مشتری: {c.customer.name}{c.customer.isActive ? '' : ' (بایگانی‌شده)'}
+                    </span>
+                  )}
                   {c.caseType && <span>نوع: {c.caseType.name}</span>}
                   <span>ایجاد: {faDate(c.createdAt)}</span>
                   {c.dueDate && (
@@ -220,19 +224,17 @@ function CreateCaseModalImpl({
     api
       .get<{ items: { userId: string; fullName: string; isActive: boolean; role: string }[] }>('/members')
       .then((r) => setMembers(r.items.filter((m) => m.isActive)))
-      .catch(() => {
-        // employees can't list members — they can still self-create unassigned
-      });
+      .catch(() => {});
   }, [open]);
 
-  // Managers create cases FOR employees — never for themselves or other managers.
-  const eligibleAssignees =
-    isManager
-      ? members.filter((m) => m.userId !== meId && m.role !== 'COMPANY_MANAGER')
-      : members;
+  const eligibleAssignees = isManager
+    ? members.filter((m) => m.userId !== meId && m.role !== 'COMPANY_MANAGER')
+    : members;
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const customerId = String(formData.get('customerId') ?? '');
     setLoading(true);
     try {
       await api.post('/cases', {
@@ -240,8 +242,7 @@ function CreateCaseModalImpl({
         description: description || undefined,
         priority,
         caseTypeId: caseTypeId || undefined,
-        // no manual date entry: server records creation time; due dates are
-        // an employee-execution concern, not part of the manager create flow
+        customerId: customerId || undefined,
         assignToUserId: assignTo || undefined,
         assignNote: assignNote || undefined,
       });
@@ -285,6 +286,8 @@ function CreateCaseModalImpl({
             </select>
           </Field>
         </div>
+
+        <CustomerPicker open={open} />
 
         <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
           <p className="mb-3 text-sm font-semibold text-slate-700">ارجاع به کارمند (اختیاری)</p>

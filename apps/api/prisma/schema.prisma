@@ -79,6 +79,7 @@ model Company {
   memberships       CompanyMembership[]
   caseTypes         CaseType[]
   cases             Case[]
+  customers         Customer[]
   sensitiveAuditLog SensitiveAuditLog[]
 
   @@map("companies")
@@ -111,7 +112,7 @@ enum CompanyRole {
 }
 
 // ---------------------------------------------------------------------------
-// Sensitive audit trail (personnel now; customer reuse in later phases)
+// Sensitive audit trail (personnel + customer master data)
 // ---------------------------------------------------------------------------
 
 model SensitiveAuditLog {
@@ -130,6 +131,45 @@ model SensitiveAuditLog {
   @@index([companyId, entityType, entityId, createdAt])
   @@index([actorId, createdAt])
   @@map("sensitive_audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Customers (company-scoped master data; archived instead of deleted)
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id           String       @id @default(cuid())
+  companyId    String
+  type         CustomerType
+  name         String
+  mobile       String?
+  phone        String?
+  nationalId   String?
+  economicCode String?
+  email        String?
+  address      String?
+  notes        String?
+  isActive     Boolean      @default(true)
+  archivedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  cases   Case[]
+
+  @@index([companyId, isActive, name])
+  @@index([companyId, type])
+  @@index([companyId, mobile])
+  @@index([companyId, nationalId])
+  @@index([companyId, economicCode])
+  @@map("customers")
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  LEGAL
+
+  @@map("customer_type")
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +194,7 @@ model Case {
   id             String       @id @default(cuid())
   number         Int          @unique @default(autoincrement())
   companyId      String
+  customerId     String?
   title          String
   description    String?
   caseTypeId     String?
@@ -168,6 +209,7 @@ model Case {
   updatedAt      DateTime     @updatedAt
 
   company      Company          @relation(fields: [companyId], references: [id])
+  customer     Customer?        @relation(fields: [customerId], references: [id], onDelete: Restrict)
   caseType     CaseType?        @relation(fields: [caseTypeId], references: [id])
   currentOwner User?            @relation("CaseCurrentOwner", fields: [currentOwnerId], references: [id])
   createdBy    User             @relation("CaseCreator", fields: [createdById], references: [id])
@@ -179,6 +221,7 @@ model Case {
 
   @@index([companyId, status])
   @@index([companyId, currentOwnerId])
+  @@index([companyId, customerId])
   @@map("cases")
 }
 

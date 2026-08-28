@@ -23,16 +23,13 @@ export async function closeTestApp() {
 }
 
 const counters = { n: 0 };
-// per-process random prefix keeps mobiles unique across runs even if cleanup missed
 const runTag = randomInt(1000, 9999);
 
 function fakeMobile(seed: number): string {
-  // valid Iranian mobile: 0912 + 7 digits
   const n = (runTag * 10000 + seed) % 10000000;
   return `0912${String(n).padStart(7, '0')}`;
 }
 
-/** Creates a fresh company with a manager + N employees; returns tokens & ids. */
 export async function seedFixture(employeeCount = 2) {
   counters.n += 1;
   const tag = `t${Date.now()}_${counters.n}_${runTag}`;
@@ -93,11 +90,10 @@ export async function cleanup() {
     select: { id: true },
   });
   const ids = testCompanies.map((c) => c.id);
-  // audit rows use RESTRICT by design; remove test-only audit evidence before fixture teardown.
   if (ids.length > 0) {
     await prisma.sensitiveAuditLog.deleteMany({ where: { companyId: { in: ids } } });
-    // cases first (case→company FK has no cascade), children of cases cascade
     await prisma.case.deleteMany({ where: { companyId: { in: ids } } });
+    await prisma.customer.deleteMany({ where: { companyId: { in: ids } } });
     await prisma.company.deleteMany({ where: { id: { in: ids } } });
   }
   await prisma.user.deleteMany({

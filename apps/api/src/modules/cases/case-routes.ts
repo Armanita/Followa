@@ -22,6 +22,7 @@ const createCaseSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().max(5000).optional(),
   caseTypeId: z.string().optional(),
+  customerId: z.string().optional(),
   priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']).optional(),
   dueDate: z.string().datetime().optional(),
   assignToUserId: z.string().optional(),
@@ -37,7 +38,6 @@ const updateCaseSchema = z.object({
 });
 
 export async function caseRoutes(app: FastifyInstance): Promise<void> {
-  /** Company-scoped case list with visibility filtering + status/search filters. */
   app.get('/cases', async (request) => {
     const actor = actorFrom(request);
     const query = request.query as Record<string, string | undefined>;
@@ -86,6 +86,7 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
           currentOwner: { select: { id: true, firstName: true, lastName: true } },
           createdBy: { select: { id: true, firstName: true, lastName: true } },
           caseType: { select: { id: true, name: true, color: true } },
+          customer: { select: { id: true, type: true, name: true, isActive: true } },
         },
       }),
       prisma.case.count({ where }),
@@ -108,6 +109,7 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
       title: body.title,
       description: body.description,
       caseTypeId: body.caseTypeId,
+      customerId: body.customerId,
       priority: body.priority,
       dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
       assignToUserId: body.assignToUserId,
@@ -126,6 +128,7 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
           currentOwner: { select: { id: true, firstName: true, lastName: true } },
           createdBy: { select: { id: true, firstName: true, lastName: true } },
           caseType: true,
+          customer: { select: { id: true, type: true, name: true, isActive: true } },
           files: {
             include: { uploader: { select: { id: true, firstName: true, lastName: true } } },
             orderBy: { createdAt: 'desc' },
@@ -147,15 +150,11 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
       }),
     ]);
 
-    // Employee sees activities but assignment history is included via /assignments;
-    // both are visible per spec §10 (participants can read their history).
     const isManager = actor.role === 'COMPANY_MANAGER';
     const isOwner = full.currentOwnerId === actor.userId;
     return {
       ...full,
       canEdit: isManager || isOwner,
-      // Managers oversee; employees execute. Operational actions are
-      // employee-only; managers get transfer/reassignment.
       canTransfer: !isClosedStatus(full.status),
       isManager,
       isCurrentOwner: isOwner,
@@ -188,8 +187,6 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     const { result, complete, effortMinutes, nextReminder } = parseWith(
       z.object({
         result: z.string().min(2).max(5000),
-        // Keep the API default for older clients; the new employee UI sends
-        // an explicit value and defaults its checkbox to "not complete".
         complete: z.boolean().default(true),
         effortMinutes: z.number().int().min(1).max(1440).optional(),
         nextReminder: z
