@@ -43,13 +43,13 @@ export default function DashboardPage() {
 
   if (loading) return <Spinner />;
   if (error) return <ErrorState message={error} onRetry={load} />;
-  if (!data) return null;
+  if (!data || !user) return null;
 
-  if (user?.role === 'COMPANY_MANAGER' && data.cards) {
-    return <ManagerDashboard firstName={user.firstName} data={data} />;
+  if (user.role === 'COMPANY_MANAGER') {
+    return data.cards ? <ManagerDashboard firstName={user.firstName} data={data} /> : null;
   }
 
-  const greeting = `سلام ${user?.firstName ?? ''} 👋`;
+  const greeting = `سلام ${user.firstName} 👋`;
 
   return (
     <div className="space-y-6">
