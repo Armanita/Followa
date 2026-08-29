@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
-import 'dashboard_screen.dart';
-import 'cases_screen.dart';
 import 'assignments_screen.dart';
-import 'reminders_screen.dart';
-import 'notifications_screen.dart';
-import 'profile_screen.dart';
+import 'cases_screen.dart';
+import 'customers_screen.dart';
+import 'dashboard_screen.dart';
 import 'employees_tab.dart';
-import 'reports_tab.dart';
+import 'more_screen.dart';
+import 'reminders_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -38,22 +38,22 @@ class _HomeShellState extends State<HomeShell> {
           const CasesScreen(),
         ),
         (
+          'مشتریان',
+          Icons.handshake_outlined,
+          Icons.handshake_rounded,
+          const CustomersScreen(),
+        ),
+        (
           'کارکنان',
           Icons.people_outline_rounded,
           Icons.people_rounded,
           const EmployeesTab(),
         ),
         (
-          'گزارش‌ها',
-          Icons.bar_chart_outlined,
-          Icons.bar_chart_rounded,
-          const ReportsTab(),
-        ),
-        (
-          'پروفایل',
-          Icons.person_outline_rounded,
-          Icons.person_rounded,
-          const ProfileScreen(),
+          'بیشتر',
+          Icons.more_horiz_rounded,
+          Icons.more_horiz_rounded,
+          const MoreScreen(),
         ),
       ] else ...[
         (
@@ -81,10 +81,10 @@ class _HomeShellState extends State<HomeShell> {
           const RemindersScreen(),
         ),
         (
-          'اعلان‌ها',
-          Icons.notifications_outlined,
-          Icons.notifications_rounded,
-          const NotificationsScreen(),
+          'بیشتر',
+          Icons.more_horiz_rounded,
+          Icons.more_horiz_rounded,
+          const MoreScreen(),
         ),
       ],
     ];
