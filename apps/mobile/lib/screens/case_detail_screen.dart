@@ -377,12 +377,11 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
 
   Future<void> _pickAndUpload() async {
     try {
-      final result = await FilePicker.pickFiles(allowMultiple: false, withData: true);
-      if (result == null || result.files.isEmpty) return;
-      final file = result.files.single;
-      if (file.bytes == null) { _message('خواندن فایل ممکن نشد'); return; }
+      final file = await FilePicker.pickFile();
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
       await _run(() async {
-        await AuthService.instance.uploadBytes('/cases/${widget.caseId}/files', fieldName: 'file', filename: file.name, bytes: file.bytes!);
+        await AuthService.instance.uploadBytes('/cases/${widget.caseId}/files', fieldName: 'file', filename: file.name, bytes: bytes);
       }, 'فایل پیوست شد');
     } catch (error) {
       _message(error.toString());
