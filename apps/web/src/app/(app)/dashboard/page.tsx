@@ -58,22 +58,24 @@ export default function DashboardPage() {
         <p className="mt-2 text-xs text-workspace-muted">خلاصه کارها، ارجاع‌ها و یادآوری‌های امروز شما</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="کارهای من" value={toFa(data.cards.myCases)} />
         <StatCard label="یادآوری‌های امروز" value={toFa(data.cards.todayReminders)} tone="warning" />
         <StatCard label="ارجاع‌های جدید" value={toFa(data.cards.newAssignments)} tone="danger" />
-        <StatCard label="نشست کاری باز" value={toFa(data.cards.activeWork)} />
         <StatCard label="تکمیل‌شده" value={toFa(data.cards.completedCases)} tone="success" />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)]">
         <Card className="p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-black text-white">یادآوری‌های امروز</h2>
+            <div>
+              <h2 className="text-sm font-black text-white">یادآوری‌های امروز</h2>
+              <p className="mt-1 text-[10px] text-workspace-soft">پیگیری‌هایی که امروز نیاز به اقدام شما دارند</p>
+            </div>
             <Link href="/reminders" className="text-[11px] font-bold text-brand-300 hover:text-brand-200">همه یادآوری‌ها</Link>
           </div>
           {data.remindersToday.length === 0 ? (
-            <EmptyState title="یادآوری‌ای برای امروز ندارید" hint="یادآوری‌ها از جزئیات پرونده ساخته می‌شوند." />
+            <EmptyState title="یادآوری‌ای برای امروز ندارید" hint="یادآوری بعدی هنگام ثبت نتیجه پرونده قابل تنظیم است." />
           ) : (
             <ul className="space-y-2.5">
               {data.remindersToday.map((reminder: any) => (
@@ -92,24 +94,13 @@ export default function DashboardPage() {
         </Card>
 
         <Card className="p-5">
-          <div className="mb-4">
-            <h2 className="text-sm font-black text-white">نشست‌های کاری ثبت‌شده</h2>
-            <p className="mt-1 text-[10px] text-workspace-soft">نمایش سازگاری با داده قدیمی سیستم؛ جریان اصلی جدید بر ثبت نتیجه و زمان صرف‌شده است.</p>
+          <h2 className="text-sm font-black text-white">میانبرهای کاری</h2>
+          <p className="mt-1 text-[10px] leading-5 text-workspace-soft">عملیات روزانه از خود پرونده انجام می‌شود: نتیجه، زمان صرف‌شده، یادآوری بعدی، فایل و انتقال.</p>
+          <div className="mt-4 space-y-2">
+            <DashboardLink href="/cases?mine=true" label="مشاهده کارهای من" />
+            <DashboardLink href="/assignments" label="بررسی ارجاع‌ها" />
+            <DashboardLink href="/reminders" label="مدیریت یادآوری‌ها" />
           </div>
-          {data.activeWork.length === 0 ? (
-            <EmptyState title="نشست کاری بازی ندارید" hint="برای ادامه کار، پرونده‌های فعال خود را بررسی کنید." action={<Link href="/cases?mine=true" className="mt-3 text-xs font-bold text-brand-300 hover:text-brand-200">رفتن به کارهای من ←</Link>} />
-          ) : (
-            <ul className="space-y-2.5">
-              {data.activeWork.map((work: any) => (
-                <li key={work.sessionId}>
-                  <Link href={`/cases/${work.caseId}`} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/15 bg-emerald-400/5 p-3 transition hover:bg-emerald-400/10">
-                    <div className="min-w-0"><p className="truncate text-xs font-bold text-workspace-ink">{work.caseTitle}</p><p className="tnum mt-1 text-[10px] text-emerald-300">شروع از {faDateTime(work.startedAt)}</p></div>
-                    <span className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold text-emerald-300">باز</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
         </Card>
       </div>
 
@@ -118,5 +109,17 @@ export default function DashboardPage() {
         <ActivityTimeline items={data.recentActivities} />
       </Card>
     </div>
+  );
+}
+
+function DashboardLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between rounded-xl border border-workspace-border bg-workspace-elevated/60 px-3.5 py-3 text-xs font-bold text-workspace-ink transition hover:border-brand-400/25 hover:bg-workspace-hover"
+    >
+      <span>{label}</span>
+      <span className="text-workspace-soft">←</span>
+    </Link>
   );
 }
