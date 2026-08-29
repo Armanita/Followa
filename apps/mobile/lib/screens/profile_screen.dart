@@ -116,10 +116,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final locked = _profile!['role'] == 'EMPLOYEE' && user['profileFinalizedAt'] != null;
     if (locked) { _message('پس از ثبت نهایی، تغییر عکس فقط توسط مدیر انجام می‌شود'); return; }
     try {
-      final result = await FilePicker.pickFiles(type: FileType.image, allowMultiple: false, withData: true);
-      if (result == null || result.files.isEmpty || result.files.single.bytes == null) return;
+      final file = await FilePicker.pickFile(type: FileType.image);
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
       setState(() => _busy = true);
-      await AuthService.instance.uploadBytes('/profile/photo', fieldName: 'file', filename: result.files.single.name, bytes: result.files.single.bytes!);
+      await AuthService.instance.uploadBytes('/profile/photo', fieldName: 'file', filename: file.name, bytes: bytes);
       await _load();
       _message('عکس پرسنلی به‌روزرسانی شد');
     } catch (error) { _message(error.toString()); }
