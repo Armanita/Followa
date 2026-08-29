@@ -1,5 +1,9 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
 import '../services/auth_service.dart';
+import '../theme/premium_theme.dart';
+import '../utils/jalali_input.dart';
 import '../widgets/common.dart';
 
 class CaseDetailScreen extends StatefulWidget {
@@ -11,11 +15,14 @@ class CaseDetailScreen extends StatefulWidget {
 }
 
 class _CaseDetailScreenState extends State<CaseDetailScreen> {
-  Map<String, dynamic>? _c;
+  Map<String, dynamic>? _case;
   List<dynamic> _activities = [];
   List<dynamic> _assignments = [];
   String? _error;
-  bool _hasActiveSession = false;
+  bool _loading = true;
+  bool _busy = false;
+
+  bool get _isManager => AuthService.instance.isManager;
 
   @override
   void initState() {
@@ -24,269 +31,449 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _error = null);
+    if (mounted) setState(() { _loading = true; _error = null; });
     try {
       final auth = AuthService.instance;
-      final c = await auth.get('/cases/${widget.caseId}');
-      final acts = await auth.get('/cases/${widget.caseId}/activities');
-      final asgns = await auth.get('/cases/${widget.caseId}/assignments');
-      final active = await auth.get('/work-sessions/active');
+      final values = await Future.wait([
+        auth.get('/cases/${widget.caseId}'),
+        auth.get('/cases/${widget.caseId}/activities'),
+        auth.get('/cases/${widget.caseId}/assignments'),
+      ]);
+      if (!mounted) return;
+      final assignmentResponse = values[2] as Map<String, dynamic>;
       setState(() {
-        _c = c as Map<String, dynamic>;
-        _activities = acts as List;
-        _assignments = (asgns['items'] as List).reversed.toList();
-        _hasActiveSession =
-            (active['items'] as List).any((s) => s['caseId'] == widget.caseId);
+        _case = values[0] as Map<String, dynamic>;
+        _activities = values[1] as List<dynamic>;
+        _assignments = (assignmentResponse['items'] as List<dynamic>? ?? const []).reversed.toList();
       });
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _action(Future<dynamic> Function() fn, String success) async {
+  Future<void> _run(Future<void> Function() action, String success) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
-      await fn();
+      await action();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(success)));
+      _message(success);
       await _load();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } catch (error) {
+      _message(error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = _c;
-    return Scaffold(
-      appBar: AppBar(title: const Text('جزئیات پرونده')),
-      body: _error != null
-          ? ErrorState(message: _error!, onRetry: _load)
-          : c == null
-              ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(padding: const EdgeInsets.all(16), children: [
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(children: [
-                            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(color: const Color(0xFF2558EB).withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                              child: Text('#${Fa.num(c['number'])}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF2558EB)))),
-                            const Spacer(),
-                            StatusChip(status: c['status']),
-                          ]),
-                          const SizedBox(height: 10),
-                          Text(c['title'], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
-                          if ((c['description'] ?? '').toString().isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(c['description'], style: TextStyle(fontSize: 13.5, height: 1.9, color: Colors.grey.shade700)),
-                          ],
-                          const Divider(height: 24),
-                          _kv('مسئول فعلی', c['currentOwner'] != null ? '${c['currentOwner']['firstName']} ${c['currentOwner']['lastName']}' : '—'),
-                          _kv('سازنده', '${c['createdBy']['firstName']} ${c['createdBy']['lastName']}'),
-                          _kv('زمان کار ثبت‌شده', Fa.duration((c['totalWorkSeconds'] ?? 0) as int)),
-                          if ((c['result'] ?? '').toString().isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Container(width: double.infinity, padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(12)),
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                const Text('نتیجه ثبت‌شده', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF047857))),
-                                const SizedBox(height: 4),
-                                Text(c['result'], style: const TextStyle(fontSize: 13, height: 1.8)),
-                              ])),
-                          ],
-                        ]),
-                      ),
-                    ),
-                    // Pending acceptance banner
-                    if (c['hasPendingAcceptanceForMe'] == true && c['status'] == 'WAITING_ACCEPTANCE')
-                      Container(
-                        margin: const EdgeInsets.only(top: 12),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFDE68A))),
-                        child: Column(children: [
-                          const Text('این پرونده به شما ارجاع شده است.', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                          const SizedBox(height: 10),
-                          Row(children: [
-                            Expanded(child: FilledButton(
-                              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF059669)),
-                              onPressed: () => _action(() => AuthService.instance.post('/cases/${widget.caseId}/accept'), 'پرونده پذیرفته شد'),
-                              child: const Text('پذیرش'))),
-                            const SizedBox(width: 10),
-                            Expanded(child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFDC2626), side: const BorderSide(color: Color(0xFFFECACA))),
-                              onPressed: _rejectDialog,
-                              child: const Text('رد کردن'))),
-                          ]),
-                        ]),
-                      ),
-                    // Actions
-                    if (!_isClosed(c['status']))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Wrap(spacing: 8, runSpacing: 8, children: [
-                          if (_isOwner(c))
-                            ActionChip(
-                              avatar: Icon(_hasActiveSession ? Icons.stop : Icons.play_arrow, size: 18,
-                                  color: _hasActiveSession ? const Color(0xFFDC2626) : const Color(0xFF059669)),
-                              label: Text(_hasActiveSession ? 'پایان کار' : 'شروع کار'),
-                              onPressed: () => _action(
-                                () => _hasActiveSession
-                                    ? AuthService.instance.post('/work-sessions/end', {'caseId': widget.caseId})
-                                    : AuthService.instance.post('/work-sessions/start', {'caseId': widget.caseId}),
-                                _hasActiveSession ? 'پایان کار ثبت شد' : 'شروع کار ثبت شد'),
-                            ),
-                          if (c['canEdit'] == true || _isOwner(c)) ...[
-                            ActionChip(
-                              avatar: const Icon(Icons.edit_note, size: 18),
-                              label: const Text('ثبت نتیجه'),
-                              onPressed: _resultDialog),
-                            ActionChip(
-                              avatar: const Icon(Icons.send_outlined, size: 18),
-                              label: const Text('انتقال'),
-                              onPressed: _transferDialog),
-                            ActionChip(
-                              avatar: const Icon(Icons.alarm_add_outlined, size: 18),
-                              label: const Text('یادآوری'),
-                              onPressed: _reminderDialog),
-                          ],
-                        ]),
-                      ),
+    if (_loading && _case == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_case == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('جزئیات پرونده')),
+        body: ErrorState(message: _error ?? 'پرونده در دسترس نیست', onRetry: _load),
+      );
+    }
 
-                    const SizedBox(height: 18),
-                    Card(
-                      child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('گردش ارجاع', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                        const SizedBox(height: 10),
-                        if (_assignments.isEmpty) Text('ارجاعی ثبت نشده است', style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5)),
-                        ..._assignments.map((a) {
-                          final m = a as Map<String, dynamic>;
-                          final from = m['fromUs'];
-                          final to = m['toUs'];
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Container(width: double.infinity, padding: const EdgeInsets.all(11),
-                              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text('${from != null ? '${from['firstName']} ${from['lastName']}' : 'سیستم'} ← ${to['firstName']} ${to['lastName']}',
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 3),
-                                Text(m['reason'] == 'INITIAL_ASSIGNMENT' ? 'ارجاع اولیه' : m['reason'] == 'TRANSFER' ? 'انتقال' : 'بازگشت (رد)',
-                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                                Text(Fa.dateTime(DateTime.parse(m['createdAt'])), style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
-                                if ((m['note'] ?? '').toString().isNotEmpty)
-                                  Padding(padding: const EdgeInsets.only(top: 4), child: Text(m['note'], style: TextStyle(fontSize: 12, color: Colors.grey.shade600))),
-                                if ((m['rejectReason'] ?? '').toString().isNotEmpty)
-                                  Padding(padding: const EdgeInsets.only(top: 4), child: Text('دلیل رد: ${m['rejectReason']}', style: const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)))),
-                              ])),
-                          );
-                        }),
-                      ])),
-                    ),
-                    const SizedBox(height: 12),
-                    Card(
-                      child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('خط زمان فعالیت‌ها', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                        const SizedBox(height: 10),
-                        ..._activities.reversed.map((e) {
-                          final a = e as Map<String, dynamic>;
-                          return ListTile(dense: true, contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(radius: 14, backgroundColor: Colors.grey.shade100,
-                              child: const Icon(Icons.circle, size: 7, color: Color(0xFF2558EB))),
-                            title: Text(activityLabels[a['type']] ?? a['type'], style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
-                            subtitle: Text(a['actor'] != null ? '${a['actor']['firstName']} ${a['actor']['lastName']}' : '',
-                                style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500)),
-                            trailing: Text(Fa.dateTime(DateTime.parse(a['createdAt'])), style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400)));
-                        }),
-                      ])),
-                    ),
-                    const SizedBox(height: 24),
+    final c = _case!;
+    final closed = c['status'] == 'DONE' || c['status'] == 'CANCELLED';
+    final canEdit = c['canEdit'] == true;
+    final canTransfer = c['canTransfer'] == true;
+    final pending = c['hasPendingAcceptanceForMe'] == true && c['status'] == 'WAITING_ACCEPTANCE';
+    final files = (c['files'] as List<dynamic>?) ?? const [];
+    final reminders = (c['reminders'] as List<dynamic>?) ?? const [];
+    final effortMinutes = _activities.fold<int>(0, (sum, raw) {
+      final payload = (raw as Map<String, dynamic>)['payload'];
+      return sum + (payload is Map && payload['effortMinutes'] is num ? (payload['effortMinutes'] as num).toInt() : 0);
+    });
+    Map<String, dynamic>? activeReminder;
+    for (final raw in reminders) {
+      final reminder = raw as Map<String, dynamic>;
+      if (reminder['status'] == 'ACTIVE') { activeReminder = reminder; break; }
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_isManager ? 'نظارت پرونده' : 'اجرای پرونده'),
+        actions: [IconButton(onPressed: _busy ? null : _load, icon: const Icon(Icons.refresh_rounded))],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 32),
+          children: [
+            PremiumPanel(
+              accent: statusColors[c['status']] ?? FollowaColors.brandSoft,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Text('#${Fa.num(c['number'] ?? '—')}', style: const TextStyle(color: FollowaColors.soft, fontWeight: FontWeight.w900)),
+                  const SizedBox(width: 8),
+                  StatusChip(status: c['status']?.toString() ?? ''),
+                  const Spacer(),
+                  Text(_isManager ? 'نظارت مدیریتی' : 'اجرای پرونده', style: const TextStyle(color: FollowaColors.soft, fontSize: 9.5)),
+                ]),
+                const SizedBox(height: 12),
+                Text(c['title']?.toString() ?? 'پرونده', style: const TextStyle(color: FollowaColors.ink, fontSize: 18, height: 1.45, fontWeight: FontWeight.w900)),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 1.85,
+              children: [
+                _Metric(label: 'مسئول فعلی', value: c['currentOwner'] == null ? 'در انتظار پذیرش' : '${c['currentOwner']['firstName']} ${c['currentOwner']['lastName']}', icon: Icons.person_outline_rounded),
+                _Metric(label: 'سررسید', value: c['dueDate'] == null ? 'بدون سررسید' : Fa.date(DateTime.parse(c['dueDate'].toString())), icon: Icons.event_outlined),
+                _Metric(label: 'زمان ثبت‌شده', value: effortMinutes == 0 ? 'ثبت نشده' : '${Fa.num(effortMinutes)} دقیقه', icon: Icons.timelapse_rounded),
+                _Metric(label: 'مستندات', value: '${Fa.num(files.length)} فایل', icon: Icons.folder_copy_outlined),
+              ],
+            ),
+            if (pending) ...[
+              const SizedBox(height: 10),
+              PremiumPanel(
+                accent: FollowaColors.amber,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('این پرونده برای شما ارجاع شده است', style: TextStyle(color: Color(0xFFFDE68A), fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: FilledButton(onPressed: _busy ? null : () => _run(() async { await AuthService.instance.post('/cases/${widget.caseId}/accept'); }, 'پرونده پذیرفته شد'), child: const Text('پذیرش'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: OutlinedButton(onPressed: _busy ? null : _rejectDialog, child: const Text('رد ارجاع'))),
                   ]),
-                ),
+                ]),
+              ),
+            ],
+            if (!closed && (canEdit || canTransfer)) ...[
+              const SizedBox(height: 10),
+              PremiumPanel(
+                child: Wrap(spacing: 8, runSpacing: 8, children: [
+                  if (!_isManager && canEdit)
+                    FilledButton.icon(onPressed: _busy ? null : _resultDialog, icon: const Icon(Icons.edit_note_rounded, size: 18), label: const Text('ثبت نتیجه')),
+                  if (canTransfer)
+                    OutlinedButton.icon(onPressed: _busy ? null : _transferDialog, icon: const Icon(Icons.compare_arrows_rounded, size: 18), label: Text(c['status'] == 'WAITING_ACCEPTANCE' ? 'ارجاع مجدد' : 'انتقال')),
+                  if (!_isManager && canEdit)
+                    OutlinedButton.icon(onPressed: _busy ? null : _pickAndUpload, icon: const Icon(Icons.attach_file_rounded, size: 18), label: const Text('پیوست فایل')),
+                  if (!_isManager && canEdit)
+                    const Text('زمان صرف‌شده و پیگیری بعدی داخل «ثبت نتیجه» ثبت می‌شوند؛ تایمر شروع/پایان در جریان جدید وجود ندارد.', style: TextStyle(color: FollowaColors.soft, fontSize: 9.5, height: 1.7)),
+                ]),
+              ),
+            ],
+            const SizedBox(height: 10),
+            _Section(
+              title: 'شرح و نتیجه',
+              icon: Icons.subject_rounded,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _TextBlock(label: 'شرح اولیه', text: (c['description'] ?? '').toString().trim().isEmpty ? 'شرح تکمیلی ثبت نشده است.' : c['description'].toString()),
+                if ((c['result'] ?? '').toString().trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _TextBlock(label: 'آخرین نتیجه', text: c['result'].toString(), accent: FollowaColors.emerald, footer: c['resultAt'] == null ? null : Fa.dateTime(DateTime.parse(c['resultAt'].toString()))),
+                ],
+              ]),
+            ),
+            if (activeReminder != null) ...[
+              const SizedBox(height: 10),
+              _Section(
+                title: 'پیگیری بعدی',
+                icon: Icons.alarm_rounded,
+                accent: FollowaColors.amber,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(Fa.dateTime(DateTime.parse(activeReminder['remindAt'].toString())), style: const TextStyle(color: Color(0xFFFDE68A), fontWeight: FontWeight.w900)),
+                  if ((activeReminder['note'] ?? '').toString().trim().isNotEmpty) ...[const SizedBox(height: 5), Text(activeReminder['note'].toString(), style: const TextStyle(color: FollowaColors.muted, fontSize: 11))],
+                ]),
+              ),
+            ],
+            const SizedBox(height: 10),
+            _Section(
+              title: 'زمینه پرونده',
+              icon: Icons.info_outline_rounded,
+              child: Column(children: [
+                _kv('ایجادکننده', '${c['createdBy']['firstName']} ${c['createdBy']['lastName']}'),
+                _kv('نوع پرونده', c['caseType'] == null ? 'بدون نوع' : c['caseType']['name'].toString()),
+                _kv('مشتری', c['customer'] == null ? 'بدون مشتری' : '${c['customer']['name']}${c['customer']['isActive'] == false ? ' · بایگانی' : ''}'),
+                _kv('زمان ایجاد', Fa.dateTime(DateTime.parse(c['createdAt'].toString()))),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            _files(files),
+            const SizedBox(height: 10),
+            _assignmentsPanel(),
+            const SizedBox(height: 10),
+            _activitiesPanel(),
+          ],
+        ),
+      ),
     );
   }
 
-  bool _isClosed(String status) => status == 'DONE' || status == 'CANCELLED';
+  Widget _files(List<dynamic> files) => _Section(
+    title: 'فایل‌ها و مستندات',
+    icon: Icons.attach_file_rounded,
+    child: files.isEmpty
+        ? const Text('فایلی ثبت نشده است.', style: TextStyle(color: FollowaColors.soft, fontSize: 10.5))
+        : Column(children: files.map((raw) {
+            final file = raw as Map<String, dynamic>;
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.insert_drive_file_outlined, color: FollowaColors.brandSoft),
+              title: Text(file['filename']?.toString() ?? 'فایل', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: FollowaColors.ink, fontSize: 11, fontWeight: FontWeight.w800)),
+              subtitle: Text('${file['uploader']?['firstName'] ?? ''} ${file['uploader']?['lastName'] ?? ''}'.trim(), style: const TextStyle(color: FollowaColors.soft, fontSize: 9.5)),
+              trailing: const Icon(Icons.download_rounded, color: FollowaColors.muted),
+              onTap: () => _openFile(file),
+            );
+          }).toList()),
+  );
 
-  bool _isOwner(Map<String, dynamic> c) =>
-      c['currentOwner'] != null && c['currentOwner']['id'] == AuthService.instance.user?['id'];
+  Widget _assignmentsPanel() => _Section(
+    title: 'گردش مسئولیت',
+    icon: Icons.swap_horiz_rounded,
+    child: _assignments.isEmpty
+        ? const Text('ارجاعی ثبت نشده است.', style: TextStyle(color: FollowaColors.soft, fontSize: 10.5))
+        : Column(children: _assignments.map((raw) {
+            final item = raw as Map<String, dynamic>;
+            final from = item['fromUs'];
+            final to = item['toUs'];
+            final fromName = from == null ? 'سیستم' : '${from['firstName']} ${from['lastName']}';
+            final toName = to == null ? '—' : '${to['firstName']} ${to['lastName']}';
+            return _EventBox(
+              title: '$fromName ← $toName',
+              time: Fa.dateTime(DateTime.parse(item['createdAt'].toString())),
+              body: (item['rejectReason'] ?? '').toString().trim().isNotEmpty ? 'دلیل رد: ${item['rejectReason']}' : (item['note'] ?? '').toString(),
+            );
+          }).toList()),
+  );
 
-  Widget _kv(String k, String v) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Row(children: [
-      SizedBox(width: 110, child: Text(k, style: TextStyle(fontSize: 12, color: Colors.grey.shade500))),
-      Expanded(child: Text(v, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
-    ]));
+  Widget _activitiesPanel() => _Section(
+    title: 'خط زمان فعالیت‌ها',
+    icon: Icons.timeline_rounded,
+    child: _activities.isEmpty
+        ? const Text('فعالیتی ثبت نشده است.', style: TextStyle(color: FollowaColors.soft, fontSize: 10.5))
+        : Column(children: _activities.reversed.map((raw) {
+            final item = raw as Map<String, dynamic>;
+            final payload = item['payload'];
+            final type = item['type']?.toString() ?? '';
+            final details = <String>[];
+            if (payload is Map && (payload['result'] ?? '').toString().trim().isNotEmpty) details.add(payload['result'].toString());
+            if (payload is Map && payload['effortMinutes'] is num) details.add('زمان صرف‌شده: ${Fa.num((payload['effortMinutes'] as num).toInt())} دقیقه');
+            if (payload is Map && payload['remindAt'] != null) details.add('یادآوری: ${Fa.dateTime(DateTime.parse(payload['remindAt'].toString()))}');
+            return _EventBox(
+              title: activityLabels[type] ?? type,
+              time: Fa.dateTime(DateTime.parse(item['createdAt'].toString())),
+              body: details.join('\n'),
+              result: type == 'RESULT_ADDED',
+            );
+          }).toList()),
+  );
 
   Future<void> _rejectDialog() async {
-    final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: const Text('رد کردن ارجاع'),
-      content: TextField(controller: ctrl, maxLines: 3, autofocus: true,
-        decoration: const InputDecoration(hintText: 'دلیل رد کردن (الزامی)')),
-      actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('انصراف')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('ثبت رد'))],
+      content: TextField(controller: controller, autofocus: true, maxLines: 4, decoration: const InputDecoration(labelText: 'دلیل رد (حداقل ۳ کاراکتر)')),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ثبت رد'))],
     ));
-    if (ok == true && ctrl.text.trim().length >= 3) {
-      await _action(() => AuthService.instance.post('/cases/${widget.caseId}/reject', {'reason': ctrl.text.trim()}),
-          'پرونده رد و بازگشت داده شد');
+    final reason = controller.text.trim();
+    controller.dispose();
+    if (ok == true && reason.length >= 3) {
+      await _run(() async { await AuthService.instance.post('/cases/${widget.caseId}/reject', {'reason': reason}); }, 'ارجاع رد شد');
     }
   }
 
   Future<void> _resultDialog() async {
-    final ctrl = TextEditingController();
-    var complete = true;
-    final ok = await showDialog<bool>(context: context, builder: (_) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-      title: const Text('ثبت نتیجه'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: ctrl, maxLines: 4, autofocus: true, decoration: const InputDecoration(hintText: 'نتیجه پیگیری…')),
-        CheckboxListTile(value: complete, onChanged: (v) => setD(() => complete = v!), activeColor: Theme.of(ctx).colorScheme.primary,
-          contentPadding: EdgeInsets.zero, controlAffinity: ListTileControlAffinity.leading, title: const Text('پرونده تکمیل شود', style: TextStyle(fontSize: 13.5))),
-      ]),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ثبت'))],
+    final result = TextEditingController();
+    final effort = TextEditingController();
+    final date = TextEditingController(text: JalaliInput.format(DateTime.now().add(const Duration(days: 1))));
+    final time = TextEditingController(text: '09:00');
+    final note = TextEditingController();
+    var complete = false;
+    var reminder = false;
+
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+      title: const Text('ثبت نتیجه پیگیری'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: result, autofocus: true, maxLines: 4, decoration: const InputDecoration(labelText: 'نتیجه پیگیری *')),
+        const SizedBox(height: 10),
+        TextField(controller: effort, keyboardType: TextInputType.number, textDirection: TextDirection.ltr, decoration: const InputDecoration(labelText: 'زمان صرف‌شده (دقیقه) *')),
+        CheckboxListTile(contentPadding: EdgeInsets.zero, value: complete, title: const Text('پرونده تکمیل شود', style: TextStyle(fontSize: 12)), onChanged: (v) => setD(() { complete = v ?? false; if (complete) reminder = false; })),
+        if (!complete) CheckboxListTile(contentPadding: EdgeInsets.zero, value: reminder, title: const Text('یادآوری بعدی ثبت شود', style: TextStyle(fontSize: 12)), onChanged: (v) => setD(() => reminder = v ?? false)),
+        if (!complete && reminder) ...[
+          TextField(controller: date, textDirection: TextDirection.ltr, decoration: const InputDecoration(labelText: 'تاریخ شمسی', hintText: '۱۴۰۵/۰۶/۰۷')),
+          const SizedBox(height: 8),
+          TextField(controller: time, textDirection: TextDirection.ltr, decoration: const InputDecoration(labelText: 'ساعت', hintText: '09:00')),
+          const SizedBox(height: 8),
+          TextField(controller: note, maxLines: 2, decoration: const InputDecoration(labelText: 'یادداشت پیگیری')),
+        ],
+      ])),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(complete ? 'ثبت و تکمیل' : 'ثبت نتیجه'))],
     )));
-    if (ok == true && ctrl.text.trim().length >= 2) {
-      await _action(() => AuthService.instance.post('/cases/${widget.caseId}/result', {'result': ctrl.text.trim(), 'complete': complete}),
-          complete ? 'پرونده تکمیل شد' : 'نتیجه ثبت شد');
+
+    if (ok == true) {
+      final resultText = result.text.trim();
+      final effortValue = int.tryParse(JalaliInput.normalizeDigits(effort.text));
+      if (resultText.length < 2) {
+        _message('نتیجه پیگیری را وارد کنید');
+      } else if (effortValue == null || effortValue < 1 || effortValue > 1440) {
+        _message('زمان صرف‌شده را بین ۱ تا ۱۴۴۰ دقیقه وارد کنید');
+      } else {
+        try {
+          Map<String, dynamic>? nextReminder;
+          if (!complete && reminder) {
+            final dt = JalaliInput.parseDateTime(date.text, time.text);
+            if (dt.isBefore(DateTime.now().subtract(const Duration(minutes: 1)))) throw const FormatException('زمان یادآوری نمی‌تواند در گذشته باشد');
+            nextReminder = {'remindAt': dt.toIso8601String(), if (note.text.trim().isNotEmpty) 'note': note.text.trim()};
+          }
+          await _run(() async {
+            await AuthService.instance.post('/cases/${widget.caseId}/result', {
+              'result': resultText,
+              'complete': complete,
+              'effortMinutes': effortValue,
+              if (nextReminder != null) 'nextReminder': nextReminder,
+            });
+          }, complete ? 'نتیجه ثبت و پرونده تکمیل شد' : nextReminder != null ? 'نتیجه و یادآوری بعدی ثبت شد' : 'نتیجه ثبت شد');
+        } on FormatException catch (error) {
+          _message(error.message);
+        }
+      }
     }
+    result.dispose(); effort.dispose(); date.dispose(); time.dispose(); note.dispose();
   }
 
   Future<void> _transferDialog() async {
-    List<dynamic> members = [];
-    try { final r = await AuthService.instance.get('/members'); members = r['items']; } catch (_) {}
+    List<dynamic> candidates;
+    try {
+      final response = await AuthService.instance.get('/members/transfer-candidates');
+      candidates = response['items'] as List<dynamic>? ?? const [];
+    } catch (error) {
+      _message(error.toString()); return;
+    }
     if (!mounted) return;
     Map<String, dynamic>? selected;
-    final noteCtrl = TextEditingController();
-    final ok = await showDialog<bool>(context: context, builder: (_) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+    final note = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
       title: const Text('انتقال پرونده'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         DropdownButtonFormField<Map<String, dynamic>>(
-          items: [for (final m in members.where((m) => m['userId'] != AuthService.instance.user?['id']))
-            DropdownMenuItem(value: m, child: Text('${m['fullName']} (${m['role'] == 'COMPANY_MANAGER' ? 'مدیر' : 'کارمند'})'))],
-          onChanged: (v) => setD(() => selected = v),
-          decoration: const InputDecoration(labelText: 'انتقال به')),
-        const SizedBox(height: 12),
-        TextField(controller: noteCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'توضیح (اختیاری)')),
+          decoration: const InputDecoration(labelText: 'همکار مقصد'),
+          items: candidates.map((raw) { final m = raw as Map<String, dynamic>; return DropdownMenuItem(value: m, child: Text('${m['fullName']}${(m['jobTitle'] ?? '').toString().isEmpty ? '' : ' · ${m['jobTitle']}'}')); }).toList(),
+          onChanged: (value) => setD(() => selected = value),
+        ),
+        const SizedBox(height: 10),
+        TextField(controller: note, maxLines: 2, decoration: const InputDecoration(labelText: 'توضیح انتقال (اختیاری)')),
       ]),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')),
-        FilledButton(onPressed: selected == null ? null : () => Navigator.pop(ctx, true), child: const Text('انتقال'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')), FilledButton(onPressed: selected == null ? null : () => Navigator.pop(ctx, true), child: const Text('انتقال'))],
     )));
+    final noteText = note.text.trim(); note.dispose();
     if (ok == true && selected != null) {
-      await _action(() => AuthService.instance.post('/cases/${widget.caseId}/transfer',
-          {'toUserId': selected!['userId'], 'note': noteCtrl.text.isEmpty ? null : noteCtrl.text}), 'پرونده ارجاع شد');
+      await _run(() async { await AuthService.instance.post('/cases/${widget.caseId}/transfer', {'toUserId': selected!['userId'], if (noteText.isNotEmpty) 'note': noteText}); }, 'پرونده منتقل شد');
     }
   }
 
-  Future<void> _reminderDialog() async {
-    final date = await showDatePicker(context: context, firstDate: DateTime.now(), initialDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-    if (time == null) return;
-    final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    await _action(() => AuthService.instance.post('/reminders', {'caseId': widget.caseId, 'remindAt': dt.toIso8601String()}), 'یادآوری ساخته شد');
+  Future<void> _pickAndUpload() async {
+    try {
+      final result = await FilePicker.pickFiles(allowMultiple: false, withData: true);
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      if (file.bytes == null) { _message('خواندن فایل ممکن نشد'); return; }
+      await _run(() async {
+        await AuthService.instance.uploadBytes('/cases/${widget.caseId}/files', fieldName: 'file', filename: file.name, bytes: file.bytes!);
+      }, 'فایل پیوست شد');
+    } catch (error) {
+      _message(error.toString());
+    }
   }
+
+  Future<void> _openFile(Map<String, dynamic> file) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final binary = await AuthService.instance.download('/files/${file['id']}/download');
+      if (!mounted) return;
+      if (binary.contentType.toLowerCase().startsWith('image/')) {
+        await showDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(minScale: .5, maxScale: 4, child: Image.memory(binary.bytes, fit: BoxFit.contain))));
+      } else {
+        final saved = await FilePicker.saveFile(dialogTitle: 'ذخیره فایل', fileName: binary.filename ?? file['filename']?.toString() ?? 'followa-file', bytes: binary.bytes);
+        if (saved != null) _message('فایل ذخیره شد');
+      }
+    } catch (error) {
+      _message(error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _message(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  static Widget _kv(String key, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(width: 90, child: Text(key, style: const TextStyle(color: FollowaColors.soft, fontSize: 10))),
+      Expanded(child: Text(value, style: const TextStyle(color: FollowaColors.muted, fontSize: 11, fontWeight: FontWeight.w700))),
+    ]),
+  );
+}
+
+class _Metric extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  const _Metric({required this.label, required this.value, required this.icon});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(color: FollowaColors.surface, borderRadius: BorderRadius.circular(15), border: Border.all(color: FollowaColors.border)),
+    child: Row(children: [Icon(icon, color: FollowaColors.brandSoft, size: 17), const SizedBox(width: 7), Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: FollowaColors.soft, fontSize: 8.5)), const SizedBox(height: 3), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: FollowaColors.muted, fontSize: 9.5, fontWeight: FontWeight.w800))]))]),
+  );
+}
+
+class _Section extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final Color? accent;
+  const _Section({required this.title, required this.icon, required this.child, this.accent});
+  @override
+  Widget build(BuildContext context) => PremiumPanel(
+    accent: accent,
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Icon(icon, color: accent ?? FollowaColors.brandSoft, size: 18), const SizedBox(width: 7), Text(title, style: const TextStyle(color: FollowaColors.ink, fontSize: 12, fontWeight: FontWeight.w900))]),
+      const SizedBox(height: 10), child,
+    ]),
+  );
+}
+
+class _TextBlock extends StatelessWidget {
+  final String label;
+  final String text;
+  final Color? accent;
+  final String? footer;
+  const _TextBlock({required this.label, required this.text, this.accent, this.footer});
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(label, style: const TextStyle(color: FollowaColors.soft, fontSize: 9.5)), const SizedBox(height: 5),
+    Container(width: double.infinity, padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: accent?.withOpacity(.07) ?? FollowaColors.elevated, borderRadius: BorderRadius.circular(12), border: Border.all(color: accent?.withOpacity(.20) ?? FollowaColors.border)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(text, style: const TextStyle(color: FollowaColors.muted, fontSize: 10.5, height: 1.75)), if (footer != null) ...[const SizedBox(height: 6), Text(footer!, style: const TextStyle(color: FollowaColors.soft, fontSize: 9))]])),
+  ]);
+}
+
+class _EventBox extends StatelessWidget {
+  final String title;
+  final String time;
+  final String body;
+  final bool result;
+  const _EventBox({required this.title, required this.time, this.body = '', this.result = false});
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity, margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(color: result ? FollowaColors.emerald.withOpacity(.055) : FollowaColors.elevated, borderRadius: BorderRadius.circular(12), border: Border.all(color: result ? FollowaColors.emerald.withOpacity(.18) : FollowaColors.border)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Text(title, style: const TextStyle(color: FollowaColors.muted, fontSize: 10.5, fontWeight: FontWeight.w800))), Text(time, style: const TextStyle(color: FollowaColors.soft, fontSize: 8.5))]), if (body.trim().isNotEmpty) ...[const SizedBox(height: 6), Text(body, style: TextStyle(color: result ? const Color(0xFFBBF7D0) : FollowaColors.soft, fontSize: 9.5, height: 1.65))]]),
+  );
 }
