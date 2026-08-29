@@ -73,20 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       const _BrandLockup(),
                       const SizedBox(height: 28),
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: FollowaColors.surface.withOpacity(.96),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: FollowaColors.border),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x55000000),
-                              blurRadius: 40,
-                              offset: Offset(0, 20),
-                            ),
-                          ],
-                        ),
+                      _AuthCard(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -100,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 5),
                             const Text(
-                              'برای ادامه، اطلاعات حساب سازمانی خود را وارد کنید.',
+                              'اطلاعات حساب سازمانی خود را وارد کنید.',
                               style: TextStyle(
                                 color: FollowaColors.soft,
                                 fontSize: 11.5,
@@ -125,13 +112,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               obscureText: _obscure,
                               textDirection: TextDirection.ltr,
                               onSubmitted: (_) {
-                                if (!_busy) void _submit();
+                                if (!_busy) {
+                                  _submit();
+                                }
                               },
                               decoration: InputDecoration(
                                 labelText: 'رمز عبور',
                                 prefixIcon: const Icon(Icons.lock_outline_rounded, size: 19),
                                 suffixIcon: IconButton(
-                                  tooltip: _obscure ? 'نمایش رمز' : 'پنهان کردن رمز',
                                   onPressed: () => setState(() => _obscure = !_obscure),
                                   icon: Icon(
                                     _obscure
@@ -144,37 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             if (_error != null) ...[
                               const SizedBox(height: 14),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: FollowaColors.red.withOpacity(.08),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: FollowaColors.red.withOpacity(.22),
-                                  ),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Icon(
-                                      Icons.error_outline_rounded,
-                                      color: Color(0xFFFCA5A5),
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _error!,
-                                        style: const TextStyle(
-                                          color: Color(0xFFFCA5A5),
-                                          fontSize: 11.5,
-                                          height: 1.6,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              _ErrorBanner(message: _error!),
                             ],
                             const SizedBox(height: 18),
                             FilledButton.icon(
@@ -281,7 +239,6 @@ class _OtpScreenState extends State<OtpScreen> {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeShell()),
         );
-        return;
       }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -317,13 +274,7 @@ class _OtpScreenState extends State<OtpScreen> {
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 480),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: FollowaColors.surface.withOpacity(.97),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: FollowaColors.border),
-                    ),
+                  child: _AuthCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -398,14 +349,7 @@ class _OtpScreenState extends State<OtpScreen> {
                         ],
                         if (_error != null) ...[
                           const SizedBox(height: 12),
-                          Text(
-                            _error!,
-                            style: const TextStyle(
-                              color: Color(0xFFFCA5A5),
-                              fontSize: 11.5,
-                              height: 1.6,
-                            ),
-                          ),
+                          _ErrorBanner(message: _error!),
                         ],
                         const SizedBox(height: 18),
                         FilledButton(
@@ -433,6 +377,69 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 }
 
+class _AuthCard extends StatelessWidget {
+  final Widget child;
+  const _AuthCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: FollowaColors.surface.withOpacity(.97),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: FollowaColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x55000000),
+            blurRadius: 40,
+            offset: Offset(0, 20),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: FollowaColors.red.withOpacity(.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: FollowaColors.red.withOpacity(.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFFCA5A5),
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFFFCA5A5),
+                fontSize: 11.5,
+                height: 1.6,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BrandLockup extends StatelessWidget {
   const _BrandLockup();
 
@@ -450,7 +457,7 @@ class _BrandLockup extends StatelessWidget {
               end: Alignment.bottomLeft,
             ),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFB794F6).withOpacity(.30)),
+            border: Border.all(color: FollowaColors.brandSoft.withOpacity(.30)),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x557C3AED),
@@ -552,8 +559,8 @@ class _AuthBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
+    return const DecoratedBox(
+      decoration: BoxDecoration(
         color: FollowaColors.shell,
         gradient: RadialGradient(
           center: Alignment(0.75, -0.75),
@@ -561,7 +568,7 @@ class _AuthBackground extends StatelessWidget {
           colors: [Color(0x332E1065), FollowaColors.shell],
         ),
       ),
-      child: const SizedBox.expand(),
+      child: SizedBox.expand(),
     );
   }
 }
