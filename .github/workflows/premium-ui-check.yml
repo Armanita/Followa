@@ -9,6 +9,7 @@ on:
       - main
     paths:
       - 'apps/web/**'
+      - 'apps/api/**'
       - 'packages/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -16,9 +17,9 @@ on:
       - '.github/workflows/premium-ui-check.yml'
 
 jobs:
-  web-build:
+  compatibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,6 +38,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm build:api
+
+      - name: Test API compatibility
+        run: pnpm test
 
       - name: Build web
         run: pnpm build:web
