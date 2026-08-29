@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   const NavList = (
-    <nav className="flex flex-col gap-1 p-3">
+    <nav className="dashboard-nav" aria-label="ناوبری اصلی">
       {nav.map((item) => {
         const base = item.href.split('?')[0];
         const active = pathname === base || (base !== '/dashboard' && pathname.startsWith(base));
@@ -85,16 +85,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             key={item.href}
             href={item.href}
             onClick={() => setSidebarOpen(false)}
-            className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
-              active
-                ? 'bg-brand-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
+            className="dashboard-nav__link"
+            data-active={active}
+            aria-current={active ? 'page' : undefined}
           >
-            <span className="text-base">{item.icon}</span>
-            <span className="flex-1">{item.label}</span>
+            <span className="dashboard-nav__icon" aria-hidden="true">
+              {item.icon}
+            </span>
+            <span>{item.label}</span>
             {item.href === '/notifications' && unread > 0 && (
-              <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
+              <span className="dashboard-nav__badge tnum">
                 {unread.toLocaleString('fa-IR')}
               </span>
             )}
@@ -105,83 +105,100 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-l border-slate-200 bg-white lg:flex">
-        <BrandHeader />
-        {NavList}
-        <div className="mt-auto border-t border-slate-100 p-3">
+    <div className="dashboard-shell orgawork-surface">
+      <aside
+        id="followa-sidebar"
+        className="dashboard-sidebar"
+        data-mobile-open={sidebarOpen}
+        aria-label="ناوبری اصلی"
+      >
+        <div className="dashboard-sidebar__top">
+          <BrandHeader />
           <button
-            onClick={logout}
-            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+            type="button"
+            className="dashboard-sidebar__close dashboard-icon-button"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="بستن منو"
           >
-            <span>🚪</span> خروج از حساب
+            ×
+          </button>
+        </div>
+
+        {NavList}
+
+        <div className="dashboard-sidebar__footer">
+          <span>حساب فعال</span>
+          <strong>
+            {user.firstName} {user.lastName}
+          </strong>
+          <span>{isManager ? 'مدیر شرکت' : 'کارمند'}</span>
+          <button type="button" onClick={logout} className="dashboard-logout">
+            <span aria-hidden="true">↪</span>
+            خروج از حساب
           </button>
         </div>
       </aside>
 
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}>
-          <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
-          <aside
-            className="absolute right-0 top-0 flex h-full w-72 flex-col bg-white shadow-pop"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <BrandHeader />
-            {NavList}
-            <div className="mt-auto border-t border-slate-100 p-3">
-              <button
-                onClick={logout}
-                className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
-              >
-                <span>🚪</span> خروج از حساب
-              </button>
-            </div>
-          </aside>
-        </div>
+        <button
+          type="button"
+          className="dashboard-backdrop"
+          aria-label="بستن منو"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500"
-            aria-label="منو"
-          >
-            ☰
-          </button>
-          <span className="font-extrabold text-brand-700">فالوآ</span>
-          <span className="mr-auto text-sm font-medium text-slate-600">
-            {user.firstName} {user.lastName}
-          </span>
-        </header>
-        <header className="hidden items-center justify-between border-b border-slate-200 bg-white/90 px-8 py-4 backdrop-blur lg:flex">
-          <div />
-          <div className="flex items-center gap-4">
+      <div className="dashboard-workspace">
+        <header className="dashboard-header">
+          <div className="dashboard-header__identity">
+            <button
+              type="button"
+              className="dashboard-header__menu-button dashboard-icon-button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="باز کردن منو"
+              aria-controls="followa-sidebar"
+              aria-expanded={sidebarOpen}
+            >
+              ☰
+            </button>
+            <div className="dashboard-header__organization">
+              <span>فضای کاری</span>
+              <strong>{isManager ? 'مدیریت شرکت' : 'پنل کارمند'}</strong>
+            </div>
+          </div>
+
+          <div className="dashboard-header__actions">
             {!isManager && (
               <Link
                 href="/notifications"
-                className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
+                className="dashboard-icon-link"
+                aria-label="اعلان‌ها"
               >
-                🔔
+                <span aria-hidden="true">🔔</span>
                 {unread > 0 && (
-                  <span className="absolute -left-1 -top-1 tnum flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  <span className="dashboard-header__badge tnum">
                     {unread.toLocaleString('fa-IR')}
                   </span>
                 )}
               </Link>
             )}
-            <div className="text-left">
-              <p className="text-sm font-semibold">
-                {user.firstName} {user.lastName}
-              </p>
-              <p className="text-xs text-slate-400">{isManager ? 'مدیر شرکت' : 'کارمند'}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 font-bold text-brand-700">
-              {user.firstName.charAt(0)}
+            <div className="dashboard-user-chip">
+              <div className="dashboard-user-chip__copy">
+                <strong>
+                  {user.firstName} {user.lastName}
+                </strong>
+                <span>{isManager ? 'مدیر شرکت' : 'کارمند'}</span>
+              </div>
+              <div className="dashboard-user-chip__avatar" aria-hidden="true">
+                {user.firstName.charAt(0)}
+              </div>
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 lg:p-8">{children}</main>
+
+        <main id="dashboard-content" className="dashboard-content" tabIndex={-1}>
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -189,14 +206,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 function BrandHeader() {
   return (
-    <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-5">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-black text-white">
-        ف
-      </div>
-      <div>
-        <p className="text-lg font-extrabold leading-none text-brand-800">فالوآ</p>
-        <p className="mt-1 text-[11px] text-slate-400">سیستم پیگیری داخلی شرکت</p>
-      </div>
-    </div>
+    <Link className="dashboard-brand" href="/dashboard">
+      <span className="dashboard-brand__mark">ف</span>
+      <span className="dashboard-brand__copy">
+        <strong>فالوآ</strong>
+        <span>سیستم پیگیری داخلی شرکت</span>
+      </span>
+    </Link>
   );
 }
