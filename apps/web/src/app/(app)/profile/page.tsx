@@ -2,281 +2,34 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, getFileObjectUrl } from '@/lib/api';
-import {
-  btnPrimary,
-  Card,
-  ErrorState,
-  Field,
-  inputClass,
-  Spinner,
-  useConfirm,
-  useToast,
-} from '@/components/ui';
+import { btnPrimary, Card, ErrorState, Field, inputClass, Spinner, useConfirm, useToast } from '@/components/ui';
+import { CheckIcon, ProfileIcon } from '@/components/workspace/icons';
+import { PageHeader, PanelHeader } from '@/components/workspace/page';
 import { faDate, faDateInput, jalaliDateToIso } from '@/lib/jalali';
 
-interface ProfileData {
-  user: {
-    id: string;
-    mobile: string;
-    firstName: string;
-    lastName: string;
-    nationalId: string | null;
-    birthDate: string | null;
-    phone: string | null;
-    address: string | null;
-    maritalStatus: 'SINGLE' | 'MARRIED' | null;
-    bankCardNumber: string | null;
-    bankIban: string | null;
-    bankName: string | null;
-    profileFinalizedAt: string | null;
-    hasPersonnelPhoto: boolean;
-  };
-  company: { id: string; name: string } | null;
-  role?: 'COMPANY_MANAGER' | 'EMPLOYEE';
-  jobTitle?: string | null;
-  employeeCode?: string | null;
-}
-
+interface ProfileData { user: { id: string; mobile: string; firstName: string; lastName: string; nationalId: string | null; birthDate: string | null; phone: string | null; address: string | null; maritalStatus: 'SINGLE' | 'MARRIED' | null; bankCardNumber: string | null; bankIban: string | null; bankName: string | null; profileFinalizedAt: string | null; hasPersonnelPhoto: boolean; }; company: { id: string; name: string } | null; role?: 'COMPANY_MANAGER' | 'EMPLOYEE'; jobTitle?: string | null; employeeCode?: string | null; }
 const MARITAL_LABELS = { SINGLE: 'مجرد', MARRIED: 'متأهل' } as const;
 
 export default function ProfilePage() {
-  const toast = useToast();
-  const confirm = useConfirm();
-  const [data, setData] = useState<ProfileData | null>(null);
-  const [form, setForm] = useState<Partial<ProfileData['user']>>({});
-  const [birthDate, setBirthDate] = useState('');
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (photoUrl) URL.revokeObjectURL(photoUrl);
-    };
-  }, [photoUrl]);
-
-  const loadPhoto = useCallback(async (hasPhoto: boolean) => {
-    if (!hasPhoto) {
-      setPhotoUrl(null);
-      return;
-    }
-    try {
-      const photo = await getFileObjectUrl('/profile/photo');
-      setPhotoUrl(photo.url);
-    } catch {
-      setPhotoUrl(null);
-    }
-  }, []);
-
-  const load = useCallback(async () => {
-    try {
-      setError('');
-      const res = await api.get<ProfileData>('/profile');
-      setData(res);
-      setForm(res.user);
-      setBirthDate(res.user.birthDate ? faDateInput(res.user.birthDate) : '');
-      await loadPhoto(res.user.hasPersonnelPhoto);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'خطا');
-    } finally {
-      setLoading(false);
-    }
-  }, [loadPhoto]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (loading) return <Spinner />;
-  if (error || !data) return <ErrorState message={error} onRetry={load} />;
-
+  const toast = useToast(); const confirm = useConfirm(); const [data, setData] = useState<ProfileData | null>(null); const [form, setForm] = useState<Partial<ProfileData['user']>>({}); const [birthDate, setBirthDate] = useState(''); const [photoUrl, setPhotoUrl] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [photoBusy, setPhotoBusy] = useState(false);
+  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
+  const loadPhoto = useCallback(async (hasPhoto: boolean) => { if (!hasPhoto) { setPhotoUrl(null); return; } try { const photo = await getFileObjectUrl('/profile/photo'); setPhotoUrl(photo.url); } catch { setPhotoUrl(null); } }, []);
+  const load = useCallback(async () => { try { setError(''); const res = await api.get<ProfileData>('/profile'); setData(res); setForm(res.user); setBirthDate(res.user.birthDate ? faDateInput(res.user.birthDate) : ''); await loadPhoto(res.user.hasPersonnelPhoto); } catch (err) { setError(err instanceof Error ? err.message : 'خطا'); } finally { setLoading(false); } }, [loadPhoto]);
+  useEffect(() => { void load(); }, [load]);
+  if (loading) return <Spinner />; if (error || !data) return <ErrorState message={error} onRetry={load} />;
   const locked = data.role === 'EMPLOYEE' && Boolean(data.user.profileFinalizedAt);
+  const set = (key: keyof ProfileData['user']) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const payload = () => ({ firstName: form.firstName, lastName: form.lastName, nationalId: form.nationalId || null, birthDate: birthDate.trim() ? jalaliDateToIso(birthDate) : null, phone: form.phone || null, address: form.address || null, maritalStatus: form.maritalStatus || null, bankCardNumber: form.bankCardNumber || null, bankIban: form.bankIban || null, bankName: form.bankName || null });
+  const saveDraft = async (event?: React.FormEvent) => { event?.preventDefault(); if (locked) return; setBusy(true); try { const res = await api.patch<{ message: string }>('/profile', payload()); toast.success(res.message); await load(); } catch (err) { toast.error(err instanceof Error ? err.message : 'خطا'); } finally { setBusy(false); } };
+  const finalize = async () => { if (locked || data.role !== 'EMPLOYEE') return; const ok = await confirm({ title: 'ثبت نهایی اطلاعات پرسنلی؟', message: 'پس از ثبت نهایی، تغییر اطلاعات و عکس توسط کارمند قفل می‌شود و ویرایش بعدی فقط توسط مدیر شرکت انجام خواهد شد.', confirmLabel: 'ثبت نهایی' }); if (!ok) return; setBusy(true); try { await api.patch('/profile', payload()); const res = await api.post<{ message: string }>('/profile/finalize'); toast.success(res.message); await load(); } catch (err) { toast.error(err instanceof Error ? err.message : 'خطا در ثبت نهایی اطلاعات'); } finally { setBusy(false); } };
+  const uploadPhoto = async (file: File) => { if (locked) return; setPhotoBusy(true); try { const body = new FormData(); body.append('file', file); const res = await api.post<{ message: string }>('/profile/photo', body); toast.success(res.message); await load(); } catch (err) { toast.error(err instanceof Error ? err.message : 'خطا در بارگذاری عکس'); } finally { setPhotoBusy(false); } };
+  const fullName = `${data.user.firstName} ${data.user.lastName}`.trim();
 
-  const set = (key: keyof ProfileData['user']) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
-  ) => setForm((f) => ({ ...f, [key]: e.target.value }));
-
-  const payload = () => ({
-    firstName: form.firstName,
-    lastName: form.lastName,
-    nationalId: form.nationalId || null,
-    birthDate: birthDate.trim() ? jalaliDateToIso(birthDate) : null,
-    phone: form.phone || null,
-    address: form.address || null,
-    maritalStatus: form.maritalStatus || null,
-    bankCardNumber: form.bankCardNumber || null,
-    bankIban: form.bankIban || null,
-    bankName: form.bankName || null,
-  });
-
-  const saveDraft = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (locked) return;
-    setBusy(true);
-    try {
-      const res = await api.patch<{ message: string }>('/profile', payload());
-      toast.success(res.message);
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'خطا');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const finalize = async () => {
-    if (locked || data.role !== 'EMPLOYEE') return;
-    const ok = await confirm({
-      title: 'ثبت نهایی اطلاعات پرسنلی؟',
-      message: 'پس از ثبت نهایی دیگر نمی‌توانید اطلاعات یا عکس پرسنلی را ویرایش کنید و هر تغییر بعدی فقط توسط مدیر شرکت انجام می‌شود.',
-      confirmLabel: 'ثبت نهایی',
-    });
-    if (!ok) return;
-    setBusy(true);
-    try {
-      await api.patch('/profile', payload());
-      const res = await api.post<{ message: string }>('/profile/finalize');
-      toast.success(res.message);
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'خطا در ثبت نهایی اطلاعات');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const uploadPhoto = async (file: File) => {
-    if (locked) return;
-    setPhotoBusy(true);
-    try {
-      const body = new FormData();
-      body.append('file', file);
-      const res = await api.post<{ message: string }>('/profile/photo', body);
-      toast.success(res.message);
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'خطا در بارگذاری عکس');
-    } finally {
-      setPhotoBusy(false);
-    }
-  };
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-extrabold">پروفایل</h1>
-        <p className="mt-0.5 text-sm text-slate-500">اطلاعات فردی و بانکی شما</p>
-      </div>
-
-      <Card className="p-5">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-brand-50 text-xl font-black text-brand-700 ring-1 ring-brand-100">
-            {photoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrl} alt="عکس پرسنلی" className="h-full w-full object-cover" />
-            ) : (
-              data.user.firstName.charAt(0)
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-bold">{data.user.firstName} {data.user.lastName}</p>
-            <p className="tnum mt-0.5 text-sm text-slate-400" dir="ltr">{data.user.mobile}</p>
-            <p className="mt-0.5 text-xs text-slate-400">
-              {data.role === 'COMPANY_MANAGER' ? 'مدیر شرکت' : 'کارمند'}
-              {data.jobTitle && ` · ${data.jobTitle}`}
-              {data.company && ` · ${data.company.name}`}
-              {data.employeeCode && ` · کد پرسنلی ${data.employeeCode}`}
-            </p>
-            {!locked && (
-              <label className="mt-3 inline-flex cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                {photoBusy ? 'در حال بارگذاری…' : data.user.hasPersonnelPhoto ? 'تعویض عکس پرسنلی' : 'افزودن عکس پرسنلی'}
-                <input
-                  className="hidden"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  disabled={photoBusy}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void uploadPhoto(file);
-                    e.currentTarget.value = '';
-                  }}
-                />
-              </label>
-            )}
-            <p className="mt-1 text-[11px] text-slate-400">JPG، PNG یا WebP تا ۵ مگابایت</p>
-          </div>
-        </div>
-      </Card>
-
-      {locked && data.user.profileFinalizedAt && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-          <p className="font-bold">اطلاعات پرسنلی ثبت نهایی شده است</p>
-          <p className="mt-1 text-xs leading-6 text-emerald-800">
-            ثبت نهایی در {faDate(data.user.profileFinalizedAt)} انجام شده است. برای هر تغییر بعدی با مدیر شرکت هماهنگ کنید.
-          </p>
-        </div>
-      )}
-
-      <Card className="p-5">
-        <h2 className="mb-4 font-bold">اطلاعات فردی</h2>
-        <form onSubmit={saveDraft} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="نام">
-            <input disabled={locked} className={inputClass} value={form.firstName ?? ''} onChange={set('firstName')} />
-          </Field>
-          <Field label="نام خانوادگی">
-            <input disabled={locked} className={inputClass} value={form.lastName ?? ''} onChange={set('lastName')} />
-          </Field>
-          <Field label="کد ملی (۱۰ رقم)">
-            <input disabled={locked} className={`${inputClass} tnum`} dir="ltr" inputMode="numeric" maxLength={10} value={form.nationalId ?? ''} onChange={set('nationalId')} />
-          </Field>
-          <Field label="تاریخ تولد شمسی">
-            <input disabled={locked} className={`${inputClass} tnum`} dir="ltr" placeholder="۱۴۰۵/۰۶/۰۷" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-          </Field>
-          <Field label="تلفن ثابت">
-            <input disabled={locked} className={`${inputClass} tnum`} dir="ltr" value={form.phone ?? ''} onChange={set('phone')} />
-          </Field>
-          <Field label="وضعیت تأهل">
-            <select disabled={locked} className={inputClass} value={form.maritalStatus ?? ''} onChange={set('maritalStatus')}>
-              <option value="">— انتخاب —</option>
-              <option value="SINGLE">{MARITAL_LABELS.SINGLE}</option>
-              <option value="MARRIED">{MARITAL_LABELS.MARRIED}</option>
-            </select>
-          </Field>
-          <div className="sm:col-span-2">
-            <Field label="آدرس">
-              <textarea disabled={locked} className={`${inputClass} min-h-20`} value={form.address ?? ''} onChange={set('address')} />
-            </Field>
-          </div>
-
-          <div className="sm:col-span-2 border-t border-slate-100 pt-4">
-            <h3 className="mb-3 text-sm font-bold">اطلاعات بانکی</h3>
-          </div>
-          <Field label="شماره کارت">
-            <input disabled={locked} className={`${inputClass} tnum`} dir="ltr" inputMode="numeric" value={form.bankCardNumber ?? ''} onChange={set('bankCardNumber')} />
-          </Field>
-          <Field label="شماره شبا">
-            <input disabled={locked} className={`${inputClass} tnum`} dir="ltr" placeholder="IR..." value={form.bankIban ?? ''} onChange={set('bankIban')} />
-          </Field>
-          <Field label="نام بانک">
-            <input disabled={locked} className={inputClass} value={form.bankName ?? ''} onChange={set('bankName')} placeholder="مثلاً: بانک ملت" />
-          </Field>
-
-          {!locked && (
-            <div className="flex flex-wrap justify-end gap-2 sm:col-span-2">
-              <button type="submit" disabled={busy} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                {busy ? 'در حال ذخیره…' : 'ذخیره موقت'}
-              </button>
-              {data.role === 'EMPLOYEE' && (
-                <button type="button" disabled={busy} onClick={() => void finalize()} className={btnPrimary.replace('w-full', '')}>
-                  ثبت نهایی اطلاعات
-                </button>
-              )}
-            </div>
-          )}
-        </form>
-      </Card>
+  return <div className="space-y-5"><PageHeader eyebrow="حساب کاربری" title="پروفایل" description="اطلاعات هویتی، سازمانی و بانکی شما؛ همراه با وضعیت ثبت نهایی پرونده پرسنلی." icon={<ProfileIcon className="h-5 w-5" />} />
+    <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="space-y-5"><Card className="overflow-hidden"><div className="h-24 bg-gradient-to-l from-brand-600/30 via-blue-600/10 to-transparent" /><div className="px-5 pb-5"><div className="-mt-10 h-24 w-24 overflow-hidden rounded-2xl border-4 border-workspace-surface bg-workspace-elevated shadow-workspace">{photoUrl ? <img src={photoUrl} alt="عکس پرسنلی" className="h-full w-full object-cover" /> : <div className="grid h-full w-full place-items-center text-2xl font-black text-brand-200">{data.user.firstName.charAt(0)}</div>}</div><h2 className="mt-3 text-base font-black text-white">{fullName}</h2><p className="tnum mt-1 text-[10px] text-workspace-soft" dir="ltr">{data.user.mobile}</p><div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full border border-brand-400/20 bg-brand-400/10 px-2.5 py-1 text-[10px] font-semibold text-brand-200">{data.role === 'COMPANY_MANAGER' ? 'مدیر شرکت' : 'کارمند'}</span>{data.jobTitle && <span className="rounded-full border border-workspace-border bg-workspace-elevated px-2.5 py-1 text-[10px] text-workspace-muted">{data.jobTitle}</span>}</div><div className="mt-4 space-y-2 border-t border-workspace-border pt-4 text-[10px]"><div className="flex justify-between gap-3"><span className="text-workspace-soft">شرکت</span><span className="text-workspace-muted">{data.company?.name || '—'}</span></div><div className="flex justify-between gap-3"><span className="text-workspace-soft">کد پرسنلی</span><span className="text-workspace-muted">{data.employeeCode || '—'}</span></div></div>{!locked && <label className="mt-4 inline-flex cursor-pointer rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-3.5 py-2 text-[10px] font-semibold text-workspace-muted transition hover:bg-workspace-hover hover:text-white">{photoBusy ? 'در حال بارگذاری…' : data.user.hasPersonnelPhoto ? 'تعویض عکس پرسنلی' : 'افزودن عکس پرسنلی'}<input className="hidden" type="file" accept="image/jpeg,image/png,image/webp" disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPhoto(file); event.currentTarget.value = ''; }} /></label>}<p className="mt-2 text-[9px] text-workspace-soft">JPG، PNG یا WebP تا ۵ مگابایت</p></div></Card>
+      {locked && data.user.profileFinalizedAt && <Card className="border-emerald-400/20 bg-emerald-400/[.055] p-4"><div className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-300"><CheckIcon className="h-4 w-4" /></span><div><p className="text-xs font-black text-emerald-200">اطلاعات ثبت نهایی شده</p><p className="mt-1 text-[10px] leading-5 text-emerald-100/70">ثبت نهایی در {faDate(data.user.profileFinalizedAt)} انجام شده است. تغییر بعدی توسط مدیر شرکت انجام می‌شود.</p></div></div></Card>}</div>
+      <Card className="overflow-hidden"><PanelHeader title="اطلاعات پرسنلی" description={locked ? 'اطلاعات در وضعیت فقط‌خواندنی قرار دارد.' : 'قبل از ثبت نهایی می‌توانید اطلاعات را ذخیره موقت کنید.'} /><form onSubmit={saveDraft} className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2"><Field label="نام"><input disabled={locked} className={inputClass} value={form.firstName ?? ''} onChange={set('firstName')} /></Field><Field label="نام خانوادگی"><input disabled={locked} className={inputClass} value={form.lastName ?? ''} onChange={set('lastName')} /></Field><Field label="کد ملی (۱۰ رقم)"><input disabled={locked} className={`${inputClass} tnum`} dir="ltr" inputMode="numeric" maxLength={10} value={form.nationalId ?? ''} onChange={set('nationalId')} /></Field><Field label="تاریخ تولد شمسی"><input disabled={locked} className={`${inputClass} tnum`} dir="ltr" placeholder="۱۴۰۵/۰۶/۰۷" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></Field><Field label="تلفن ثابت"><input disabled={locked} className={`${inputClass} tnum`} dir="ltr" value={form.phone ?? ''} onChange={set('phone')} /></Field><Field label="وضعیت تأهل"><select disabled={locked} className={inputClass} value={form.maritalStatus ?? ''} onChange={set('maritalStatus')}><option value="">— انتخاب —</option><option value="SINGLE">{MARITAL_LABELS.SINGLE}</option><option value="MARRIED">{MARITAL_LABELS.MARRIED}</option></select></Field><div className="sm:col-span-2"><Field label="آدرس"><textarea disabled={locked} className={`${inputClass} min-h-20`} value={form.address ?? ''} onChange={set('address')} /></Field></div><div className="sm:col-span-2 border-t border-workspace-border pt-4"><h3 className="mb-3 text-xs font-black text-white">اطلاعات بانکی</h3></div><Field label="شماره کارت"><input disabled={locked} className={`${inputClass} tnum`} dir="ltr" inputMode="numeric" value={form.bankCardNumber ?? ''} onChange={set('bankCardNumber')} /></Field><Field label="شماره شبا"><input disabled={locked} className={`${inputClass} tnum`} dir="ltr" placeholder="IR..." value={form.bankIban ?? ''} onChange={set('bankIban')} /></Field><Field label="نام بانک"><input disabled={locked} className={inputClass} value={form.bankName ?? ''} onChange={set('bankName')} /></Field>{!locked && <div className="flex flex-wrap justify-end gap-2 border-t border-workspace-border pt-4 sm:col-span-2"><button type="submit" disabled={busy} className="rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-4 py-2.5 text-xs font-semibold text-workspace-muted hover:bg-workspace-hover hover:text-white disabled:opacity-50">{busy ? 'در حال ذخیره…' : 'ذخیره موقت'}</button>{data.role === 'EMPLOYEE' && <button type="button" disabled={busy} onClick={() => void finalize()} className={btnPrimary.replace('w-full', '')}>ثبت نهایی اطلاعات</button>}</div>}</form></Card>
     </div>
-  );
+  </div>;
 }
