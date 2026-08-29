@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'theme/premium_theme.dart';
@@ -47,9 +48,12 @@ class _RootGateState extends State<RootGate> {
   @override
   void initState() {
     super.initState();
-    AuthService.instance.hasToken().then((value) {
-      if (mounted) setState(() => _loggedIn = value);
-    });
+    _restore();
+  }
+
+  Future<void> _restore() async {
+    final value = await AuthService.instance.restoreSession();
+    if (mounted) setState(() => _loggedIn = value);
   }
 
   @override
