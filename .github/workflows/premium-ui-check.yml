@@ -1,0 +1,75 @@
+name: Followa Premium UI Check
+
+on:
+  push:
+    branches:
+      - ui/followa-premium-redesign
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/web/**'
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/premium-ui-check.yml'
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/followa_ci?schema=public
+      JWT_SECRET: followa-ci-test-secret
+      NODE_ENV: test
+      OTP_PROVIDER: mock
+      NOTIFICATION_PROVIDER: mock
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: followa_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d followa_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm build:api
+
+      - name: Apply test migrations
+        run: pnpm --filter @followa/api exec prisma migrate deploy
+
+      - name: Seed compatibility database
+        run: pnpm --filter @followa/api db:seed
+
+      - name: Test API compatibility
+        run: pnpm test
+
+      - name: Build web
+        run: pnpm build:web
