@@ -1,10 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { api, setAuth, clearAuth } from '@/lib/api';
-import { btnPrimary, Field, inputClass, Toast } from '@/components/ui';
-import Link from 'next/link';
+import { api, clearAuth, setAuth } from '@/lib/api';
+import { btnPrimary, Field, inputClass } from '@/components/ui';
 
 interface LoginResponse {
   token: string;
@@ -40,58 +40,72 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-bl from-brand-50 via-slate-50 to-slate-100 p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-black text-white shadow-pop">
-            ف
-          </div>
-          <h1 className="text-2xl font-extrabold text-slate-900">فالوآ</h1>
-          <p className="mt-1 text-sm text-slate-500">سیستم پیگیری و گردش کار داخلی شرکت</p>
+    <div className="followa-auth">
+      <section className="followa-auth__form-panel">
+        <div className="followa-auth__brand" aria-label="فالوآ">
+          <span className="followa-auth__brand-mark">ف</span>
+          <span className="followa-auth__brand-copy">
+            <strong>فالوآ</strong>
+            <span>سیستم پیگیری داخلی شرکت</span>
+          </span>
         </div>
 
-        <form
-          onSubmit={submit}
-          className="space-y-4 rounded-3xl bg-white p-6 shadow-card ring-1 ring-slate-200/70 sm:p-8"
-        >
-          <Field label="شماره موبایل" required>
-            <input
-              className={`${inputClass} tnum text-left`}
-              dir="ltr"
-              inputMode="numeric"
-              placeholder="09123456789"
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value)}
-              autoFocus
-            />
-          </Field>
-          <Field label="رمز عبور" required>
-            <input
-              type="password"
-              className={inputClass}
-              dir="ltr"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
+        <div className="followa-auth__content">
+          <div className="followa-auth__heading">
+            <p className="followa-auth__eyebrow">ورود به فضای کاری</p>
+            <h1>خوش آمدید</h1>
+            <p>برای ادامه، با شماره موبایل و رمز عبور حساب سازمانی خود وارد شوید.</p>
+          </div>
 
-          {error && (
-            <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
-          )}
+          <form onSubmit={submit} className="followa-auth__card space-y-4">
+            <Field label="شماره موبایل" required>
+              <input
+                className={`${inputClass} tnum text-left`}
+                dir="ltr"
+                inputMode="numeric"
+                placeholder="09123456789"
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                autoFocus
+              />
+            </Field>
+            <Field label="رمز عبور" required>
+              <input
+                type="password"
+                className={inputClass}
+                dir="ltr"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </Field>
 
-          <button type="submit" disabled={loading} className={btnPrimary}>
-            {loading ? 'در حال ورود…' : 'ورود'}
-          </button>
+            {error && (
+              <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
+            )}
 
-          <p className="pt-1 text-center text-sm text-slate-500">
-            رمز عبور ندارید؟{' '}
-            <Link href="/otp" className="font-semibold text-brand-600 hover:underline">
-              ثبت‌نام با کد یکبارمصرف
-            </Link>
+            <button type="submit" disabled={loading} className={btnPrimary}>
+              {loading ? 'در حال ورود…' : 'ورود'}
+            </button>
+
+            <p className="followa-auth__footer-link">
+              رمز عبور ندارید؟{' '}
+              <Link href="/otp">ثبت‌نام با کد یکبارمصرف</Link>
+            </p>
+          </form>
+        </div>
+      </section>
+
+      <aside className="followa-auth__visual" aria-hidden="true">
+        <div className="followa-auth__visual-content">
+          <span>فضای کاری یکپارچه</span>
+          <h2>پیگیری پرونده‌ها، مسئولیت‌ها و نتیجه‌ها در یک جریان روشن</h2>
+          <p>
+            فالوآ برای تیم‌هایی ساخته شده که می‌خواهند هر ارجاع، پیگیری و نتیجه قابل مشاهده و قابل
+            پیگیری باقی بماند.
           </p>
-        </form>
-      </div>
+        </div>
+      </aside>
     </div>
   );
 }
