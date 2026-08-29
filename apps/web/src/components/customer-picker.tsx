@@ -71,11 +71,11 @@ export function CustomerPicker({ open }: { open: boolean }) {
   };
 
   return (
-    <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
+    <div className="rounded-2xl border border-workspace-border bg-workspace-elevated/60 p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-slate-700">مشتری (اختیاری)</p>
-          <p className="mt-0.5 text-xs text-slate-400">برای پرونده‌های داخلی می‌توانید خالی بگذارید.</p>
+          <p className="text-sm font-semibold text-workspace-ink">مشتری (اختیاری)</p>
+          <p className="mt-0.5 text-xs text-workspace-soft">برای پرونده‌های داخلی می‌توانید خالی بگذارید.</p>
         </div>
         <button type="button" onClick={() => setQuickOpen((value) => !value)} className={btnSecondary}>
           {quickOpen ? 'بستن' : '＋ مشتری سریع'}
@@ -105,11 +105,11 @@ export function CustomerPicker({ open }: { open: boolean }) {
             </option>
           ))}
         </select>
-        {loading && <p className="mt-1 text-xs text-slate-400">در حال جستجو…</p>}
+        {loading && <p className="mt-1 text-xs text-workspace-soft">در حال جستجو…</p>}
       </div>
 
       {quickOpen && (
-        <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+        <div className="mt-4 space-y-3 border-t border-workspace-border pt-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="نوع مشتری" required>
               <select
