@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './orgawork-compat.css';
 import 'vazirmatn/Vazirmatn-font-face.css';
 
 export const metadata: Metadata = {
