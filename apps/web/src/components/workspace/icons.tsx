@@ -83,3 +83,18 @@ export function SearchIcon(props: IconProps) {
 export function CalendarIcon(props: IconProps) {
   return <BaseIcon {...props}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></BaseIcon>;
 }
+export function TransferIcon(props: IconProps) {
+  return <BaseIcon {...props}><path d="M4 7h12" /><path d="m13 4 3 3-3 3" /><path d="M20 17H8" /><path d="m11 14-3 3 3 3" /></BaseIcon>;
+}
+export function FileIcon(props: IconProps) {
+  return <BaseIcon {...props}><path d="M6 2h8l4 4v16H6z" /><path d="M14 2v5h5" /><path d="M9 13h6M9 17h6" /></BaseIcon>;
+}
+export function UploadIcon(props: IconProps) {
+  return <BaseIcon {...props}><path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M5 20h14" /></BaseIcon>;
+}
+export function DownloadIcon(props: IconProps) {
+  return <BaseIcon {...props}><path d="M12 4v12" /><path d="m7 11 5 5 5-5" /><path d="M5 20h14" /></BaseIcon>;
+}
+export function ResultIcon(props: IconProps) {
+  return <BaseIcon {...props}><path d="M5 4h14v16H5z" /><path d="M8 9h8M8 13h5" /><path d="m14.5 16 1.5 1.5 3-3" /></BaseIcon>;
+}
