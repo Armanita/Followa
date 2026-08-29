@@ -1,0 +1,55 @@
+name: Followa Mobile Premium Check
+
+on:
+  push:
+    branches:
+      - ui/followa-mobile-premium
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-premium-check.yml'
+
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Fetch pinned Estedad fonts
+        run: bash tool/fetch_estedad_fonts.sh
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze compile errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        run: flutter test
+
+      - name: Build Android release APK
+        run: flutter build apk --release --dart-define="FOLLOWA_API=http://192.168.1.239:3001/api/v1"
+
+      - name: Upload final typography LAN APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: followa-android-final-estedad-192-168-1-239
+          path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
