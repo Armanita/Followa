@@ -34,11 +34,6 @@ type DashboardData = {
     caseType?: { name: string; color: string | null } | null;
   }>;
   recentActivities: any[];
-  activeWorkers: Array<{
-    user: { id: string; firstName: string; lastName: string };
-    case: { id: string; title: string };
-    startedAt: string;
-  }>;
   statusChart: Array<{ status: string; count: number }>;
 };
 
@@ -188,53 +183,26 @@ export function ManagerDashboard({ data, firstName }: { data: DashboardData; fir
           )}
         </Card>
 
-        <div className="space-y-5">
-          <Card className="p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-black text-white">سلامت جریان پرونده‌ها</h2>
-                <p className="mt-1 text-[10px] text-workspace-soft">توزیع وضعیت بر اساس داده جاری</p>
-              </div>
-              <span className="tnum rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-black text-emerald-300">{toFa(doneRate)}٪ تکمیل</span>
+        <Card className="p-5">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-black text-white">سلامت جریان پرونده‌ها</h2>
+              <p className="mt-1 text-[10px] text-workspace-soft">توزیع وضعیت بر اساس داده جاری</p>
             </div>
-            <CaseStatusChart data={data.statusChart} />
-            <div className="mt-5 grid grid-cols-2 gap-3 border-t border-workspace-border pt-4">
-              <div className="rounded-xl border border-workspace-border bg-workspace-elevated/60 p-3">
-                <p className="text-[10px] text-workspace-soft">تکمیل‌شده</p>
-                <p className="tnum mt-1 text-lg font-black text-emerald-300">{toFa(data.cards.doneCases)}</p>
-              </div>
-              <div className="rounded-xl border border-workspace-border bg-workspace-elevated/60 p-3">
-                <p className="text-[10px] text-workspace-soft">لغوشده</p>
-                <p className="tnum mt-1 text-lg font-black text-workspace-muted">{toFa(data.cards.cancelled)}</p>
-              </div>
+            <span className="tnum rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-black text-emerald-300">{toFa(doneRate)}٪ تکمیل</span>
+          </div>
+          <CaseStatusChart data={data.statusChart} />
+          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-workspace-border pt-4">
+            <div className="rounded-xl border border-workspace-border bg-workspace-elevated/60 p-3">
+              <p className="text-[10px] text-workspace-soft">تکمیل‌شده</p>
+              <p className="tnum mt-1 text-lg font-black text-emerald-300">{toFa(data.cards.doneCases)}</p>
             </div>
-          </Card>
-
-          <Card className="overflow-hidden">
-            <div className="border-b border-workspace-border px-5 py-4">
-              <h2 className="text-sm font-black text-white">فعالیت جاری تیم</h2>
-              <p className="mt-1 text-[10px] text-workspace-soft">نشست‌های کاری باز ثبت‌شده در سیستم</p>
+            <div className="rounded-xl border border-workspace-border bg-workspace-elevated/60 p-3">
+              <p className="text-[10px] text-workspace-soft">لغوشده</p>
+              <p className="tnum mt-1 text-lg font-black text-workspace-muted">{toFa(data.cards.cancelled)}</p>
             </div>
-            {data.activeWorkers.length === 0 ? (
-              <p className="px-5 py-7 text-center text-xs text-workspace-soft">در حال حاضر نشست کاری بازی ثبت نشده است.</p>
-            ) : (
-              <div className="divide-y divide-workspace-border">
-                {data.activeWorkers.slice(0, 5).map((worker) => (
-                  <Link key={`${worker.user.id}-${worker.case.id}`} href={`/cases/${worker.case.id}`} className="flex items-center gap-3 px-5 py-3 transition hover:bg-workspace-hover/60">
-                    <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-workspace-borderStrong bg-workspace-elevated text-[10px] font-black text-brand-200">
-                      {worker.user.firstName.charAt(0)}{worker.user.lastName.charAt(0)}
-                      <span className="absolute -bottom-0.5 -left-0.5 h-2.5 w-2.5 rounded-full border-2 border-workspace-surface bg-emerald-400" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <strong className="block truncate text-[11px] text-workspace-ink">{worker.user.firstName} {worker.user.lastName}</strong>
-                      <span className="mt-0.5 block truncate text-[9px] text-workspace-soft">{worker.case.title}</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
+          </div>
+        </Card>
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,.55fr)]">
