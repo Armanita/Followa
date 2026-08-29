@@ -144,8 +144,10 @@ class _PersonnelDialogState extends State<_PersonnelDialog> {
   }
 
   Future<void> _uploadPhoto() async {
-    final result = await FilePicker.pickFiles(type: FileType.image, allowMultiple: false, withData: true); if (result == null || result.files.isEmpty || result.files.single.bytes == null) return;
-    try { setState(() => _busy = true); final response = await AuthService.instance.uploadBytes('/members/${widget.membershipId}/photo', fieldName: 'file', filename: result.files.single.name, bytes: result.files.single.bytes!); _user = response['user'] as Map<String, dynamic>; _photo = (await AuthService.instance.download('/members/${widget.membershipId}/photo')).bytes; await widget.onChanged(); if (mounted) setState(() {}); }
+    final file = await FilePicker.pickFile(type: FileType.image);
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    try { setState(() => _busy = true); final response = await AuthService.instance.uploadBytes('/members/${widget.membershipId}/photo', fieldName: 'file', filename: file.name, bytes: bytes); _user = response['user'] as Map<String, dynamic>; _photo = (await AuthService.instance.download('/members/${widget.membershipId}/photo')).bytes; await widget.onChanged(); if (mounted) setState(() {}); }
     catch (error) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString()))); } finally { if (mounted) setState(() => _busy = false); }
   }
 
