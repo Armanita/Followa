@@ -34,8 +34,21 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Verify lockfile is current
+        run: |
+          if ! git diff --quiet -- pubspec.lock; then
+            echo "::group::GENERATED_PUBSPEC_LOCK"
+            cat pubspec.lock
+            echo "::endgroup::"
+            echo "pubspec.lock is stale; commit the generated lockfile."
+            exit 1
+          fi
+
       - name: Analyze compile errors
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Test
         run: flutter test
+
+      - name: Build Android release APK
+        run: flutter build apk --release --dart-define="FOLLOWA_API=https://example.invalid/api/v1"
