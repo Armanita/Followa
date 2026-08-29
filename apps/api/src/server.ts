@@ -7,6 +7,7 @@ import { registerAuth } from './plugins/auth.js';
 import { authRoutes } from './modules/auth/auth-routes.js';
 import { adminRoutes } from './modules/admin/admin-routes.js';
 import { memberRoutes } from './modules/members/members-routes.js';
+import { transferCandidateRoutes } from './modules/members/transfer-candidate-routes.js';
 import { companyRoutes } from './modules/companies/company-routes.js';
 import { customerRoutes } from './modules/customers/customer-routes.js';
 import { caseRoutes } from './modules/cases/case-routes.js';
@@ -25,7 +26,7 @@ export async function buildServer() {
         ? { transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss' } } }
         : {}),
     },
-    bodyLimit: 2 * 1024 * 1024, // JSON bodies stay small; file uploads use multipart
+    bodyLimit: 2 * 1024 * 1024,
   });
 
   await app.register(cors, { origin: true, credentials: true });
@@ -44,6 +45,7 @@ export async function buildServer() {
   const apiPrefix = '/api/v1';
   await app.register(authRoutes, { prefix: apiPrefix });
   await app.register(adminRoutes, { prefix: `${apiPrefix}/admin` });
+  await app.register(transferCandidateRoutes, { prefix: apiPrefix });
   await app.register(memberRoutes, { prefix: apiPrefix });
   await app.register(companyRoutes, { prefix: apiPrefix });
   await app.register(customerRoutes, { prefix: apiPrefix });

@@ -1,97 +1,20 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { api, setAuth, clearAuth } from '@/lib/api';
-import { btnPrimary, Field, inputClass, Toast } from '@/components/ui';
-import Link from 'next/link';
+import { api, clearAuth, setAuth } from '@/lib/api';
+import { btnPrimary, Field, inputClass } from '@/components/ui';
+import { ActivityIcon, CasesIcon, CheckIcon } from '@/components/workspace/icons';
 
-interface LoginResponse {
-  token: string;
-  user: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    role: 'COMPANY_MANAGER' | 'EMPLOYEE' | null;
-  };
-}
+interface LoginResponse { token: string; user: { id: string; firstName: string; lastName: string; role: 'COMPANY_MANAGER' | 'EMPLOYEE' | null }; }
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [mobile, setMobile] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const res = await api.post<LoginResponse>('/auth/login', { mobile, password });
-      clearAuth();
-      setAuth(res.token, res.user);
-      router.replace('/dashboard');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'خطا در ورود');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-bl from-brand-50 via-slate-50 to-slate-100 p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-black text-white shadow-pop">
-            ف
-          </div>
-          <h1 className="text-2xl font-extrabold text-slate-900">فالوآ</h1>
-          <p className="mt-1 text-sm text-slate-500">سیستم پیگیری و گردش کار داخلی شرکت</p>
-        </div>
-
-        <form
-          onSubmit={submit}
-          className="space-y-4 rounded-3xl bg-white p-6 shadow-card ring-1 ring-slate-200/70 sm:p-8"
-        >
-          <Field label="شماره موبایل" required>
-            <input
-              className={`${inputClass} tnum text-left`}
-              dir="ltr"
-              inputMode="numeric"
-              placeholder="09123456789"
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value)}
-              autoFocus
-            />
-          </Field>
-          <Field label="رمز عبور" required>
-            <input
-              type="password"
-              className={inputClass}
-              dir="ltr"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
-
-          {error && (
-            <div className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</div>
-          )}
-
-          <button type="submit" disabled={loading} className={btnPrimary}>
-            {loading ? 'در حال ورود…' : 'ورود'}
-          </button>
-
-          <p className="pt-1 text-center text-sm text-slate-500">
-            رمز عبور ندارید؟{' '}
-            <Link href="/otp" className="font-semibold text-brand-600 hover:underline">
-              ثبت‌نام با کد یکبارمصرف
-            </Link>
-          </p>
-        </form>
-      </div>
-    </div>
-  );
+  const router = useRouter(); const [mobile, setMobile] = useState(''); const [password, setPassword] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); setError(''); setLoading(true); try { const res = await api.post<LoginResponse>('/auth/login', { mobile, password }); clearAuth(); setAuth(res.token, res.user); router.replace('/dashboard'); } catch (err) { setError(err instanceof Error ? err.message : 'خطا در ورود'); } finally { setLoading(false); } };
+  return <div className="grid min-h-screen bg-workspace-canvas lg:grid-cols-[minmax(0,1fr)_minmax(440px,.78fr)]">
+    <aside className="relative hidden overflow-hidden border-l border-workspace-border bg-workspace-shell p-10 lg:flex lg:flex-col lg:justify-between xl:p-14"><div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-600/20 blur-3xl" /><div className="absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-blue-600/10 blur-3xl" /><div className="relative"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-lg font-black text-white shadow-[0_16px_36px_rgba(124,77,255,.28)]">ف</span><div><p className="text-base font-black text-white">فالوآ</p><p className="mt-0.5 text-[10px] text-workspace-soft">سامانه پیگیری و گردش کار سازمانی</p></div></div><div className="mt-20 max-w-xl"><p className="text-[10px] font-bold tracking-wide text-brand-300">فضای کاری یکپارچه</p><h1 className="mt-4 text-4xl font-black leading-[1.55] tracking-tight text-white xl:text-5xl">هر پرونده، مسئولیت و نتیجه در یک جریان روشن.</h1><p className="mt-5 max-w-lg text-sm leading-8 text-workspace-muted">فالوآ برای تیم‌هایی ساخته شده که می‌خواهند پیگیری‌ها گم نشوند، مسئولیت‌ها روشن بمانند و تاریخچه تصمیم‌ها قابل مشاهده باشد.</p><div className="mt-9 grid gap-3 sm:grid-cols-3"><Feature icon={<CasesIcon className="h-4 w-4" />} title="پرونده‌ها" text="گردش روشن مسئولیت" /><Feature icon={<ActivityIcon className="h-4 w-4" />} title="پیگیری" text="نتیجه و اقدام بعدی" /><Feature icon={<CheckIcon className="h-4 w-4" />} title="کنترل" text="دید مدیریتی یکپارچه" /></div></div></div><p className="relative text-[9px] text-workspace-soft">Followa Operational Workspace</p></aside>
+    <main className="flex min-h-screen items-center justify-center p-5 sm:p-8 lg:p-12"><div className="w-full max-w-[430px]"><div className="mb-8 flex items-center gap-3 lg:hidden"><span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-sm font-black text-white">ف</span><div><p className="font-black text-white">فالوآ</p><p className="text-[9px] text-workspace-soft">فضای کاری سازمانی</p></div></div><div className="mb-7"><p className="text-[10px] font-bold text-brand-300">ورود به فضای کاری</p><h2 className="mt-2 text-2xl font-black text-white">خوش آمدید</h2><p className="mt-2 text-xs leading-6 text-workspace-muted">برای ادامه شماره موبایل و رمز عبور حساب سازمانی خود را وارد کنید.</p></div><form onSubmit={submit} className="space-y-4 rounded-2xl border border-workspace-border bg-workspace-surface p-5 shadow-workspace sm:p-6"><Field label="شماره موبایل" required><input className={`${inputClass} tnum text-left`} dir="ltr" inputMode="numeric" placeholder="09123456789" value={mobile} onChange={(event) => setMobile(event.target.value)} autoFocus /></Field><Field label="رمز عبور" required><input type="password" className={inputClass} dir="ltr" placeholder="••••••••" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>{error && <div className="rounded-xl border border-red-400/20 bg-red-400/10 px-3.5 py-2.5 text-xs text-red-200">{error}</div>}<button type="submit" disabled={loading} className={btnPrimary}>{loading ? 'در حال ورود…' : 'ورود به فالوآ'}</button><p className="border-t border-workspace-border pt-4 text-center text-[11px] text-workspace-muted">رمز عبور ندارید؟ <Link href="/otp" className="font-bold text-brand-300 hover:text-brand-200">فعال‌سازی با کد یکبارمصرف</Link></p></form></div></main>
+  </div>;
 }
+function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) { return <div className="rounded-2xl border border-workspace-border bg-workspace-elevated/55 p-4"><span className="grid h-8 w-8 place-items-center rounded-lg border border-brand-400/20 bg-brand-400/10 text-brand-200">{icon}</span><p className="mt-3 text-xs font-black text-white">{title}</p><p className="mt-1 text-[9px] text-workspace-soft">{text}</p></div>; }

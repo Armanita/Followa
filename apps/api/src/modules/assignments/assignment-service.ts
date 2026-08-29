@@ -1,13 +1,13 @@
 import { prisma } from '../../lib/prisma.js';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors.js';
-import { assertCanViewCase, logActivity, type Actor } from '../cases/case-service.js';
+import { assertCanViewCase, type Actor } from '../cases/case-service.js';
 import { notificationService } from '../notifications/notification-service.js';
 
 export const assignmentService = {
   /**
-   * Transfer the case to another active company member. Only the current owner
-   * (or a manager) can transfer. Case moves to WAITING_ACCEPTANCE; the previous
-   * owner loses ownership immediately (spec §9: exactly one active responsible).
+   * Transfer the case to another active employee in the same company. Only the
+   * current owner (or a manager) can transfer. Case moves to WAITING_ACCEPTANCE;
+   * the previous owner loses ownership immediately.
    */
   async transfer(actor: Actor, caseId: string, toUserId: string, note?: string) {
     if (toUserId === actor.userId) throw badRequest('انتقال پرونده به خودتان مجاز نیست');
@@ -22,10 +22,15 @@ export const assignmentService = {
     }
 
     const targetMembership = await prisma.companyMembership.findFirst({
-      where: { userId: toUserId, companyId: actor.companyId, isActive: true },
+      where: {
+        userId: toUserId,
+        companyId: actor.companyId,
+        isActive: true,
+        role: 'EMPLOYEE',
+      },
       include: { user: true },
     });
-    if (!targetMembership) throw badRequest('کاربر مقصد در این شرکت فعال نیست');
+    if (!targetMembership) throw badRequest('کارمند مقصد در این شرکت فعال نیست');
 
     const result = await prisma.$transaction(async (tx) => {
       const assignment = await tx.caseAssignment.create({
@@ -41,7 +46,7 @@ export const assignmentService = {
         where: { id: caseId },
         data: {
           status: 'WAITING_ACCEPTANCE',
-          currentOwnerId: null, // nobody owns it until accepted
+          currentOwnerId: null,
         },
       });
       await tx.caseActivity.create({
@@ -66,7 +71,6 @@ export const assignmentService = {
     return result;
   },
 
-  /** Receiver accepts. Case becomes IN_PROGRESS owned by receiver. */
   async accept(actor: Actor, caseId: string) {
     const pending = await prisma.caseAssignment.findFirst({
       where: { caseId, toUserId: actor.userId, status: 'PENDING' },
@@ -93,7 +97,6 @@ export const assignmentService = {
       }),
     ]);
 
-    // notify sender (if any) about acceptance
     if (pending.fromUserId && pending.fromUserId !== actor.userId) {
       await notificationService.notify({
         userId: pending.fromUserId,
@@ -107,11 +110,6 @@ export const assignmentService = {
     return updated;
   },
 
-  /**
-   * Receiver rejects with mandatory reason. Case returns to the sender:
-   * ownership reverts, status becomes IN_PROGRESS again (they were working on
-   * it) or OPEN if it was their initial creation.
-   */
   async reject(actor: Actor, caseId: string, rejectReason: string) {
     const pending = await prisma.caseAssignment.findFirst({
       where: { caseId, toUserId: actor.userId, status: 'PENDING' },
@@ -132,7 +130,6 @@ export const assignmentService = {
         where: { id: pending.id },
         data: { status: 'REJECTED', rejectReason, respondedAt: new Date() },
       }),
-      // return-to-sender assignment record keeps full history traceable
       prisma.caseAssignment.create({
         data: {
           caseId,
@@ -172,7 +169,6 @@ export const assignmentService = {
     return { message: 'پرونده رد شد و به ارجاع‌دهنده بازگشت' };
   },
 
-  /** Assignment history for a case (view-only, immutable). */
   async history(actor: Actor, caseId: string) {
     await assertCanViewCase(caseId, actor);
     return prisma.caseAssignment.findMany({

@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 import { api, downloadFile, getFileObjectUrl } from '@/lib/api';
 import {
   btnPrimary,
@@ -10,17 +10,50 @@ import {
   Card,
   EmptyState,
   ErrorState,
-  Field,
-  inputClass,
   Modal,
   PriorityBadge,
   Spinner,
   StatusBadge,
-  useConfirm,
   useToast,
 } from '@/components/ui';
-import { ActivityTimeline, AssignmentHistory } from '@/components/timeline';
-import { faDate, faDateTime, faDuration, toFa } from '@/lib/jalali';
+import {
+  ActivityTimeline,
+  AssignmentHistory,
+  type AssignmentRow,
+  type TimelineEntry,
+} from '@/components/timeline';
+import { CaseTransferModal } from '@/components/workspace/case-transfer-modal';
+import {
+  ActivityIcon,
+  ArrowLeftIcon,
+  CalendarIcon,
+  CasesIcon,
+  ClockIcon,
+  CustomersIcon,
+  DownloadIcon,
+  EmployeesIcon,
+  FileIcon,
+  TransferIcon,
+} from '@/components/workspace/icons';
+import { Avatar, PageHeader, PanelHeader } from '@/components/workspace/page';
+import { faDate, faDateTime, faDuration, isLate, toFa } from '@/lib/jalali';
+
+interface CaseFile {
+  id: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  createdAt: string;
+  uploader: { id?: string; firstName: string; lastName: string };
+}
+
+interface CaseReminder {
+  id: string;
+  remindAt: string;
+  note: string | null;
+  status: string;
+  assignee?: { id: string; firstName: string; lastName: string } | null;
+}
 
 interface CaseDetail {
   id: string;
@@ -33,49 +66,42 @@ interface CaseDetail {
   result: string | null;
   resultAt: string | null;
   createdAt: string;
-  canEdit: boolean;
   canTransfer: boolean;
   isManager: boolean;
-  isCurrentOwner: boolean;
-  hasPendingAcceptanceForMe: boolean;
   totalWorkSeconds: number;
   currentOwner?: { id: string; firstName: string; lastName: string } | null;
   createdBy: { id: string; firstName: string; lastName: string };
   caseType?: { id: string; name: string; color: string | null } | null;
-  files: { id: string; filename: string; size: number; mimeType: string; createdAt: string; uploader: { firstName: string; lastName: string } }[];
+  customer?: { id: string; type: 'INDIVIDUAL' | 'LEGAL'; name: string; isActive: boolean } | null;
+  reminders?: CaseReminder[];
+  files: CaseFile[];
 }
 
-export default function CaseDetailPage() {
+export default function ManagerCaseDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const toast = useToast();
-  const confirm = useConfirm();
   const [data, setData] = useState<CaseDetail | null>(null);
-  const [activities, setActivities] = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
-  const [workSessions, setWorkSessions] = useState<any[]>([]);
+  const [activities, setActivities] = useState<TimelineEntry[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState<'' | 'transfer' | 'reject' | 'result'>('');
-  const [busyAction, setBusyAction] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [preview, setPreview] = useState<{ url: string; type: string; name: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const load = useCallback(async () => {
+    setError('');
     try {
-      setError('');
-      const detail = await api.get<CaseDetail>(`/cases/${id}`);
-      setData(detail);
-      const [acts, asgns, sessions] = await Promise.all([
-        api.get<any[]>(`/cases/${id}/activities`),
-        api.get<{ items: any[] }>(`/cases/${id}/assignments`),
-        api.get<{ items: any[] }>(`/cases/${id}/work-sessions`).catch(() => ({ items: [] })),
+      const [detail, acts, asgns] = await Promise.all([
+        api.get<CaseDetail>(`/cases/${id}`),
+        api.get<TimelineEntry[]>(`/cases/${id}/activities`),
+        api.get<{ items: AssignmentRow[] }>(`/cases/${id}/assignments`),
       ]);
+      setData(detail);
       setActivities(acts);
       setAssignments(asgns.items);
-      setWorkSessions(sessions.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'خطا');
+      setError(err instanceof Error ? err.message : 'خطا در دریافت پرونده');
     } finally {
       setLoading(false);
     }
@@ -85,65 +111,25 @@ export default function CaseDetailPage() {
     void load();
   }, [load]);
 
-  if (loading) return <Spinner />;
-  if (error)
-    return (
-      <div className="space-y-4">
-        <ErrorState message={error} onRetry={load} />
-        <div className="text-center">
-          <Link href="/cases" className="text-sm font-medium text-brand-600 hover:underline">
-            ← بازگشت به پرونده‌ها
-          </Link>
-        </div>
-      </div>
-    );
-  if (!data) return null;
+  useEffect(() => {
+    return () => {
+      if (preview?.url) URL.revokeObjectURL(preview.url);
+    };
+  }, [preview]);
 
-  const isClosed = data.status === 'DONE' || data.status === 'CANCELLED';
-  // Managers oversee and reassign only; employees execute.
-  const showEmployeeActions = !data.isManager && !isClosed;
-
-  /** Runs an async action with busy state + toast feedback. */
-  const runAction = async (fn: () => Promise<unknown>, successMsg: string) => {
-    if (busyAction) return;
-    setBusyAction(true);
-    try {
-      await fn();
-      toast.success(successMsg);
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'خطای غیرمنتظره');
-    } finally {
-      setBusyAction(false);
-    }
-  };
-
-  const handleTransferClick = async () => {
-    if (!data.currentOwner && data.status !== 'WAITING_ACCEPTANCE') return;
-    const ok = await confirm({
-      title: 'انتقال پرونده',
-      message:
-        data.isManager
-          ? 'پرونده برای مسئول جدید ارجاع می‌شود و در تاریخچه ثبت خواهد شد.'
-          : 'تا زمان پذیرش گیرنده، شما مسئولیت را از دست می‌دهید.',
-      confirmLabel: 'ادامه',
-    });
-    if (ok) setModal('transfer');
-  };
-
-  const openAttachment = async (f: CaseDetail['files'][number]) => {
+  const openAttachment = async (file: CaseFile) => {
     setPreviewLoading(true);
     try {
-      if (f.mimeType.startsWith('image/') || f.mimeType.startsWith('audio/') || f.mimeType === 'application/pdf') {
-        const { url, type } = await getFileObjectUrl(`/files/${f.id}/download`);
+      if (file.mimeType.startsWith('image/') || file.mimeType.startsWith('audio/') || file.mimeType === 'application/pdf') {
+        const { url, type } = await getFileObjectUrl(`/files/${file.id}/download`);
         if (type === 'application/pdf') {
-          // PDFs open best in a new tab via blob URL
           window.open(url, '_blank', 'noopener');
+          window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
         } else {
-          setPreview({ url, type, name: f.filename });
+          setPreview({ url, type, name: file.filename });
         }
       } else {
-        await downloadFile(`/files/${f.id}/download`, f.filename);
+        await downloadFile(`/files/${file.id}/download`, file.filename);
         toast.success('فایل دانلود شد');
       }
     } catch (err) {
@@ -153,166 +139,187 @@ export default function CaseDetailPage() {
     }
   };
 
+  if (loading) return <Spinner label="در حال دریافت پرونده…" />;
+  if (error) {
+    return (
+      <div className="space-y-5">
+        <ErrorState message={error} onRetry={load} />
+        <div className="flex justify-center">
+          <Link href="/cases" className={btnSecondary}>
+            <ArrowLeftIcon className="h-4 w-4 rotate-180" />
+            بازگشت به پرونده‌ها
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  const late = isLate(data.dueDate, data.status);
+  const effortMinutes = activities.reduce(
+    (sum, item) => sum + (typeof item.payload?.effortMinutes === 'number' ? item.payload.effortMinutes : 0),
+    0,
+  );
+  const activeReminder = (data.reminders ?? []).find((reminder) => reminder.status === 'ACTIVE');
+
   return (
     <div className="space-y-5">
-      <button onClick={() => router.back()} className="text-sm font-medium text-slate-500 hover:text-slate-700">
-        → بازگشت
-      </button>
-
-      {/* header card */}
-      <Card className="p-5">
-        <div className="flex flex-wrap items-start gap-3">
-          <span className="tnum rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">
-            #{toFa(data.number)}
-          </span>
-          <h1 className="min-w-0 flex-1 text-xl font-extrabold leading-snug">{data.title}</h1>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <StatusBadge status={data.status} />
-          <PriorityBadge priority={data.priority} />
-          {data.caseType && (
-            <span
-              className="rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset"
-              style={{
-                color: data.caseType.color ?? '#334155',
-                backgroundColor: `${data.caseType.color ?? '#64748b'}14`,
-                borderColor: data.caseType.color ?? undefined,
-                ['--tw-ring-color' as string]: `${data.caseType.color ?? '#64748b'}40`,
-              }}
-            >
-              {data.caseType.name}
+      <PageHeader
+        eyebrow="نظارت مدیریتی پرونده"
+        title={data.title}
+        description="نمای یکپارچه وضعیت، گردش مسئولیت، نتیجه‌ها، زمان صرف‌شده و مستندات پرونده."
+        meta={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="tnum rounded-lg border border-workspace-border bg-workspace-elevated px-2.5 py-1 text-workspace-muted">
+              پرونده #{toFa(data.number)}
             </span>
-          )}
-          {data.dueDate && (
-            <span className={`tnum rounded-full px-2.5 py-0.5 text-xs font-medium ${new Date(data.dueDate) < new Date() && !isClosed ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
-              سررسید: {faDate(data.dueDate)}
-            </span>
-          )}
-          <span className="tnum rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">
-            زمان کار: {faDuration(data.totalWorkSeconds)}
-          </span>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500 sm:grid-cols-4">
-          <div>
-            <p className="text-slate-400">مسئول فعلی</p>
-            <p className="mt-0.5 font-semibold text-slate-700">
-              {data.currentOwner ? `${data.currentOwner.firstName} ${data.currentOwner.lastName}` : '—'}
-            </p>
+            <StatusBadge status={data.status} />
+            <PriorityBadge priority={data.priority} />
           </div>
-          <div>
-            <p className="text-slate-400">سازنده</p>
-            <p className="mt-0.5 font-semibold text-slate-700">
-              {data.createdBy.firstName} {data.createdBy.lastName}
-            </p>
-          </div>
-          <div>
-            <p className="text-slate-400">تاریخ ایجاد</p>
-            <p className="tnum mt-0.5 font-semibold text-slate-700">{faDateTime(data.createdAt)}</p>
-          </div>
-          {data.resultAt && (
-            <div>
-              <p className="text-slate-400">زمان نتیجه</p>
-              <p className="tnum mt-0.5 font-semibold text-slate-700">{faDateTime(data.resultAt)}</p>
-            </div>
-          )}
-        </div>
-        {data.description && (
-          <p className="mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 p-3.5 text-sm leading-relaxed text-slate-600">
-            {data.description}
-          </p>
-        )}
-        {data.result && (
-          <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
-            <p className="mb-1 text-xs font-bold text-emerald-700">نتیجه ثبت‌شده</p>
-            <p className="whitespace-pre-wrap text-sm text-emerald-900">{data.result}</p>
-          </div>
-        )}
-      </Card>
-
-      {/* pending acceptance banner (employees who received the case) */}
-      {!data.isManager && data.hasPendingAcceptanceForMe && data.status === 'WAITING_ACCEPTANCE' && (
-        <PendingBanner caseId={id} runAction={runAction} busy={busyAction} onReject={() => setModal('reject')} />
-      )}
-
-      {/* action bar */}
-      {(showEmployeeActions || (data.canTransfer && data.isManager)) && (
-        <Card className="p-4">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {showEmployeeActions && (
-              <>
-                {data.canEdit || data.isCurrentOwner ? (
-                  <button onClick={() => setModal('result')} className={btnSecondary}>
-                    📝 ثبت نتیجه / تکمیل
-                  </button>
-                ) : null}
-              </>
-            )}
+        }
+        icon={<CasesIcon className="h-5 w-5" />}
+        actions={
+          <>
+            <Link href="/cases" className={btnSecondary}>
+              <ArrowLeftIcon className="h-4 w-4 rotate-180" />
+              پرونده‌ها
+            </Link>
             {data.canTransfer && (
-              <button
-                onClick={handleTransferClick}
-                disabled={busyAction}
-                className={`${btnSecondary} !border-brand-200 !text-brand-700 hover:!bg-brand-50`}
-              >
-                {busyAction ? '…' : '📤'} انتقال / ارجاع مجدد
+              <button onClick={() => setTransferOpen(true)} className={btnPrimary.replace('w-full', '')}>
+                <TransferIcon className="h-4 w-4" />
+                {data.status === 'WAITING_ACCEPTANCE' ? 'ارجاع مجدد' : 'انتقال پرونده'}
               </button>
             )}
-            {data.isManager && (
-              <p className="mr-auto hidden text-xs text-slate-400 sm:block">
-                حالت مدیریت: مشاهده کامل + ارجاع مجدد
-              </p>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* ===== manager read-only case story ===== */}
-      <CaseStory
-        description={data.description}
-        result={data.result}
-        activities={activities}
-        assignments={assignments}
-        workSessions={workSessions}
+          </>
+        }
       />
 
-      {/* files (read-only for everyone; upload lives in employee flow) */}
-      <Card className="p-5">
-        <h2 className="mb-4 font-bold">فایل‌ها</h2>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <OverviewItem icon={<EmployeesIcon className="h-4 w-4" />} label="مسئول فعلی">
+          {data.currentOwner ? `${data.currentOwner.firstName} ${data.currentOwner.lastName}` : 'در انتظار پذیرش'}
+        </OverviewItem>
+        <OverviewItem icon={<CalendarIcon className="h-4 w-4" />} label="سررسید" tone={late ? 'danger' : 'default'}>
+          {data.dueDate ? faDate(data.dueDate) : 'بدون سررسید'}
+        </OverviewItem>
+        <OverviewItem icon={<ClockIcon className="h-4 w-4" />} label="زمان اعلامی نتایج">
+          {effortMinutes > 0 ? `${toFa(effortMinutes)} دقیقه` : 'ثبت نشده'}
+        </OverviewItem>
+        <OverviewItem icon={<ActivityIcon className="h-4 w-4" />} label="رویدادها">
+          {toFa(activities.length)} رویداد
+        </OverviewItem>
+        <OverviewItem icon={<FileIcon className="h-4 w-4" />} label="مستندات">
+          {toFa(data.files.length)} فایل
+        </OverviewItem>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(310px,.75fr)]">
+        <div className="space-y-5">
+          <Card className="overflow-hidden">
+            <PanelHeader title="شرح و نتیجه پرونده" description="تصویر فعلی از موضوع و آخرین نتیجه ثبت‌شده" />
+            <div className="space-y-4 p-5">
+              <section>
+                <p className="mb-2 text-[10px] font-semibold text-workspace-soft">شرح اولیه</p>
+                <p className="whitespace-pre-wrap rounded-xl border border-workspace-border bg-workspace-elevated/50 px-4 py-3.5 text-xs leading-7 text-workspace-muted">
+                  {data.description || 'شرح تکمیلی برای این پرونده ثبت نشده است.'}
+                </p>
+              </section>
+              <section>
+                <p className="mb-2 text-[10px] font-semibold text-workspace-soft">آخرین نتیجه</p>
+                {data.result ? (
+                  <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-4 py-3.5">
+                    <p className="whitespace-pre-wrap text-xs leading-7 text-emerald-100">{data.result}</p>
+                    {data.resultAt && <p className="tnum mt-2 text-[10px] text-emerald-300/70">{faDateTime(data.resultAt)}</p>}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-workspace-borderStrong px-4 py-4 text-xs text-workspace-soft">
+                    هنوز نتیجه‌ای برای این پرونده ثبت نشده است.
+                  </p>
+                )}
+              </section>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <PanelHeader title="خط زمان عملیاتی" description="رویدادها، نتیجه‌های مرحله‌ای، یادآوری‌ها و تغییرات ثبت‌شده" />
+            <div className="p-5">
+              <ActivityTimeline items={activities} />
+            </div>
+          </Card>
+        </div>
+
+        <aside className="space-y-5">
+          <Card className="overflow-hidden">
+            <PanelHeader title="گردش مسئولیت" description={`${toFa(assignments.length)} رکورد ارجاع`} />
+            <div className="p-4">
+              <AssignmentHistory items={assignments} />
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <PanelHeader title="اطلاعات پرونده" description="زمینه و مالکیت سازمانی" />
+            <div className="space-y-4 p-5">
+              <div className="flex items-center gap-3">
+                <Avatar name={`${data.createdBy.firstName} ${data.createdBy.lastName}`} />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-workspace-soft">ایجادکننده</p>
+                  <p className="truncate text-xs font-bold text-workspace-ink">{data.createdBy.firstName} {data.createdBy.lastName}</p>
+                  <p className="tnum mt-1 text-[10px] text-workspace-soft">{faDateTime(data.createdAt)}</p>
+                </div>
+              </div>
+              <ContextRow label="نوع پرونده" value={data.caseType?.name ?? 'بدون نوع'} />
+              <ContextRow
+                label="مشتری"
+                value={data.customer ? `${data.customer.name}${data.customer.isActive ? '' : ' · بایگانی'}` : 'بدون مشتری'}
+                icon={<CustomersIcon className="h-3.5 w-3.5" />}
+              />
+              {activeReminder && (
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3.5 py-3">
+                  <p className="text-[10px] font-semibold text-amber-300">یادآوری فعال بعدی</p>
+                  <p className="tnum mt-1 text-xs font-bold text-amber-100">{faDateTime(activeReminder.remindAt)}</p>
+                  {activeReminder.note && <p className="mt-1 text-[11px] leading-6 text-amber-200/80">{activeReminder.note}</p>}
+                </div>
+              )}
+              {data.totalWorkSeconds > 0 && (
+                <ContextRow label="سابقه تایمر قدیمی" value={faDuration(data.totalWorkSeconds)} />
+              )}
+            </div>
+          </Card>
+        </aside>
+      </div>
+
+      <Card className="overflow-hidden">
+        <PanelHeader title="فایل‌ها و مستندات" description="مستندات احراز هویت‌شده مرتبط با پرونده" />
         {data.files.length === 0 ? (
-          <EmptyState title="فایلی پیوست نشده است" hint="فایل‌های پیوست کارکنان اینجا نمایش داده می‌شود." />
+          <EmptyState title="فایلی پیوست نشده است" hint="فایل‌هایی که کارکنان در جریان پیگیری ثبت می‌کنند اینجا نمایش داده می‌شوند." />
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {data.files.map((f) => (
-              <li key={f.id} className="flex items-center gap-3 py-2.5">
-                <span className="text-lg">{f.mimeType.startsWith('audio') ? '🎧' : f.mimeType.startsWith('image') ? '🖼️' : '📄'}</span>
-                <button
-                  onClick={() => openAttachment(f)}
-                  className="min-w-0 flex-1 truncate text-right text-sm font-medium text-brand-700 hover:underline"
-                >
-                  {f.filename}
-                  <span className="mr-2 text-xs font-normal text-slate-400">
-                    ({f.uploader.firstName} {f.uploader.lastName})
-                  </span>
+          <div className="divide-y divide-workspace-border">
+            {data.files.map((file) => (
+              <div key={file.id} className="flex flex-wrap items-center gap-3 px-4 py-3.5 transition hover:bg-workspace-hover/40 sm:px-5">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-workspace-border bg-workspace-elevated text-workspace-muted">
+                  <FileIcon className="h-4 w-4" />
+                </span>
+                <button onClick={() => void openAttachment(file)} className="min-w-0 flex-1 text-right">
+                  <p className="truncate text-xs font-bold text-workspace-ink hover:text-brand-200">{file.filename}</p>
+                  <p className="mt-1 text-[10px] text-workspace-soft">
+                    {file.uploader.firstName} {file.uploader.lastName} · {fileKindLabel(file.mimeType)} · {toFa(Math.max(1, Math.round(file.size / 1024)))} کیلوبایت
+                  </p>
                 </button>
-                <span className="tnum shrink-0 text-xs text-slate-400">{toFa((f.size / 1024).toFixed(0))} کیلوبایت</span>
-                <span className="tnum hidden shrink-0 text-xs text-slate-400 sm:block">{faDateTime(f.createdAt)}</span>
+                <span className="tnum hidden text-[10px] text-workspace-soft md:block">{faDateTime(file.createdAt)}</span>
                 <button
-                  onClick={() =>
-                    downloadFile(`/files/${f.id}/download`, f.filename)
-                      .then(() => toast.success('فایل دانلود شد'))
-                      .catch((e) => toast.error(e instanceof Error ? e.message : 'خطا در دانلود'))
-                  }
-                  className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                  type="button"
+                  onClick={() => void downloadFile(`/files/${file.id}/download`, file.filename).then(() => toast.success('فایل دانلود شد')).catch((err) => toast.error(err instanceof Error ? err.message : 'خطا در دانلود'))}
+                  className={btnSecondary}
                 >
+                  <DownloadIcon className="h-4 w-4" />
                   دانلود
                 </button>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </Card>
 
       {previewLoading && <Spinner label="در حال باز کردن فایل…" />}
-
       {preview && (
         <Modal open onClose={() => setPreview(null)} title={preview.name} wide>
           {preview.type.startsWith('image/') ? (
@@ -321,348 +328,60 @@ export default function CaseDetailPage() {
           ) : (
             <audio controls src={preview.url} className="w-full" />
           )}
-          <div className="mt-4 flex justify-end gap-2">
-            <a href={preview.url} download={preview.name} className={`${btnSecondary} !py-1.5 !text-xs`}>
+          <div className="mt-4 flex justify-end">
+            <a href={preview.url} download={preview.name} className={btnSecondary}>
+              <DownloadIcon className="h-4 w-4" />
               ذخیره فایل
             </a>
           </div>
         </Modal>
       )}
 
-      <RejectModal open={modal === 'reject'} onClose={() => setModal('')} caseId={id} onDone={load} />
-      <ResultModal open={modal === 'result'} onClose={() => setModal('')} caseId={id} onDone={load} />
-      <TransferModal open={modal === 'transfer'} onClose={() => setModal('')} caseId={id} onDone={load} />
+      <CaseTransferModal
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        caseId={id}
+        onDone={load}
+        title="انتقال / ارجاع مجدد پرونده"
+      />
     </div>
   );
 }
 
-function PendingBanner({
-  caseId,
-  runAction,
-  busy,
-  onReject,
+function OverviewItem({
+  icon,
+  label,
+  children,
+  tone = 'default',
 }: {
-  caseId: string;
-  runAction: (fn: () => Promise<unknown>, m: string) => Promise<void>;
-  busy: boolean;
-  onReject: () => void;
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+  tone?: 'default' | 'danger';
 }) {
   return (
-    <Card className="border-amber-200 bg-amber-50/70 p-4 ring-amber-200">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-amber-800">این پرونده به شما ارجاع شده است. آن را می‌پذیرید؟</p>
-        <div className="flex gap-2">
-          <button
-            onClick={() => runAction(() => api.post(`/cases/${caseId}/accept`), 'پرونده پذیرفته شد')}
-            disabled={busy}
-            className={`${btnPrimary.replace('w-full', '')} !bg-emerald-600 hover:!bg-emerald-700`}
-          >
-            ✓ پذیرش
-          </button>
-          <button onClick={onReject} className={`${btnSecondary} !border-red-200 !text-red-600 hover:!bg-red-50`}>
-            ✕ رد کردن
-          </button>
-        </div>
+    <Card className="p-4">
+      <div className="flex items-center gap-2 text-workspace-soft">
+        {icon}
+        <p className="text-[10px] font-semibold">{label}</p>
       </div>
+      <p className={`tnum mt-2 truncate text-xs font-black ${tone === 'danger' ? 'text-red-300' : 'text-workspace-ink'}`}>{children}</p>
     </Card>
   );
 }
 
-/** Unified read-only story: description → timeline → transfers → work log. */
-function CaseStory({
-  description,
-  result,
-  activities,
-  assignments,
-  workSessions,
-}: {
-  description: string | null;
-  result: string | null;
-  activities: any[];
-  assignments: any[];
-  workSessions: any[];
-}) {
-  const totalSeconds = (workSessions ?? []).reduce(
-    (sum: number, s: any) => sum + (s.durationSeconds ?? 0),
-    0,
-  );
+function ContextRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
-    <Card className="overflow-hidden">
-      <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-3.5">
-        <h2 className="font-bold text-slate-800">📖 شرح کامل پرونده</h2>
-        <p className="mt-0.5 text-xs text-slate-500">تمام رویدادها، یادداشت‌ها و گردش کار — فقط خواندنی</p>
-      </div>
-
-      <div className="space-y-5 p-5">
-        {/* narrative summary strip */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StoryStat label="رویدادها" value={toFa(activities.length)} icon='🧾' />
-          <StoryStat label="گردش ارجاع" value={toFa(assignments.length)} icon='📤' />
-          <StoryStat label="نشست کاری" value={toFa((workSessions ?? []).length)} icon='⏱️' />
-          <StoryStat label="زمان کل" value={faDuration(totalSeconds)} icon='⏳' />
-        </div>
-
-        {description && (
-          <section>
-            <h3 className="mb-2 text-sm font-bold text-slate-700">شرح اولیه</h3>
-            <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3.5 text-sm leading-relaxed text-slate-600">
-              {description}
-            </p>
-          </section>
-        )}
-        {result && (
-          <section>
-            <h3 className="mb-2 text-sm font-bold text-emerald-700">نتیجه نهایی</h3>
-            <p className="whitespace-pre-wrap rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5 text-sm leading-relaxed text-emerald-900">
-              {result}
-            </p>
-          </section>
-        )}
-
-        <section>
-          <h3 className="mb-3 text-sm font-bold text-slate-700">خط زمان رویدادها</h3>
-          <ActivityTimeline items={activities} />
-        </section>
-
-        <section>
-          <h3 className="mb-3 text-sm font-bold text-slate-700">گردش ارجاع بین افراد</h3>
-          <AssignmentHistory items={assignments} />
-        </section>
-
-        {(workSessions ?? []).length > 0 && (
-          <section>
-            <h3 className="mb-3 text-sm font-bold text-slate-700">گزارش کار واقعی</h3>
-            <div className="space-y-2">
-              {[...workSessions]
-                .sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
-                .map((s: any) => (
-                  <div key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-2.5 text-xs">
-                    <span className="font-semibold text-slate-700">
-                      {s.user?.firstName} {s.user?.lastName}
-                    </span>
-                    <span className="tnum text-slate-500">{faDateTime(s.startedAt)}</span>
-                    <span className="text-slate-300">→</span>
-                    <span className="tnum text-slate-500">{s.endedAt ? faDateTime(s.endedAt) : 'در جریان'}</span>
-                    <span className="tnum mr-auto rounded-full bg-violet-50 px-2 py-0.5 font-bold text-violet-700">
-                      {faDuration(s.durationSeconds ?? 0)}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </section>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function StoryStat({ label, value, icon }: { label: string; value: string; icon: string }) {
-  return (
-    <div className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
-      <p className="text-[11px] text-slate-400">
-        {icon} {label}
-      </p>
-      <p className="tnum mt-0.5 text-sm font-extrabold text-slate-700">{value}</p>
+    <div className="flex items-start justify-between gap-4 border-t border-workspace-border pt-3 first:border-0 first:pt-0">
+      <span className="flex items-center gap-1.5 text-[10px] text-workspace-soft">{icon}{label}</span>
+      <span className="max-w-[65%] text-left text-[11px] font-semibold leading-6 text-workspace-muted">{value}</span>
     </div>
   );
 }
 
-function RejectModal({
-  open,
-  onClose,
-  caseId,
-  onDone,
-}: {
-  open: boolean;
-  onClose: () => void;
-  caseId: string;
-  onDone: () => void;
-}) {
-  const toast = useToast();
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
-  if (!open) return null;
-  return (
-    <Modal open={open} onClose={onClose} title="رد کردن ارجاع">
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          try {
-            await api.post(`/cases/${caseId}/reject`, { reason });
-            toast.success('پرونده رد و به ارجاع‌دهنده بازگشت');
-            onClose();
-            onDone();
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'خطا');
-          } finally {
-            setBusy(false);
-          }
-        }}
-        className="space-y-4"
-      >
-        <Field label="دلیل رد کردن" required>
-          <textarea
-            className={`${inputClass} min-h-24`}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="چرا نمی‌توانید این کار را انجام دهید؟"
-            autoFocus
-          />
-        </Field>
-        <p className="text-xs text-slate-400">پرونده پس از رد شدن به ارجاع‌دهنده بازمی‌گردد.</p>
-        <button disabled={busy || reason.length < 3} className={btnPrimary}>ثبت رد</button>
-      </form>
-    </Modal>
-  );
-}
-
-function ResultModal({
-  open,
-  onClose,
-  caseId,
-  onDone,
-}: {
-  open: boolean;
-  onClose: () => void;
-  caseId: string;
-  onDone: () => void;
-}) {
-  const toast = useToast();
-  const confirm = useConfirm();
-  const [result, setResult] = useState('');
-  const [complete, setComplete] = useState(true);
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (complete) {
-      const ok = await confirm({
-        title: 'تکمیل پرونده',
-        message: 'با تکمیل، پرونده بسته می‌شود و دیگر قابل تغییر نیست. مطمئن هستید؟',
-        confirmLabel: 'بله، تکمیل کن',
-      });
-      if (!ok) return;
-    }
-    setBusy(true);
-    try {
-      await api.post(`/cases/${caseId}/result`, { result, complete });
-      toast.success(complete ? 'پرونده تکمیل شد' : 'نتیجه ثبت شد');
-      setResult('');
-      onClose();
-      onDone();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'خطا');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (!open) return null;
-  return (
-    <Modal open={open} onClose={onClose} title="ثبت نتیجه">
-      <form onSubmit={submit} className="space-y-4">
-        <Field label="نتیجه پیگیری" required>
-          <textarea
-            className={`${inputClass} min-h-32`}
-            value={result}
-            onChange={(e) => setResult(e.target.value)}
-            placeholder="چه اتفاقی افتاد؟ نتیجه مذاکره، قرار بعدی…"
-            autoFocus
-          />
-        </Field>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={complete} onChange={(e) => setComplete(e.target.checked)} className="accent-brand-600" />
-          موضوع کاملاً بسته شده — پرونده تکمیل شود
-        </label>
-        <button disabled={busy || result.length < 2} className={btnPrimary}>ثبت</button>
-      </form>
-    </Modal>
-  );
-}
-
-function TransferModalImpl({
-  open,
-  onClose,
-  caseId,
-  onDone,
-}: {
-  open: boolean;
-  onClose: () => void;
-  caseId: string;
-  onDone: () => void;
-}) {
-  const toast = useToast();
-  const [members, setMembers] = useState<{ userId: string; fullName: string; role?: string }[]>([]);
-  const [toUser, setToUser] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const meId = typeof window === 'undefined' ? '' : safeUserId();
-
-  useEffect(() => {
-    if (!open) return;
-    api
-      .get<{ items: { userId: string; fullName: string; isActive: boolean; role: string }[] }>('/members')
-      .then((r) =>
-        setMembers(r.items.filter((m) => m.isActive).map((m) => ({ userId: m.userId, fullName: m.fullName, role: m.role }))),
-      )
-      .catch(() => toast.error('دریافت فهرست همکاران ناموفق بود'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  // managers cannot transfer to themselves or to other managers
-  const eligible = members.filter(
-    (m) => m.userId !== meId && m.role !== 'COMPANY_MANAGER',
-  );
-
-  if (!open) return null;
-  return (
-    <Modal open={open} onClose={onClose} title="انتقال / ارجاع مجدد پرونده">
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          try {
-            await api.post(`/cases/${caseId}/transfer`, { toUserId: toUser, note: note || undefined });
-            toast.success('پرونده ارجاع شد');
-            setToUser('');
-            setNote('');
-            onClose();
-            onDone();
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'خطا');
-          } finally {
-            setBusy(false);
-          }
-        }}
-        className="space-y-4"
-      >
-        <Field label="ارجاع به" required>
-          <select className={inputClass} value={toUser} onChange={(e) => setToUser(e.target.value)} autoFocus>
-            <option value="">— انتخاب همکار —</option>
-            {eligible.map((m) => (
-              <option key={m.userId} value={m.userId}>{m.fullName}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="یادداشت انتقال">
-          <textarea className={`${inputClass} min-h-20`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="وضعیت فعلی، نکات مهم برای گیرنده…" />
-        </Field>
-        <p className="text-xs text-slate-400">
-          تا زمانی که گیرنده پرونده را بپذیرد، وضعیت «در انتظار پذیرش» خواهد بود. این انتقال در تاریخچه ثبت می‌شود.
-        </p>
-        <button disabled={busy || !toUser} className={btnPrimary}>{busy ? 'در حال ارجاع…' : 'ارجاع پرونده'}</button>
-      </form>
-    </Modal>
-  );
-}
-
-const TransferModal = TransferModalImpl;
-
-function safeUserId(): string {
-  try {
-    return JSON.parse(localStorage.getItem('followa_user') ?? '{}').id ?? '';
-  } catch {
-    return '';
-  }
+function fileKindLabel(mimeType: string) {
+  if (mimeType.startsWith('image/')) return 'تصویر';
+  if (mimeType.startsWith('audio/')) return 'صوت';
+  if (mimeType === 'application/pdf') return 'PDF';
+  return 'فایل';
 }
