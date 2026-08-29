@@ -39,12 +39,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await AuthService.instance.login(_mobile.text.trim(), _password.text);
+      await AuthService.instance.login(
+        _mobile.text.trim(),
+        _password.text,
+      );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeShell()),
@@ -59,144 +63,169 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: _AuthBackground()),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const _BrandLockup(),
-                      const SizedBox(height: 28),
-                      _AuthCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text(
-                              'ورود به فضای کاری',
-                              style: TextStyle(
-                                color: FollowaColors.ink,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            const Text(
-                              'اطلاعات حساب سازمانی خود را وارد کنید.',
-                              style: TextStyle(
-                                color: FollowaColors.soft,
-                                fontSize: 11.5,
-                                height: 1.7,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            TextField(
-                              controller: _mobile,
-                              keyboardType: TextInputType.phone,
-                              textAlign: TextAlign.left,
-                              textDirection: TextDirection.ltr,
-                              decoration: const InputDecoration(
-                                labelText: 'شماره موبایل',
-                                hintText: '09123456789',
-                                prefixIcon: Icon(Icons.phone_iphone_rounded, size: 19),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            TextField(
-                              controller: _password,
-                              obscureText: _obscure,
-                              textDirection: TextDirection.ltr,
-                              onSubmitted: (_) {
-                                if (!_busy) {
-                                  _submit();
-                                }
-                              },
-                              decoration: InputDecoration(
-                                labelText: 'رمز عبور',
-                                prefixIcon: const Icon(Icons.lock_outline_rounded, size: 19),
-                                suffixIcon: IconButton(
-                                  onPressed: () => setState(() => _obscure = !_obscure),
-                                  icon: Icon(
-                                    _obscure
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                    size: 19,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (_error != null) ...[
-                              const SizedBox(height: 14),
-                              _ErrorBanner(message: _error!),
-                            ],
-                            const SizedBox(height: 18),
-                            FilledButton.icon(
-                              onPressed: _busy ? null : _submit,
-                              icon: _busy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Icon(Icons.arrow_back_rounded, size: 19),
-                              label: Text(_busy ? 'در حال ورود…' : 'ورود به فالوآ'),
-                            ),
-                            const SizedBox(height: 6),
-                            TextButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () async {
-                                      await Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => const OtpScreen(),
-                                        ),
-                                      );
-                                    },
-                              child: const Text('ثبت‌نام یا تعیین رمز با کد یکبارمصرف'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      const Text(
-                        'مدیریت پیگیری، مسئولیت و گردش کار در یک فضای عملیاتی واحد',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: FollowaColors.soft,
-                          fontSize: 10.5,
-                          height: 1.7,
-                        ),
-                      ),
-                    ],
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Column(
+                children: [
+                  const _BrandHeader(
+                    eyebrow: 'فضای عملیاتی سازمان',
+                    title: 'فالوآ',
+                    subtitle: 'مدیریت پرونده، مسئولیت و پیگیری در یک فضای کاری یکپارچه',
                   ),
-                ),
+                  const SizedBox(height: 26),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: FollowaColors.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: FollowaColors.border),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x30000000),
+                          blurRadius: 36,
+                          offset: Offset(0, 18),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'ورود به فضای کاری',
+                          style: TextStyle(
+                            color: FollowaColors.ink,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        const Text(
+                          'با شماره موبایل سازمانی و رمز عبور وارد شوید.',
+                          style: TextStyle(
+                            color: FollowaColors.muted,
+                            fontSize: 10.5,
+                            height: 1.6,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        TextField(
+                          controller: _mobile,
+                          keyboardType: TextInputType.phone,
+                          textDirection: TextDirection.ltr,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'شماره موبایل',
+                            hintText: '09123456789',
+                            prefixIcon: Icon(
+                              Icons.phone_iphone_rounded,
+                              size: 19,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: _password,
+                          obscureText: _obscure,
+                          textDirection: TextDirection.ltr,
+                          onSubmitted: (_) {
+                            if (!_busy) _submit();
+                          },
+                          decoration: InputDecoration(
+                            labelText: 'رمز عبور',
+                            prefixIcon: const Icon(
+                              Icons.lock_outline_rounded,
+                              size: 19,
+                            ),
+                            suffixIcon: IconButton(
+                              tooltip: _obscure ? 'نمایش رمز' : 'پنهان کردن رمز',
+                              onPressed: () =>
+                                  setState(() => _obscure = !_obscure),
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(11),
+                            decoration: BoxDecoration(
+                              color: FollowaColors.red.withOpacity(.07),
+                              borderRadius: BorderRadius.circular(13),
+                              border: Border.all(
+                                color: FollowaColors.red.withOpacity(.18),
+                              ),
+                            ),
+                            child: Text(
+                              _error!,
+                              style: const TextStyle(
+                                color: Color(0xFFFCA5A5),
+                                fontSize: 10.5,
+                                height: 1.6,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        FilledButton.icon(
+                          onPressed: _busy ? null : _submit,
+                          icon: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.login_rounded, size: 19),
+                          label: Text(_busy ? 'در حال ورود…' : 'ورود'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const OtpSignupScreen(),
+                                    ),
+                                  ),
+                          child: const Text(
+                            'ورود اول / تعیین رمز با کد یکبارمصرف',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class OtpScreen extends StatefulWidget {
-  const OtpScreen({super.key});
+class OtpSignupScreen extends StatefulWidget {
+  const OtpSignupScreen({super.key});
 
   @override
-  State<OtpScreen> createState() => _OtpScreenState();
+  State<OtpSignupScreen> createState() => _OtpSignupScreenState();
 }
 
-class _OtpScreenState extends State<OtpScreen> {
-  int _step = 0;
+class _OtpSignupScreenState extends State<OtpSignupScreen> {
   final _mobile = TextEditingController();
   final _code = TextEditingController();
   final _password = TextEditingController();
   final _password2 = TextEditingController();
+  int _step = 0;
   String _resetToken = '';
   bool _busy = false;
   String? _error;
@@ -211,6 +240,7 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Future<void> _next() async {
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -228,7 +258,11 @@ class _OtpScreenState extends State<OtpScreen> {
         if (mounted) setState(() => _step = 2);
       } else {
         if (_password.text != _password2.text) {
-          throw ApiException('تکرار رمز عبور مطابقت ندارد');
+          throw const ApiException(
+            statusCode: 400,
+            code: 'PASSWORD_MISMATCH',
+            message: 'تکرار رمز عبور مطابقت ندارد',
+          );
         }
         await auth.createPassword(
           _mobile.text.trim(),
@@ -236,8 +270,9 @@ class _OtpScreenState extends State<OtpScreen> {
           _password.text,
         );
         if (!mounted) return;
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const HomeShell()),
+          (_) => false,
         );
       }
     } catch (error) {
@@ -249,91 +284,79 @@ class _OtpScreenState extends State<OtpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const titles = ['شماره موبایل', 'تأیید هویت', 'ساخت رمز عبور'];
-    const descriptions = [
-      'شماره‌ای را وارد کنید که مدیر شرکت برای شما ثبت کرده است.',
-      'کد شش رقمی ارسال‌شده را وارد کنید.',
-      'برای ورودهای بعدی یک رمز امن تعیین کنید.',
-    ];
-
+    final labels = ['دریافت کد', 'تأیید کد', 'تعیین رمز'];
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('فعال‌سازی حساب'),
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_forward_rounded),
-        ),
-      ),
-      body: Stack(
-        children: [
-          const Positioned.fill(child: _AuthBackground()),
-          SafeArea(
-            top: false,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: _AuthCard(
+      appBar: AppBar(title: const Text('فعال‌سازی حساب')),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _BrandHeader(
+                    eyebrow: 'فعال‌سازی امن حساب',
+                    title: 'ورود اول',
+                    subtitle:
+                        'شماره موبایل را تأیید کنید و رمز شخصی خود را بسازید.',
+                    compact: true,
+                  ),
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: FollowaColors.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: FollowaColors.border),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _StepRail(step: _step),
-                        const SizedBox(height: 22),
-                        Text(
-                          titles[_step],
-                          style: const TextStyle(
-                            color: FollowaColors.ink,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        Row(
+                          children: [
+                            for (var index = 0; index < labels.length; index++)
+                              Expanded(
+                                child: _StepIndicator(
+                                  label: labels[index],
+                                  active: index == _step,
+                                  complete: index < _step,
+                                ),
+                              ),
+                          ],
                         ),
-                        const SizedBox(height: 5),
-                        Text(
-                          descriptions[_step],
-                          style: const TextStyle(
-                            color: FollowaColors.soft,
-                            fontSize: 11.5,
-                            height: 1.7,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 20),
                         if (_step == 0)
                           TextField(
                             controller: _mobile,
                             keyboardType: TextInputType.phone,
                             textDirection: TextDirection.ltr,
-                            textAlign: TextAlign.left,
                             decoration: const InputDecoration(
                               labelText: 'شماره موبایل',
-                              prefixIcon: Icon(Icons.phone_iphone_rounded, size: 19),
+                              hintText: '09123456789',
+                              prefixIcon: Icon(Icons.phone_iphone_rounded),
                             ),
-                          ),
-                        if (_step == 1)
+                          )
+                        else if (_step == 1)
                           TextField(
                             controller: _code,
                             keyboardType: TextInputType.number,
-                            maxLength: 6,
                             textDirection: TextDirection.ltr,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              letterSpacing: 8,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                            ),
                             decoration: const InputDecoration(
-                              counterText: '',
-                              labelText: 'کد تأیید',
+                              labelText: 'کد یکبارمصرف',
+                              prefixIcon: Icon(Icons.password_rounded),
                             ),
-                          ),
-                        if (_step == 2) ...[
+                          )
+                        else ...[
                           TextField(
                             controller: _password,
                             obscureText: true,
                             textDirection: TextDirection.ltr,
                             decoration: const InputDecoration(
                               labelText: 'رمز عبور جدید',
-                              prefixIcon: Icon(Icons.lock_outline_rounded, size: 19),
+                              prefixIcon: Icon(Icons.lock_outline_rounded),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -341,157 +364,127 @@ class _OtpScreenState extends State<OtpScreen> {
                             controller: _password2,
                             obscureText: true,
                             textDirection: TextDirection.ltr,
+                            onSubmitted: (_) => _next(),
                             decoration: const InputDecoration(
                               labelText: 'تکرار رمز عبور',
-                              prefixIcon: Icon(Icons.lock_reset_rounded, size: 19),
+                              prefixIcon: Icon(Icons.lock_reset_rounded),
                             ),
                           ),
                         ],
                         if (_error != null) ...[
                           const SizedBox(height: 12),
-                          _ErrorBanner(message: _error!),
+                          Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: Color(0xFFFCA5A5),
+                              fontSize: 10.5,
+                            ),
+                          ),
                         ],
                         const SizedBox(height: 18),
                         FilledButton(
                           onPressed: _busy ? null : _next,
                           child: Text(
                             _busy
-                                ? 'لطفاً صبر کنید…'
-                                : (_step == 0
+                                ? 'در حال پردازش…'
+                                : _step == 0
                                     ? 'ارسال کد'
-                                    : (_step == 1
-                                        ? 'تأیید و ادامه'
-                                        : 'ساخت رمز و ورود')),
+                                    : _step == 1
+                                        ? 'تأیید کد'
+                                        : 'ثبت رمز و ورود',
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _AuthCard extends StatelessWidget {
-  final Widget child;
-  const _AuthCard({required this.child});
+class _BrandHeader extends StatelessWidget {
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+  final bool compact;
+
+  const _BrandHeader({
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: FollowaColors.surface.withOpacity(.97),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: FollowaColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x55000000),
-            blurRadius: 40,
-            offset: Offset(0, 20),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  const _ErrorBanner({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: FollowaColors.red.withOpacity(.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: FollowaColors.red.withOpacity(.22)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: Color(0xFFFCA5A5),
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Color(0xFFFCA5A5),
-                fontSize: 11.5,
-                height: 1.6,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BrandLockup extends StatelessWidget {
-  const _BrandLockup();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 70,
-          height: 70,
+          width: compact ? 48 : 56,
+          height: compact ? 48 : 56,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+              colors: [FollowaColors.brand, Color(0xFF5B21B6)],
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
             ),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: FollowaColors.brandSoft.withOpacity(.30)),
-            boxShadow: const [
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
               BoxShadow(
-                color: Color(0x557C3AED),
-                blurRadius: 28,
-                offset: Offset(0, 12),
+                color: FollowaColors.brand.withOpacity(.28),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          alignment: Alignment.center,
-          child: const Text(
+          child: Text(
             'ف',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 32,
+              fontSize: compact ? 19 : 22,
               fontWeight: FontWeight.w900,
             ),
           ),
         ),
-        const SizedBox(height: 14),
-        const Text(
-          'فالوآ',
-          style: TextStyle(
-            color: FollowaColors.ink,
-            fontSize: 26,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'مدیریت پیگیری و گردش کار',
-          style: TextStyle(
-            color: FollowaColors.muted,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eyebrow,
+                style: const TextStyle(
+                  color: FollowaColors.brandSoft,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                title,
+                style: TextStyle(
+                  color: FollowaColors.ink,
+                  fontSize: compact ? 21 : 27,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: FollowaColors.muted,
+                  fontSize: 10.5,
+                  height: 1.6,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -499,76 +492,51 @@ class _BrandLockup extends StatelessWidget {
   }
 }
 
-class _StepRail extends StatelessWidget {
-  final int step;
-  const _StepRail({required this.step});
+class _StepIndicator extends StatelessWidget {
+  final String label;
+  final bool active;
+  final bool complete;
+
+  const _StepIndicator({
+    required this.label,
+    required this.active,
+    required this.complete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(3, (index) {
-        final active = index <= step;
-        return Expanded(
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: active
-                      ? FollowaColors.brand.withOpacity(.18)
-                      : FollowaColors.elevated,
-                  borderRadius: BorderRadius.circular(9),
-                  border: Border.all(
-                    color: active
-                        ? FollowaColors.brandSoft.withOpacity(.35)
-                        : FollowaColors.border,
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  ['۱', '۲', '۳'][index],
-                  style: TextStyle(
-                    color: active ? FollowaColors.brandSoft : FollowaColors.soft,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-              if (index < 2)
-                Expanded(
-                  child: Container(
-                    height: 1,
-                    margin: const EdgeInsets.symmetric(horizontal: 6),
-                    color: index < step
-                        ? FollowaColors.brand.withOpacity(.45)
-                        : FollowaColors.border,
-                  ),
-                ),
-            ],
+    final color = complete
+        ? FollowaColors.emerald
+        : active
+            ? FollowaColors.brandSoft
+            : FollowaColors.soft;
+    return Column(
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withOpacity(.10),
+            shape: BoxShape.circle,
+            border: Border.all(color: color.withOpacity(.26)),
           ),
-        );
-      }),
-    );
-  }
-}
-
-class _AuthBackground extends StatelessWidget {
-  const _AuthBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        color: FollowaColors.shell,
-        gradient: RadialGradient(
-          center: Alignment(0.75, -0.75),
-          radius: 1.25,
-          colors: [Color(0x332E1065), FollowaColors.shell],
+          child: Icon(
+            complete ? Icons.check_rounded : Icons.circle,
+            color: color,
+            size: complete ? 16 : 8,
+          ),
         ),
-      ),
-      child: SizedBox.expand(),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 8.5,
+            fontWeight: active || complete ? FontWeight.w800 : FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }
