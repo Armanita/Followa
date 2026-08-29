@@ -40,7 +40,7 @@ ThemeData buildFollowaPremiumTheme() {
     brightness: Brightness.dark,
     colorScheme: scheme,
     useMaterial3: true,
-    fontFamily: 'Vazirmatn',
+    fontFamily: 'Estedad',
     scaffoldBackgroundColor: FollowaColors.shell,
     dividerColor: FollowaColors.border,
     splashColor: FollowaColors.brand.withOpacity(.08),
@@ -52,9 +52,11 @@ ThemeData buildFollowaPremiumTheme() {
       elevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
+        fontFamily: 'Estedad',
         color: FollowaColors.ink,
         fontSize: 17,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w800,
+        height: 1.5,
       ),
     ),
     cardTheme: CardThemeData(
@@ -70,8 +72,20 @@ ThemeData buildFollowaPremiumTheme() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: FollowaColors.elevated,
-      labelStyle: const TextStyle(color: FollowaColors.muted, fontSize: 12),
-      hintStyle: const TextStyle(color: FollowaColors.soft, fontSize: 12),
+      labelStyle: const TextStyle(
+        fontFamily: 'Estedad',
+        color: FollowaColors.muted,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        height: 1.6,
+      ),
+      hintStyle: const TextStyle(
+        fontFamily: 'Estedad',
+        color: FollowaColors.soft,
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        height: 1.6,
+      ),
       border: outline,
       enabledBorder: outline,
       focusedBorder: OutlineInputBorder(
@@ -92,11 +106,23 @@ ThemeData buildFollowaPremiumTheme() {
         disabledBackgroundColor: FollowaColors.border,
         disabledForegroundColor: FollowaColors.soft,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+        textStyle: const TextStyle(
+          fontFamily: 'Estedad',
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          height: 1.5,
+        ),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: FollowaColors.brandSoft),
+      style: TextButton.styleFrom(
+        foregroundColor: FollowaColors.brandSoft,
+        textStyle: const TextStyle(
+          fontFamily: 'Estedad',
+          fontWeight: FontWeight.w600,
+          height: 1.5,
+        ),
+      ),
     ),
     navigationBarTheme: NavigationBarThemeData(
       height: 72,
@@ -104,13 +130,15 @@ ThemeData buildFollowaPremiumTheme() {
       surfaceTintColor: Colors.transparent,
       indicatorColor: FollowaColors.brand.withOpacity(.18),
       labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+            fontFamily: 'Estedad',
             color: states.contains(WidgetState.selected)
                 ? FollowaColors.ink
                 : FollowaColors.soft,
             fontSize: 10,
             fontWeight: states.contains(WidgetState.selected)
-                ? FontWeight.w800
-                : FontWeight.w600,
+                ? FontWeight.w700
+                : FontWeight.w500,
+            height: 1.5,
           )),
       iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
             color: states.contains(WidgetState.selected)
@@ -125,7 +153,12 @@ ThemeData buildFollowaPremiumTheme() {
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: FollowaColors.elevated,
-      contentTextStyle: const TextStyle(color: FollowaColors.ink),
+      contentTextStyle: const TextStyle(
+        fontFamily: 'Estedad',
+        color: FollowaColors.ink,
+        fontWeight: FontWeight.w500,
+        height: 1.6,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       behavior: SnackBarBehavior.floating,
     ),
