@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../theme/premium_theme.dart';
 import 'dashboard_screen.dart';
 import 'cases_screen.dart';
 import 'assignments_screen.dart';
@@ -22,30 +23,109 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final isManager = AuthService.instance.isManager;
-    final tabs = <(String, IconData, Widget)>[
+    final tabs = <(String, IconData, IconData, Widget)>[
       if (isManager) ...[
-        ('داشبورد', Icons.dashboard_outlined, const DashboardScreen()),
-        ('پرونده‌ها', Icons.folder_outlined, const CasesScreen()),
-        ('کارکنان', Icons.people_outline, const EmployeesTab()),
-        ('گزارش‌ها', Icons.bar_chart_outlined, const ReportsTab()),
-        ('پروفایل', Icons.person_outline, const ProfileScreen()),
+        (
+          'داشبورد',
+          Icons.grid_view_outlined,
+          Icons.grid_view_rounded,
+          const DashboardScreen(),
+        ),
+        (
+          'پرونده‌ها',
+          Icons.folder_outlined,
+          Icons.folder_rounded,
+          const CasesScreen(),
+        ),
+        (
+          'کارکنان',
+          Icons.people_outline_rounded,
+          Icons.people_rounded,
+          const EmployeesTab(),
+        ),
+        (
+          'گزارش‌ها',
+          Icons.bar_chart_outlined,
+          Icons.bar_chart_rounded,
+          const ReportsTab(),
+        ),
+        (
+          'پروفایل',
+          Icons.person_outline_rounded,
+          Icons.person_rounded,
+          const ProfileScreen(),
+        ),
       ] else ...[
-        ('داشبورد', Icons.dashboard_outlined, const DashboardScreen()),
-        ('کارهای من', Icons.folder_outlined, const CasesScreen(mineOnly: true)),
-        ('ارجاع‌ها', Icons.move_to_inbox_outlined, const AssignmentsScreen()),
-        ('یادآوری', Icons.alarm_outlined, const RemindersScreen()),
-        ('اعلان‌ها', Icons.notifications_outlined, const NotificationsScreen()),
+        (
+          'امروز',
+          Icons.grid_view_outlined,
+          Icons.grid_view_rounded,
+          const DashboardScreen(),
+        ),
+        (
+          'پرونده‌ها',
+          Icons.folder_outlined,
+          Icons.folder_rounded,
+          const CasesScreen(mineOnly: true),
+        ),
+        (
+          'ارجاع‌ها',
+          Icons.move_to_inbox_outlined,
+          Icons.move_to_inbox_rounded,
+          const AssignmentsScreen(),
+        ),
+        (
+          'یادآوری',
+          Icons.alarm_outlined,
+          Icons.alarm_rounded,
+          const RemindersScreen(),
+        ),
+        (
+          'اعلان‌ها',
+          Icons.notifications_outlined,
+          Icons.notifications_rounded,
+          const NotificationsScreen(),
+        ),
       ],
     ];
 
+    if (_index >= tabs.length) _index = 0;
+
     return Scaffold(
-      body: IndexedStack(index: _index, children: [for (final t in tabs) t.$3]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: [
-          for (final t in tabs) NavigationDestination(icon: Icon(t.$2), label: t.$1),
-        ],
+      extendBody: true,
+      body: IndexedStack(
+        index: _index,
+        children: [for (final tab in tabs) tab.$4],
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A111D),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: FollowaColors.border),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x66000000),
+                blurRadius: 30,
+                offset: Offset(0, 14),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: NavigationBar(
+            selectedIndex: _index,
+            onDestinationSelected: (index) => setState(() => _index = index),
+            destinations: [
+              for (var index = 0; index < tabs.length; index++)
+                NavigationDestination(
+                  icon: Icon(tabs[index].$2),
+                  selectedIcon: Icon(tabs[index].$3),
+                  label: tabs[index].$1,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
