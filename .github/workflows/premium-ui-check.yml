@@ -65,6 +65,9 @@ jobs:
       - name: Apply test migrations
         run: pnpm --filter @followa/api exec prisma migrate deploy
 
+      - name: Seed compatibility database
+        run: pnpm --filter @followa/api db:seed
+
       - name: Test API compatibility
         run: pnpm test
 
