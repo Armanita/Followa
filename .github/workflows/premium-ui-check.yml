@@ -20,6 +20,26 @@ jobs:
   compatibility:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/followa_ci?schema=public
+      JWT_SECRET: followa-ci-test-secret
+      NODE_ENV: test
+      OTP_PROVIDER: mock
+      NOTIFICATION_PROVIDER: mock
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: followa_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d followa_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,6 +61,9 @@ jobs:
 
       - name: Build API
         run: pnpm build:api
+
+      - name: Apply test migrations
+        run: pnpm --filter @followa/api exec prisma migrate deploy
 
       - name: Test API compatibility
         run: pnpm test
