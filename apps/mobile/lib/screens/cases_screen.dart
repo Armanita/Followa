@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
 import '../widgets/common.dart';
@@ -14,11 +15,15 @@ class CasesScreen extends StatefulWidget {
 }
 
 class _CasesScreenState extends State<CasesScreen> {
+  static const _pageSize = 15;
+  final _searchController = TextEditingController();
   List<dynamic> _items = [];
   String? _error;
   String _search = '';
+  String _status = '';
+  int _page = 1;
+  int _total = 0;
   bool _loading = true;
-  final _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -38,14 +43,21 @@ class _CasesScreenState extends State<CasesScreen> {
       _error = null;
     });
     try {
-      final query = StringBuffer('/cases?pageSize=50');
-      if (widget.mineOnly) query.write('&mine=true');
+      final params = <String>[
+        'page=$_page',
+        'pageSize=$_pageSize',
+      ];
+      if (widget.mineOnly) params.add('mine=true');
       if (_search.isNotEmpty) {
-        query.write('&search=${Uri.encodeComponent(_search)}');
+        params.add('search=${Uri.encodeComponent(_search)}');
       }
-      final response = await AuthService.instance.get(query.toString());
+      if (_status.isNotEmpty) params.add('status=$_status');
+      final response = await AuthService.instance.get('/cases?${params.join('&')}');
       if (!mounted) return;
-      setState(() => _items = response['items'] as List);
+      setState(() {
+        _items = response['items'] as List<dynamic>? ?? const [];
+        _total = (response['total'] as num?)?.toInt() ?? _items.length;
+      });
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -53,16 +65,27 @@ class _CasesScreenState extends State<CasesScreen> {
     }
   }
 
+  void _applySearch(String value) {
+    _search = value.trim();
+    _page = 1;
+    _load();
+  }
+
   Future<void> _openNewCase() async {
-    await Navigator.push(
+    final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const NewCaseScreen()),
     );
-    await _load();
+    if (created == true) {
+      _page = 1;
+      await _load();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasPrev = _page > 1;
+    final hasNext = _page * _pageSize < _total;
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -98,7 +121,7 @@ class _CasesScreenState extends State<CasesScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${Fa.num(_items.length)} پرونده در نمای فعلی',
+                              '${Fa.num(_total)} پرونده در نتیجه فعلی',
                               style: const TextStyle(
                                 color: FollowaColors.muted,
                                 fontSize: 10.5,
@@ -127,10 +150,7 @@ class _CasesScreenState extends State<CasesScreen> {
                   TextField(
                     controller: _searchController,
                     textInputAction: TextInputAction.search,
-                    onSubmitted: (value) {
-                      _search = value.trim();
-                      _load();
-                    },
+                    onSubmitted: _applySearch,
                     decoration: InputDecoration(
                       hintText: 'جستجو در عنوان پرونده…',
                       prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -139,12 +159,35 @@ class _CasesScreenState extends State<CasesScreen> {
                           : IconButton(
                               onPressed: () {
                                 _searchController.clear();
-                                _search = '';
-                                _load();
+                                _applySearch('');
                               },
                               icon: const Icon(Icons.close_rounded, size: 18),
                             ),
                     ),
+                  ),
+                  const SizedBox(height: 9),
+                  DropdownButtonFormField<String>(
+                    initialValue: _status,
+                    decoration: const InputDecoration(
+                      labelText: 'وضعیت پرونده',
+                      prefixIcon: Icon(Icons.filter_alt_outlined, size: 19),
+                    ),
+                    dropdownColor: FollowaColors.elevated,
+                    items: [
+                      const DropdownMenuItem(value: '', child: Text('همه وضعیت‌ها')),
+                      for (final entry in statusLabels.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _status = value ?? '';
+                        _page = 1;
+                      });
+                      _load();
+                    },
                   ),
                 ],
               ),
@@ -167,16 +210,55 @@ class _CasesScreenState extends State<CasesScreen> {
                                   PremiumPanel(
                                     child: EmptyState(
                                       title: 'پرونده‌ای یافت نشد',
-                                      hint: 'عبارت جستجو را تغییر دهید یا پرونده جدید ایجاد کنید.',
+                                      hint: 'جستجو یا فیلتر را تغییر دهید یا پرونده جدید ایجاد کنید.',
                                     ),
                                   ),
                                 ],
                               )
                             : ListView.separated(
                                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
-                                itemCount: _items.length,
+                                itemCount: _items.length + 1,
                                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
+                                  if (index == _items.length) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          OutlinedButton(
+                                            onPressed: hasPrev
+                                                ? () {
+                                                    setState(() => _page--);
+                                                    _load();
+                                                  }
+                                                : null,
+                                            child: const Text('قبلی'),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            child: Text(
+                                              'صفحه ${Fa.num(_page)}',
+                                              style: const TextStyle(
+                                                color: FollowaColors.muted,
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ),
+                                          OutlinedButton(
+                                            onPressed: hasNext
+                                                ? () {
+                                                    setState(() => _page++);
+                                                    _load();
+                                                  }
+                                                : null,
+                                            child: const Text('بعدی'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
                                   final item = _items[index] as Map<String, dynamic>;
                                   return _CaseCard(
                                     item: item,
@@ -348,8 +430,10 @@ class _CaseCard extends StatelessWidget {
                         customerName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: FollowaColors.soft,
+                        style: TextStyle(
+                          color: customer?['isActive'] == false
+                              ? const Color(0xFFFDE68A)
+                              : FollowaColors.soft,
                           fontSize: 9.5,
                         ),
                       ),
