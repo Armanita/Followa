@@ -1,54 +1,55 @@
 import Link from 'next/link';
 
 const modules = [
-  { title: 'پرونده‌ها', text: 'مدیریت چرخه کامل پرونده، وضعیت‌ها و مسئولیت‌ها.' },
-  { title: 'مشتریان', text: 'ثبت ارتباطات و دسترسی سریع به اطلاعات مرتبط.' },
-  { title: 'اقدامات', text: 'پیگیری وظایف، یادآوری‌ها و گردش کار تیمی.' },
-  { title: 'گزارش‌ها', text: 'دید عملیاتی برای تصمیم‌گیری بهتر مدیران.' },
+  { title: 'پرونده‌ها', value: '128', text: 'چرخه کامل پرونده، وضعیت‌ها و مسئولیت‌ها', tone: 'text-brand-300' },
+  { title: 'مشتریان', value: '54', text: 'مدیریت ارتباطات و اطلاعات مرتبط', tone: 'text-emerald-300' },
+  { title: 'اقدامات', value: '23', text: 'پیگیری وظایف و گردش کار تیمی', tone: 'text-amber-300' },
+  { title: 'گزارش‌ها', value: '12', text: 'دید عملیاتی برای تصمیم‌گیری مدیران', tone: 'text-violet-300' },
 ];
 
 export default function Home() {
   return (
-    <main dir="rtl" className="min-h-screen bg-slate-950 text-white">
+    <main dir="rtl" className="min-h-screen bg-[#050b18] text-white">
       <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-        <div className="text-2xl font-bold tracking-tight">Followa</div>
-        <nav className="hidden gap-6 text-sm text-slate-300 md:flex">
+        <div className="text-2xl font-black">Followa</div>
+        <nav className="hidden gap-7 text-sm text-slate-300 md:flex">
           <Link href="/about">درباره ما</Link>
           <Link href="/contact">تماس با ما</Link>
           <Link href="/privacy">حریم خصوصی</Link>
           <Link href="/terms">شرایط استفاده</Link>
         </nav>
-        <Link href="/login" className="rounded-xl bg-white px-5 py-2 font-medium text-slate-950">
+        <Link href="/login" className="rounded-xl border border-violet-400/30 bg-violet-500/20 px-5 py-2.5 text-sm font-bold text-violet-100">
           ورود به سامانه
         </Link>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-10 px-6 py-16 lg:grid-cols-2 lg:py-24">
+      <section className="mx-auto grid max-w-7xl gap-12 px-6 py-16 lg:grid-cols-2 lg:py-24">
         <div>
-          <div className="mb-5 inline-flex rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-300">
-            سامانه مدیریت پرونده و عملیات سازمانی
-          </div>
-          <h1 className="text-4xl font-bold leading-relaxed md:text-6xl">
-            همه پرونده‌ها، مشتریان و اقدامات تیم شما در یک فضای یکپارچه
+          <span className="inline-flex rounded-full border border-violet-400/20 bg-violet-400/10 px-4 py-2 text-xs font-semibold text-violet-200">
+            Workspace مدیریت عملیات سازمانی
+          </span>
+          <h1 className="mt-8 text-4xl font-black leading-[1.7] md:text-6xl">
+            همه پرونده‌ها، مشتریان و اقدامات تیم شما در یک فضای کاری یکپارچه
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-9 text-slate-300">
-            Followa یک محیط عملیاتی برای سازمان‌هاست تا فرآیندهای کاری را ثبت، پیگیری و مدیریت کنند.
+            Followa محیط عملیاتی سازمان برای ثبت، پیگیری و مدیریت فرآیندهای کاری با کنترل وضعیت و مسئولیت‌هاست.
           </p>
-          <div className="mt-8 flex gap-4">
-            <Link href="/login" className="rounded-xl bg-white px-7 py-3 text-slate-950">ورود به Followa</Link>
-          </div>
+          <Link href="/login" className="mt-8 inline-flex rounded-xl border border-violet-400/30 bg-violet-600 px-7 py-3 font-bold">
+            ورود به Followa
+          </Link>
         </div>
 
-        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-          <div className="mb-5 flex justify-between rounded-2xl bg-slate-950 p-4">
-            <span>داشبورد Followa</span>
-            <span className="text-slate-400">Live</span>
+        <div className="rounded-3xl border border-slate-800 bg-[#0b1426] p-6 shadow-2xl">
+          <div className="mb-5 flex items-center justify-between rounded-2xl border border-slate-800 bg-[#07101f] p-4">
+            <span className="font-bold">داشبورد Followa</span>
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-300">فعال</span>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {modules.map((item) => (
-              <div key={item.title} className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                <h3 className="font-semibold">{item.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-400">{item.text}</p>
+              <div key={item.title} className="rounded-2xl border border-slate-800 bg-[#101b30] p-5 shadow-lg">
+                <div className={`text-3xl font-black ${item.tone}`}>{item.value}</div>
+                <h3 className="mt-3 font-bold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-7 text-slate-400">{item.text}</p>
               </div>
             ))}
           </div>
