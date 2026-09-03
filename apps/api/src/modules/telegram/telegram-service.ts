@@ -57,10 +57,19 @@ export function createTelegramService(repository: {
     },
 
     async confirmConnection(payload: TelegramContactPayload, userId: string) {
+      const phoneNumber = normalizePhone(payload.phoneNumber);
+
+      if (!phoneNumber) {
+        return {
+          status: 'rejected',
+          reason: 'invalid_phone_number',
+        };
+      }
+
       return repository.confirmTelegramIdentity({
         telegramUserId: String(payload.telegramUserId),
         userId,
-        phoneNumber: normalizePhone(payload.phoneNumber),
+        phoneNumber,
       });
     },
   };
