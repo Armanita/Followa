@@ -34,9 +34,16 @@ export async function telegramRoutes(app: FastifyInstance) {
 
   app.post('/telegram/confirm', async (request) => {
     const body = request.body as {
-      telegramUserId: number;
-      phoneNumber: string;
+      telegramUserId?: number;
+      phoneNumber?: string;
     };
+
+    if (!body.telegramUserId || !body.phoneNumber) {
+      return {
+        status: 'rejected',
+        reason: 'invalid_confirmation_payload',
+      };
+    }
 
     const pending = await repository.getPendingConnection(String(body.telegramUserId));
 
