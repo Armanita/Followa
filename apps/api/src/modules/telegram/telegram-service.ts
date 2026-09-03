@@ -13,7 +13,10 @@ function normalizePhone(phone: string) {
   return phone.replace(/\s+/g, '').replace(/^\+98/, '0');
 }
 
-export function createTelegramService() {
+export function createTelegramService(repository: {
+  findUserByMobile(mobile: string): Promise<{ id: string; mobile: string } | null>;
+  attachTelegramIdentity(input: { telegramUserId: string; userId: string }): Promise<unknown>;
+}) {
   return {
     handleStart(payload: TelegramStartPayload) {
       return {
@@ -23,12 +26,26 @@ export function createTelegramService() {
       };
     },
 
-    handleContact(payload: TelegramContactPayload) {
+    async handleContact(payload: TelegramContactPayload) {
+      const user = await repository.findUserByMobile(normalizePhone(payload.phoneNumber));
+
+      if (!user) {
+        return {
+          status: 'rejected',
+          reason: 'user_not_found',
+          telegramUserId: payload.telegramUserId,
+        };
+      }
+
+      await repository.attachTelegramIdentity({
+        telegramUserId: String(payload.telegramUserId),
+        userId: user.id,
+      });
+
       return {
-        status: 'received',
-        action: 'identity_lookup',
+        status: 'linked',
+        userId: user.id,
         telegramUserId: payload.telegramUserId,
-        normalizedPhone: normalizePhone(payload.phoneNumber),
       };
     },
   };
