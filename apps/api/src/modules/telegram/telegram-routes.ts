@@ -20,23 +20,29 @@ export async function telegramRoutes(app: FastifyInstance) {
     }
 
     const update = request.body as Record<string, any>;
+    const message = update.message;
+    const telegramUserId = message?.from?.id;
 
-    if (update.message?.text === '/start') {
+    if (!telegramUserId) {
+      return { status: 'ignored' };
+    }
+
+    if (message.text === '/start') {
       return service.handleStart({
-        telegramUserId: update.message.from.id,
-        username: update.message.from.username,
-        firstName: update.message.from.first_name,
-        lastName: update.message.from.last_name,
+        telegramUserId,
+        username: message.from.username,
+        firstName: message.from.first_name,
+        lastName: message.from.last_name,
       });
     }
 
-    if (update.message?.contact) {
+    if (message.contact) {
       return service.handleContact({
-        telegramUserId: update.message.from.id,
-        username: update.message.from.username,
-        firstName: update.message.from.first_name,
-        lastName: update.message.from.last_name,
-        phoneNumber: update.message.contact.phone_number,
+        telegramUserId,
+        username: message.from.username,
+        firstName: message.from.first_name,
+        lastName: message.from.last_name,
+        phoneNumber: message.contact.phone_number,
       });
     }
 
