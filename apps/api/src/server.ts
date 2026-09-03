@@ -17,6 +17,7 @@ import { reminderRoutes } from './modules/reminders/reminder-routes.js';
 import { notificationRoutes } from './modules/notifications/notification-routes.js';
 import { fileRoutes } from './modules/files/file-routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard-routes.js';
+import { telegramRoutes } from './modules/telegram/telegram-routes.js';
 
 export async function buildServer() {
   const app = Fastify({
@@ -56,6 +57,7 @@ export async function buildServer() {
   await app.register(notificationRoutes, { prefix: apiPrefix });
   await app.register(fileRoutes, { prefix: apiPrefix });
   await app.register(dashboardRoutes, { prefix: apiPrefix });
+  await app.register(telegramRoutes, { prefix: apiPrefix });
 
   return app;
 }
