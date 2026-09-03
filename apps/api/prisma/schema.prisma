@@ -55,6 +55,7 @@ model User {
   uploadedFiles  File[]
   auditActions   SensitiveAuditLog[] @relation("SensitiveAuditActor")
   telegramIdentity TelegramIdentity?
+  telegramPendingConnections TelegramPendingConnection[]
 
   @@map("users")
 }
@@ -430,4 +431,14 @@ model TelegramIdentity {
 
   @@map("telegram_identities")
 }
+model TelegramPendingConnection {
+  telegramUserId String   @id
+  userId         String
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("telegram_pending_connections")
+}
