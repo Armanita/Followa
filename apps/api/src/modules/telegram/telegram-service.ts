@@ -9,6 +9,10 @@ export type TelegramContactPayload = TelegramStartPayload & {
   phoneNumber: string;
 };
 
+function normalizePhone(phone: string) {
+  return phone.replace(/\s+/g, '').replace(/^\+98/, '0');
+}
+
 export function createTelegramService() {
   return {
     handleStart(payload: TelegramStartPayload) {
@@ -22,9 +26,9 @@ export function createTelegramService() {
     handleContact(payload: TelegramContactPayload) {
       return {
         status: 'received',
-        action: 'identity_lookup_pending',
+        action: 'identity_lookup',
         telegramUserId: payload.telegramUserId,
-        phoneNumber: payload.phoneNumber,
+        normalizedPhone: normalizePhone(payload.phoneNumber),
       };
     },
   };
