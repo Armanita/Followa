@@ -71,12 +71,19 @@ export async function telegramRoutes(app: FastifyInstance) {
       };
     }
 
-    return service.confirmConnection(
-      {
-        telegramUserId: body.telegramUserId,
-        phoneNumber: body.phoneNumber,
-      },
-      pending.userId,
-    );
+    try {
+      return await service.confirmConnection(
+        {
+          telegramUserId: body.telegramUserId,
+          phoneNumber: body.phoneNumber,
+        },
+        pending.userId,
+      );
+    } catch {
+      return {
+        status: 'rejected',
+        reason: 'identity_confirmation_failed',
+      };
+    }
   });
 }
