@@ -10,7 +10,8 @@ export type TelegramContactPayload = TelegramStartPayload & {
 };
 
 function normalizePhone(phone: string) {
-  return phone.replace(/\s+/g, '').replace(/^\+98/, '0');
+  const normalized = phone.replace(/\s+/g, '').replace(/^\+98/, '0');
+  return normalized;
 }
 
 export function createTelegramService(repository: {
@@ -27,7 +28,8 @@ export function createTelegramService(repository: {
     },
 
     async handleContact(payload: TelegramContactPayload) {
-      const user = await repository.findUserByMobile(normalizePhone(payload.phoneNumber));
+      const mobile = normalizePhone(payload.phoneNumber);
+      const user = await repository.findUserByMobile(mobile);
 
       if (!user) {
         return {
