@@ -9,7 +9,7 @@ export type TelegramIdentityRecord = {
 export type TelegramPendingConnection = {
   telegramUserId: string;
   userId: string;
-  createdAt: number;
+  createdAt: Date;
 };
 
 export type UserLookupResult = {
@@ -18,9 +18,8 @@ export type UserLookupResult = {
 };
 
 const PENDING_CONNECTION_TTL_MS = 10 * 60 * 1000;
-const pendingConnections = new Map<string, TelegramPendingConnection>();
 
-type TelegramDatabase = Pick<PrismaClient, 'user' | 'telegramIdentity'>;
+type TelegramDatabase = Pick<PrismaClient, 'user' | 'telegramIdentity' | 'telegramPendingConnection'>;
 
 export function createTelegramRepository(db: TelegramDatabase) {
   return {
@@ -32,12 +31,11 @@ export function createTelegramRepository(db: TelegramDatabase) {
     },
 
     async createPendingConnection(input: Omit<TelegramPendingConnection, 'createdAt'>) {
-      const pending = {
-        ...input,
-        createdAt: Date.now(),
-      };
-
-      pendingConnections.set(input.telegramUserId, pending);
+      const pending = await db.telegramPendingConnection.upsert({
+        where: { telegramUserId: input.telegramUserId },
+        update: { userId: input.userId },
+        create: input,
+      });
 
       return {
         status: 'pending_confirmation',
@@ -46,14 +44,18 @@ export function createTelegramRepository(db: TelegramDatabase) {
     },
 
     async getPendingConnection(telegramUserId: string) {
-      const pending = pendingConnections.get(telegramUserId);
+      const pending = await db.telegramPendingConnection.findUnique({
+        where: { telegramUserId },
+      });
 
       if (!pending) {
         return null;
       }
 
-      if (Date.now() - pending.createdAt > PENDING_CONNECTION_TTL_MS) {
-        pendingConnections.delete(telegramUserId);
+      if (Date.now() - pending.createdAt.getTime() > PENDING_CONNECTION_TTL_MS) {
+        await db.telegramPendingConnection.delete({
+          where: { telegramUserId },
+        });
         return null;
       }
 
@@ -73,7 +75,9 @@ export function createTelegramRepository(db: TelegramDatabase) {
         };
       }
 
-      pendingConnections.delete(input.telegramUserId);
+      await db.telegramPendingConnection.deleteMany({
+        where: { telegramUserId: input.telegramUserId },
+      });
 
       return db.telegramIdentity.upsert({
         where: { telegramUserId: input.telegramUserId },
