@@ -7,6 +7,7 @@ export type TelegramIdentityRecord = {
 export type TelegramPendingConnection = {
   telegramUserId: string;
   userId: string;
+  createdAt: number;
 };
 
 export type UserLookupResult = {
@@ -14,6 +15,7 @@ export type UserLookupResult = {
   mobile: string;
 };
 
+const PENDING_CONNECTION_TTL_MS = 10 * 60 * 1000;
 const pendingConnections = new Map<string, TelegramPendingConnection>();
 
 export function createTelegramRepository(db: any) {
@@ -25,16 +27,33 @@ export function createTelegramRepository(db: any) {
       });
     },
 
-    async createPendingConnection(input: TelegramPendingConnection) {
-      pendingConnections.set(input.telegramUserId, input);
+    async createPendingConnection(input: Omit<TelegramPendingConnection, 'createdAt'>) {
+      const pending = {
+        ...input,
+        createdAt: Date.now(),
+      };
+
+      pendingConnections.set(input.telegramUserId, pending);
+
       return {
         status: 'pending_confirmation',
-        ...input,
+        ...pending,
       };
     },
 
     async getPendingConnection(telegramUserId: string) {
-      return pendingConnections.get(telegramUserId) ?? null;
+      const pending = pendingConnections.get(telegramUserId);
+
+      if (!pending) {
+        return null;
+      }
+
+      if (Date.now() - pending.createdAt > PENDING_CONNECTION_TTL_MS) {
+        pendingConnections.delete(telegramUserId);
+        return null;
+      }
+
+      return pending;
     },
 
     async confirmTelegramIdentity(input: TelegramIdentityRecord) {
