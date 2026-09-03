@@ -4,6 +4,21 @@ import { prisma } from '../../lib/prisma.js';
 import { createTelegramRepository } from './telegram-repository.js';
 import { createTelegramService } from './telegram-service.js';
 
+type TelegramWebhookUpdate = {
+  message?: {
+    text?: string;
+    from?: {
+      id: number;
+      username?: string;
+      first_name?: string;
+      last_name?: string;
+    };
+    contact?: {
+      phone_number: string;
+    };
+  };
+};
+
 export async function telegramRoutes(app: FastifyInstance) {
   const repository = createTelegramRepository(prisma);
   const service = createTelegramService(repository);
@@ -19,11 +34,11 @@ export async function telegramRoutes(app: FastifyInstance) {
       };
     }
 
-    const update = request.body as Record<string, any>;
+    const update = request.body as TelegramWebhookUpdate;
     const message = update.message;
     const telegramUserId = message?.from?.id;
 
-    if (!telegramUserId) {
+    if (!telegramUserId || !message.from) {
       return { status: 'ignored' };
     }
 
