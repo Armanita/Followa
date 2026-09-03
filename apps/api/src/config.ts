@@ -16,6 +16,9 @@ export const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '12h',
   otpProvider: process.env.OTP_PROVIDER ?? 'mock',
   notificationProvider: process.env.NOTIFICATION_PROVIDER ?? 'mock',
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
+  telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME ?? '',
+  telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? '',
   storageDir: process.env.STORAGE_DIR ?? './storage/files',
   maxFileSizeMb: Number(process.env.MAX_FILE_SIZE_MB ?? 20),
   databaseUrl: required(
