@@ -1,8 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import { prisma } from '../../lib/prisma.js';
+import { createTelegramRepository } from './telegram-repository.js';
 import { createTelegramService } from './telegram-service.js';
 
 export async function telegramRoutes(app: FastifyInstance) {
-  const service = createTelegramService();
+  const repository = createTelegramRepository(prisma);
+  const service = createTelegramService(repository);
 
   app.post('/telegram/webhook', async (request) => {
     const update = request.body as Record<string, any>;
