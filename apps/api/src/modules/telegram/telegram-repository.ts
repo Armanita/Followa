@@ -57,6 +57,18 @@ export function createTelegramRepository(db: any) {
     },
 
     async confirmTelegramIdentity(input: TelegramIdentityRecord) {
+      const existing = await db.telegramIdentity.findUnique({
+        where: { telegramUserId: input.telegramUserId },
+        select: { userId: true },
+      });
+
+      if (existing && existing.userId !== input.userId) {
+        return {
+          status: 'rejected',
+          reason: 'telegram_identity_already_linked',
+        };
+      }
+
       pendingConnections.delete(input.telegramUserId);
 
       return db.telegramIdentity.upsert({
