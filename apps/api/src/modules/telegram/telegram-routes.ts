@@ -31,4 +31,28 @@ export async function telegramRoutes(app: FastifyInstance) {
 
     return { status: 'ignored' };
   });
+
+  app.post('/telegram/confirm', async (request) => {
+    const body = request.body as {
+      telegramUserId: number;
+      phoneNumber: string;
+    };
+
+    const pending = await repository.getPendingConnection(String(body.telegramUserId));
+
+    if (!pending) {
+      return {
+        status: 'rejected',
+        reason: 'pending_connection_not_found',
+      };
+    }
+
+    return service.confirmConnection(
+      {
+        telegramUserId: body.telegramUserId,
+        phoneNumber: body.phoneNumber,
+      },
+      pending.userId,
+    );
+  });
 }
