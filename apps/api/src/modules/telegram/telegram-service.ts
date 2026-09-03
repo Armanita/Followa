@@ -10,13 +10,17 @@ export type TelegramContactPayload = TelegramStartPayload & {
 };
 
 function normalizePhone(phone: string) {
-  const normalized = phone.replace(/\s+/g, '').replace(/^\+98/, '0');
-  return normalized;
+  return phone.replace(/\s+/g, '').replace(/^\+98/, '0');
 }
 
 export function createTelegramService(repository: {
   findUserByMobile(mobile: string): Promise<{ id: string; mobile: string } | null>;
-  attachTelegramIdentity(input: { telegramUserId: string; userId: string }): Promise<unknown>;
+  createPendingConnection(input: { telegramUserId: string; userId: string }): Promise<unknown>;
+  confirmTelegramIdentity(input: {
+    telegramUserId: string;
+    userId: string;
+    phoneNumber?: string;
+  }): Promise<unknown>;
 }) {
   return {
     handleStart(payload: TelegramStartPayload) {
@@ -39,16 +43,25 @@ export function createTelegramService(repository: {
         };
       }
 
-      await repository.attachTelegramIdentity({
+      await repository.createPendingConnection({
         telegramUserId: String(payload.telegramUserId),
         userId: user.id,
       });
 
       return {
-        status: 'linked',
+        status: 'pending_confirmation',
         userId: user.id,
         telegramUserId: payload.telegramUserId,
+        action: 'confirm_identity',
       };
+    },
+
+    async confirmConnection(payload: TelegramContactPayload, userId: string) {
+      return repository.confirmTelegramIdentity({
+        telegramUserId: String(payload.telegramUserId),
+        userId,
+        phoneNumber: normalizePhone(payload.phoneNumber),
+      });
     },
   };
 }
