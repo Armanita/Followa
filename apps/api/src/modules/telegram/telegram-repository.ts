@@ -1,3 +1,5 @@
+import type { PrismaClient } from '@prisma/client';
+
 export type TelegramIdentityRecord = {
   telegramUserId: string;
   userId: string;
@@ -18,7 +20,9 @@ export type UserLookupResult = {
 const PENDING_CONNECTION_TTL_MS = 10 * 60 * 1000;
 const pendingConnections = new Map<string, TelegramPendingConnection>();
 
-export function createTelegramRepository(db: any) {
+type TelegramDatabase = Pick<PrismaClient, 'user' | 'telegramIdentity'>;
+
+export function createTelegramRepository(db: TelegramDatabase) {
   return {
     findUserByMobile(mobile: string): Promise<UserLookupResult | null> {
       return db.user.findUnique({
