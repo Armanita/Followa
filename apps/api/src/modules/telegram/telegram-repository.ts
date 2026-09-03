@@ -14,6 +14,8 @@ export type UserLookupResult = {
   mobile: string;
 };
 
+const pendingConnections = new Map<string, TelegramPendingConnection>();
+
 export function createTelegramRepository(db: any) {
   return {
     findUserByMobile(mobile: string): Promise<UserLookupResult | null> {
@@ -24,13 +26,20 @@ export function createTelegramRepository(db: any) {
     },
 
     async createPendingConnection(input: TelegramPendingConnection) {
+      pendingConnections.set(input.telegramUserId, input);
       return {
         status: 'pending_confirmation',
         ...input,
       };
     },
 
+    async getPendingConnection(telegramUserId: string) {
+      return pendingConnections.get(telegramUserId) ?? null;
+    },
+
     async confirmTelegramIdentity(input: TelegramIdentityRecord) {
+      pendingConnections.delete(input.telegramUserId);
+
       return db.telegramIdentity.upsert({
         where: { telegramUserId: input.telegramUserId },
         update: {
