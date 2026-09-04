@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { config } from '../../config.js';
 import { prisma } from '../../lib/prisma.js';
 import { createTelegramRepository } from './telegram-repository.js';
+import { createTelegramClient } from './telegram-client.js';
 import { createTelegramService } from './telegram-service.js';
 
 type TelegramWebhookUpdate = {
@@ -21,7 +22,8 @@ type TelegramWebhookUpdate = {
 
 export async function telegramRoutes(app: FastifyInstance) {
   const repository = createTelegramRepository(prisma);
-  const service = createTelegramService(repository);
+  const telegramClient = createTelegramClient();
+  const service = createTelegramService(repository, telegramClient);
 
   app.post('/telegram/webhook', async (request) => {
     if (
