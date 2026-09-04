@@ -25,6 +25,17 @@ const CONTACT_REQUEST_MARKUP = {
   one_time_keyboard: true,
 };
 
+const CONFIRM_CONNECTION_MARKUP = {
+  inline_keyboard: [
+    [
+      {
+        text: 'تایید اتصال',
+        callback_data: 'telegram_confirm',
+      },
+    ],
+  ],
+};
+
 export function createTelegramService(repository: {
   findUserByMobile(mobile: string): Promise<{ id: string; mobile: string } | null>;
   createPendingConnection(input: { telegramUserId: string; userId: string }): Promise<unknown>;
@@ -76,6 +87,7 @@ export function createTelegramService(repository: {
       await telegramClient?.sendMessage(
         payload.telegramUserId,
         'حساب شما پیدا شد. لطفاً تایید اتصال را انجام دهید.',
+        CONFIRM_CONNECTION_MARKUP,
       );
 
       return {
@@ -89,17 +101,10 @@ export function createTelegramService(repository: {
     async confirmConnection(payload: TelegramContactPayload, userId: string) {
       const phoneNumber = normalizePhone(payload.phoneNumber);
 
-      if (!phoneNumber) {
-        return {
-          status: 'rejected',
-          reason: 'invalid_phone_number',
-        };
-      }
-
       const result = await repository.confirmTelegramIdentity({
         telegramUserId: String(payload.telegramUserId),
         userId,
-        phoneNumber,
+        phoneNumber: phoneNumber || undefined,
       });
 
       if (telegramClient && 'telegramUserId' in (result as object)) {
