@@ -6,9 +6,20 @@ export type TelegramSendMessageResult = {
   description?: string;
 };
 
+export type TelegramReplyMarkup = {
+  keyboard?: Array<Array<{ text: string; request_contact?: boolean }>>;
+  resize_keyboard?: boolean;
+  one_time_keyboard?: boolean;
+  remove_keyboard?: boolean;
+};
+
 export function createTelegramClient() {
   return {
-    async sendMessage(chatId: number | string, text: string): Promise<TelegramSendMessageResult> {
+    async sendMessage(
+      chatId: number | string,
+      text: string,
+      replyMarkup?: TelegramReplyMarkup,
+    ): Promise<TelegramSendMessageResult> {
       if (!config.telegramBotToken) {
         return {
           ok: false,
@@ -26,6 +37,7 @@ export function createTelegramClient() {
           body: JSON.stringify({
             chat_id: chatId,
             text,
+            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
           }),
         },
       );
