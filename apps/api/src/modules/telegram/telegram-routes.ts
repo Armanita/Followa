@@ -18,6 +18,13 @@ type TelegramWebhookUpdate = {
       phone_number: string;
     };
   };
+  callback_query?: {
+    id: string;
+    data?: string;
+    from?: {
+      id: number;
+    };
+  };
 };
 
 export async function telegramRoutes(app: FastifyInstance) {
@@ -37,6 +44,29 @@ export async function telegramRoutes(app: FastifyInstance) {
     }
 
     const update = request.body as TelegramWebhookUpdate;
+
+    if (update.callback_query?.data === 'telegram_confirm') {
+      const telegramUserId = update.callback_query.from?.id;
+
+      if (!telegramUserId) {
+        return { status: 'ignored' };
+      }
+
+      const result = await repository.confirmPendingConnection(String(telegramUserId));
+
+      if (result) {
+        await telegramClient.sendMessage(
+          telegramUserId,
+          'اتصال حساب تلگرام شما با موفقیت انجام شد.',
+        );
+      }
+
+      return result ?? {
+        status: 'rejected',
+        reason: 'pending_connection_not_found',
+      };
+    }
+
     const message = update.message;
     const telegramUserId = message?.from?.id;
 
