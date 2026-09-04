@@ -13,6 +13,12 @@ function normalizePhone(phone: string) {
   return phone.replace(/\s+/g, '').replace(/^\+98/, '0');
 }
 
+const CONTACT_REQUEST_MARKUP = {
+  keyboard: [[{ text: 'ارسال شماره تماس', request_contact: true }]],
+  resize_keyboard: true,
+  one_time_keyboard: true,
+};
+
 export function createTelegramService(repository: {
   findUserByMobile(mobile: string): Promise<{ id: string; mobile: string } | null>;
   createPendingConnection(input: { telegramUserId: string; userId: string }): Promise<unknown>;
@@ -22,10 +28,16 @@ export function createTelegramService(repository: {
     phoneNumber?: string;
   }): Promise<unknown>;
 }, telegramClient?: {
-  sendMessage(chatId: number | string, text: string): Promise<unknown>;
+  sendMessage(chatId: number | string, text: string, replyMarkup?: unknown): Promise<unknown>;
 }) {
   return {
-    handleStart(payload: TelegramStartPayload) {
+    async handleStart(payload: TelegramStartPayload) {
+      await telegramClient?.sendMessage(
+        payload.telegramUserId,
+        'برای اتصال حساب Followa، لطفاً شماره تماس خود را ارسال کنید.',
+        CONTACT_REQUEST_MARKUP,
+      );
+
       return {
         status: 'received',
         action: 'request_contact',
@@ -38,6 +50,11 @@ export function createTelegramService(repository: {
       const user = await repository.findUserByMobile(mobile);
 
       if (!user) {
+        await telegramClient?.sendMessage(
+          payload.telegramUserId,
+          'حسابی با این شماره پیدا نشد.',
+        );
+
         return {
           status: 'rejected',
           reason: 'user_not_found',
@@ -52,7 +69,7 @@ export function createTelegramService(repository: {
 
       await telegramClient?.sendMessage(
         payload.telegramUserId,
-        '\u062d\u0633\u0627\u0628 \u0634\u0645\u0627 \u067e\u06cc\u062f\u0627 \u0634\u062f. \u0644\u0637\u0641\u0627 \u062a\u0627\u06cc\u06cc\u062f \u0627\u062a\u0635\u0627\u0644 \u0631\u0627 \u0627\u0646\u062c\u0627\u0645 \u062f\u0647\u06cc\u062f.',
+        'حساب شما پیدا شد. لطفاً تایید اتصال را انجام دهید.',
       );
 
       return {
@@ -82,7 +99,7 @@ export function createTelegramService(repository: {
       if (telegramClient && 'telegramUserId' in (result as object)) {
         await telegramClient.sendMessage(
           payload.telegramUserId,
-          '\u0627\u062a\u0635\u0627\u0644 \u062d\u0633\u0627\u0628 \u062a\u0644\u06af\u0631\u0627\u0645 \u0634\u0645\u0627 \u0628\u0627 \u0645\u0648\u0641\u0642\u06cc\u062a \u0627\u0646\u062c\u0627\u0645 \u0634\u062f.',
+          'اتصال حساب تلگرام شما با موفقیت انجام شد.',
         );
       }
 
