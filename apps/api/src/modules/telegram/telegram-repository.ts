@@ -66,6 +66,19 @@ export function createTelegramRepository(db: TelegramDatabase) {
       return pending;
     },
 
+    async confirmPendingConnection(telegramUserId: string) {
+      const pending = await this.getPendingConnection(telegramUserId);
+
+      if (!pending) {
+        return null;
+      }
+
+      return this.confirmTelegramIdentity({
+        telegramUserId,
+        userId: pending.userId,
+      });
+    },
+
     async confirmTelegramIdentity(input: TelegramIdentityRecord) {
       const existing = await db.telegramIdentity.findUnique({
         where: { telegramUserId: input.telegramUserId },
