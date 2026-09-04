@@ -10,7 +10,13 @@ export type TelegramContactPayload = TelegramStartPayload & {
 };
 
 function normalizePhone(phone: string) {
-  return phone.replace(/\s+/g, '').replace(/^\+98/, '0');
+  const normalized = phone.replace(/\s+/g, '').replace(/^\+/, '');
+
+  if (normalized.startsWith('98')) {
+    return `0${normalized.slice(2)}`;
+  }
+
+  return normalized;
 }
 
 const CONTACT_REQUEST_MARKUP = {
