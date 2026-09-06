@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { parseWith } from '../../lib/validation.js';
+import { unauthorized } from '../../lib/errors.js';
 import { authService, normalizeMobile } from './auth-service.js';
 
 const mobileSchema = z.object({
@@ -27,6 +28,26 @@ const loginSchema = z.object({
 const adminLoginSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
+});
+
+const forgotPasswordRequestSchema = z.object({
+  mobile: z.string().min(10).max(20),
+});
+
+const forgotPasswordVerifySchema = z.object({
+  mobile: z.string().min(10).max(20),
+  code: z.string().regex(/^\d{6}$/, 'کد تأیید باید ۶ رقم باشد'),
+});
+
+const forgotPasswordResetSchema = z.object({
+  mobile: z.string().min(10).max(20),
+  resetToken: z.string().min(10),
+  password: z.string().min(8, 'رمز عبور حداقل ۸ کاراکتر باشد').max(72),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'رمز عبور فعلی الزامی است'),
+  newPassword: z.string().min(8, 'رمز عبور حداقل ۸ کاراکتر باشد').max(72),
 });
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -83,6 +104,46 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       select: { id: true, username: true },
     });
     reply.send({ token, admin });
+  });
+
+  // ------------------------------------------------------------------
+  // Forgot password (public, logged-out). Generic responses throughout —
+  // the endpoints never reveal whether an account exists.
+  // ------------------------------------------------------------------
+
+  app.post('/auth/forgot-password/request', async (request) => {
+    const { mobile } = parseWith(forgotPasswordRequestSchema, request.body);
+    try {
+      await authService.forgotPasswordRequest(mobile);
+    } catch {
+      // Delivery problems are indistinguishable from an unknown account.
+    }
+    return { message: 'در صورت وجود حساب، کد بازیابی ارسال شد' };
+  });
+
+  app.post('/auth/forgot-password/verify', async (request) => {
+    const body = parseWith(forgotPasswordVerifySchema, request.body);
+    return authService.forgotPasswordVerify(body.mobile, body.code);
+  });
+
+  app.post('/auth/forgot-password/reset', async (request) => {
+    const body = parseWith(forgotPasswordResetSchema, request.body);
+    await authService.forgotPasswordReset(body.mobile, body.resetToken, body.password);
+    return { message: 'رمز عبور بازنشانی شد. اکنون می‌توانید وارد شوید.' };
+  });
+
+  // ------------------------------------------------------------------
+  // Self-service password change (JWT required — enforced by the global
+  // preHandler because this route is not on the public allowlist).
+  // ------------------------------------------------------------------
+
+  app.post('/auth/change-password', async (request) => {
+    if (request.actor?.kind !== 'COMPANY_USER') {
+      throw unauthorized('این عملیات مخصوص کاربران شرکت است');
+    }
+    const body = parseWith(changePasswordSchema, request.body);
+    await authService.changePassword(request.actor.id, body.currentPassword, body.newPassword);
+    return { message: 'رمز عبور تغییر کرد' };
   });
 }
 

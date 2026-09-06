@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { config } from '../../config.js';
+import { createTelegramClient } from '../telegram/telegram-client.js';
+import { createTelegramRepository } from '../telegram/telegram-repository.js';
 
 export interface NotificationInput {
   userId: string;
@@ -39,12 +41,27 @@ class MessengerNotificationAdapter implements PushAdapter {
   }
 }
 
+class TelegramNotificationAdapter implements PushAdapter {
+  readonly name = 'telegram';
+  private readonly telegramClient = createTelegramClient();
+  private readonly telegramRepository = createTelegramRepository(prisma);
+
+  async send(userId: string, title: string, body: string): Promise<void> {
+    const identity = await this.telegramRepository.findIdentityByUserId(userId);
+    if (!identity) return; // user has no linked Telegram account — in-app row is the delivery
+
+    await this.telegramClient.sendMessage(identity.telegramUserId, `${title}\n${body}`);
+  }
+}
+
 function createPushAdapter(): PushAdapter {
   switch (config.notificationProvider) {
     case 'bale':
       return new MessengerNotificationAdapter('bale', process.env.BALE_BOT_TOKEN);
     case 'eitaa':
       return new MessengerNotificationAdapter('eitaa', process.env.EITAA_BOT_TOKEN);
+    case 'telegram':
+      return new TelegramNotificationAdapter();
     default:
       return new MockPushAdapter();
   }

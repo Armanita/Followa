@@ -31,6 +31,13 @@ export function createTelegramRepository(db: TelegramDatabase) {
       });
     },
 
+    findIdentityByUserId(userId: string): Promise<TelegramIdentityRecord | null> {
+      return db.telegramIdentity.findUnique({
+        where: { userId },
+        select: { telegramUserId: true, userId: true },
+      });
+    },
+
     async createPendingConnection(input: Omit<TelegramPendingConnection, 'createdAt' | 'expiresAt'>) {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + PENDING_CONNECTION_TTL_MS);

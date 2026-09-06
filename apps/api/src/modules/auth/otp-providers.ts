@@ -1,4 +1,7 @@
 import { config } from '../../config.js';
+import { prisma } from '../../lib/prisma.js';
+import { createTelegramClient } from '../telegram/telegram-client.js';
+import { createTelegramRepository } from '../telegram/telegram-repository.js';
 
 export interface OtpProvider {
   readonly name: string;
@@ -49,6 +52,52 @@ class MessengerOtpProvider implements OtpProvider {
   }
 }
 
+/**
+ * Telegram OTP provider — delivery channel ONLY.
+ *
+ * The Telegram account is exclusively the destination where the one-time code
+ * is sent. It is never an authentication credential: no JWT is issued from
+ * Telegram, no callback/message authenticates anyone, and the code is only
+ * ever verified by the normal Followa API endpoints.
+ *
+ * Resolution: mobile → Followa user → TelegramIdentity → telegramUserId.
+ * Dependencies are injectable (same pattern as createTelegramService) so the
+ * provider is testable without Telegram network access.
+ */
+type TelegramOtpRepository = {
+  findUserByMobile(mobile: string): Promise<{ id: string; mobile: string } | null>;
+  findIdentityByUserId(userId: string): Promise<{ telegramUserId: string; userId: string } | null>;
+};
+type TelegramOtpClient = {
+  sendMessage(chatId: number | string, text: string): Promise<unknown>;
+};
+
+export class TelegramOtpProvider implements OtpProvider {
+  readonly name = 'telegram';
+  constructor(
+    private readonly repository: TelegramOtpRepository = createTelegramRepository(prisma),
+    private readonly client: TelegramOtpClient = createTelegramClient(),
+  ) {}
+
+  async sendOtp(mobile: string, code: string): Promise<void> {
+    const user = await this.repository.findUserByMobile(mobile);
+    if (!user) {
+      throw new Error('telegram_otp_user_not_found');
+    }
+    const identity = await this.repository.findIdentityByUserId(user.id);
+    if (!identity) {
+      // No linked Telegram account — cannot deliver. Fail loudly so the
+      // caller knows delivery did not happen (OTP state is rolled back).
+      throw new Error('telegram_otp_identity_not_linked');
+    }
+
+    await this.client.sendMessage(
+      identity.telegramUserId,
+      `کد یکبارمصرف فالوآ: ${code}\nمدت اعتبار: ۵ دقیقه`,
+    );
+  }
+}
+
 export function createOtpProvider(): OtpProvider {
   switch (config.otpProvider) {
     case 'sms':
@@ -57,7 +106,17 @@ export function createOtpProvider(): OtpProvider {
       return new MessengerOtpProvider('bale', process.env.BALE_BOT_TOKEN);
     case 'eitaa':
       return new MessengerOtpProvider('eitaa', process.env.EITAA_BOT_TOKEN);
+    case 'telegram':
+      return new TelegramOtpProvider();
     default:
       return new MockOtpProvider();
   }
+}
+
+/** Exposed for tests: instantiates the Telegram provider with fakes, no network. */
+export function createTelegramOtpProviderForTests(
+  repository: TelegramOtpRepository,
+  client: TelegramOtpClient,
+): OtpProvider {
+  return new TelegramOtpProvider(repository, client);
 }
