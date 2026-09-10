@@ -17,6 +17,17 @@ const createCompanySchema = z.object({
   }),
 });
 
+const updateCompanySchema = z.object({
+  name: z.string().min(2).max(100).optional(),
+  manager: z.object({
+    userId: z.string().min(1),
+    firstName: z.string().min(1).max(50).optional(),
+    lastName: z.string().min(1).max(50).optional(),
+    mobile: z.string().min(10).max(20).optional(),
+    jobTitle: z.string().max(80).nullable().optional(),
+  }).optional(),
+});
+
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // All routes here are system-admin only (checked per route because the global
   // hook only enforces token presence).
@@ -46,8 +57,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         createdAt: c.createdAt,
         managers: c.memberships.map((m) => ({
           id: m.user.id,
+          userId: m.user.id,
+          membershipId: m.id,
+          firstName: m.user.firstName,
+          lastName: m.user.lastName,
           fullName: `${m.user.firstName} ${m.user.lastName}`,
           mobile: m.user.mobile,
+          jobTitle: m.jobTitle,
           isActive: m.isActive,
         })),
         memberCount: c._count.memberships,
@@ -103,6 +119,73 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return { message: 'شرکت و مدیر آن ساخته شد', companyId: company.id };
+  });
+
+  app.patch('/companies/:id', async (request) => {
+    const { id } = request.params as { id: string };
+    const body = parseWith(updateCompanySchema, request.body);
+    const normalizedMobile = body.manager?.mobile !== undefined
+      ? normalizeMobile(body.manager.mobile)
+      : undefined;
+
+    await prisma.$transaction(async (tx) => {
+      const company = await tx.company.findUnique({ where: { id }, select: { id: true } });
+      if (!company) throw notFound('شرکت یافت نشد');
+
+      let managerMembership: { id: string; userId: string } | null = null;
+      if (body.manager) {
+        managerMembership = await tx.companyMembership.findFirst({
+          where: {
+            companyId: id,
+            userId: body.manager.userId,
+            role: 'COMPANY_MANAGER',
+          },
+          select: { id: true, userId: true },
+        });
+        if (!managerMembership) throw notFound('مدیر شرکت یافت نشد');
+
+        if (normalizedMobile !== undefined) {
+          const existingMobileOwner = await tx.user.findUnique({
+            where: { mobile: normalizedMobile },
+            select: { id: true },
+          });
+          if (existingMobileOwner && existingMobileOwner.id !== body.manager.userId) {
+            throw conflict('کاربری با این شماره موبایل از قبل وجود دارد');
+          }
+        }
+      }
+
+      if (body.name !== undefined) {
+        await tx.company.update({ where: { id }, data: { name: body.name } });
+      }
+
+      if (body.manager && managerMembership) {
+        const userData: {
+          firstName?: string;
+          lastName?: string;
+          mobile?: string;
+        } = {};
+        if (body.manager.firstName !== undefined) userData.firstName = body.manager.firstName;
+        if (body.manager.lastName !== undefined) userData.lastName = body.manager.lastName;
+        if (normalizedMobile !== undefined) userData.mobile = normalizedMobile;
+
+        if (Object.keys(userData).length > 0) {
+          await tx.user.update({
+            where: { id: body.manager.userId },
+            data: userData,
+          });
+        }
+
+        if (body.manager.jobTitle !== undefined) {
+          await tx.companyMembership.update({
+            where: { id: managerMembership.id },
+            data: { jobTitle: body.manager.jobTitle },
+          });
+        }
+      }
+    });
+
+    return { message: 'اطلاعات شرکت و مدیر به‌روزرسانی شد' };
   });
 
   app.patch('/companies/:id/active', async (request) => {

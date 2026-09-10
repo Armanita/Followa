@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
 import {
   btnPrimary,
+  btnSecondary,
   Card,
   ConfirmProvider,
   EmptyState,
@@ -31,8 +32,13 @@ type AdminStats = {
 
 type CompanyManager = {
   id: string;
+  userId: string;
+  membershipId: string;
+  firstName: string;
+  lastName: string;
   fullName: string;
   mobile: string;
+  jobTitle: string | null;
   isActive: boolean;
 };
 
@@ -67,6 +73,7 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<CompanyRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const handleAdminAuthFailure = useCallback((err: unknown) => {
@@ -175,23 +182,29 @@ function AdminDashboard() {
         ) : (
           <>
             <div className="divide-y divide-workspace-border md:hidden">
-              {companies.map((company) => {
-                const manager = company.managers[0];
-                return (
-                  <div key={company.id} className="space-y-4 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-sm font-black text-workspace-ink">{company.name}</h3>
-                          <CompanyStatusBadge active={company.isActive} />
-                        </div>
-                        <p className="tnum mt-1 text-[10px] text-workspace-soft">ثبت: {faDate(company.createdAt)}</p>
+              {companies.map((company) => (
+                <div key={company.id} className="space-y-4 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-sm font-black text-workspace-ink">{company.name}</h3>
+                        <CompanyStatusBadge active={company.isActive} />
                       </div>
+                      <p className="tnum mt-1 text-[10px] text-workspace-soft">ثبت: {faDate(company.createdAt)}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditTarget(company)}
+                        className="rounded-lg border border-workspace-borderStrong bg-workspace-elevated px-3 py-2 text-[10px] font-semibold text-workspace-muted transition hover:bg-workspace-hover hover:text-white"
+                      >
+                        ویرایش
+                      </button>
                       <button
                         type="button"
                         disabled={busyId === company.id}
                         onClick={() => void toggleCompany(company)}
-                        className={`shrink-0 rounded-lg border px-3 py-2 text-[10px] font-semibold transition disabled:opacity-50 ${
+                        className={`rounded-lg border px-3 py-2 text-[10px] font-semibold transition disabled:opacity-50 ${
                           company.isActive
                             ? 'border-red-400/20 text-red-300 hover:bg-red-400/10'
                             : 'border-emerald-400/20 text-emerald-300 hover:bg-emerald-400/10'
@@ -200,36 +213,43 @@ function AdminDashboard() {
                         {company.isActive ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
                       </button>
                     </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border border-workspace-border bg-workspace-elevated/55 p-3">
-                        <p className="text-[9px] text-workspace-soft">اعضا</p>
-                        <p className="tnum mt-1 text-sm font-black text-white">{toFa(company.memberCount)}</p>
-                      </div>
-                      <div className="rounded-xl border border-workspace-border bg-workspace-elevated/55 p-3">
-                        <p className="text-[9px] text-workspace-soft">پرونده‌ها</p>
-                        <p className="tnum mt-1 text-sm font-black text-white">{toFa(company.caseCount)}</p>
-                      </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-workspace-border bg-workspace-elevated/55 p-3">
+                      <p className="text-[9px] text-workspace-soft">اعضا</p>
+                      <p className="tnum mt-1 text-sm font-black text-white">{toFa(company.memberCount)}</p>
                     </div>
-
-                    <div className="flex items-center gap-3 rounded-xl border border-workspace-border bg-workspace-elevated/35 p-3">
-                      <Avatar name={manager?.fullName ?? company.name} size="sm" />
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-bold text-workspace-ink">{manager?.fullName ?? 'مدیری ثبت نشده'}</p>
-                        {manager ? (
-                          <p className="tnum mt-0.5 text-[10px] text-workspace-soft" dir="ltr">{manager.mobile}</p>
-                        ) : (
-                          <p className="mt-0.5 text-[10px] text-workspace-soft">—</p>
-                        )}
-                      </div>
+                    <div className="rounded-xl border border-workspace-border bg-workspace-elevated/55 p-3">
+                      <p className="text-[9px] text-workspace-soft">پرونده‌ها</p>
+                      <p className="tnum mt-1 text-sm font-black text-white">{toFa(company.caseCount)}</p>
                     </div>
                   </div>
-                );
-              })}
+
+                  {company.managers.length > 0 ? (
+                    <div className="space-y-2">
+                      {company.managers.map((manager) => (
+                        <div key={manager.membershipId} className="flex items-center gap-3 rounded-xl border border-workspace-border bg-workspace-elevated/35 p-3">
+                          <Avatar name={manager.fullName} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-workspace-ink">{manager.fullName}</p>
+                            <p className="tnum mt-0.5 text-[10px] text-workspace-soft" dir="ltr">{manager.mobile}</p>
+                            {manager.jobTitle && <p className="mt-0.5 text-[9px] text-workspace-soft">{manager.jobTitle}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-workspace-border bg-workspace-elevated/35 p-3 text-[10px] text-workspace-soft">
+                      مدیری برای این شرکت ثبت نشده است.
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[880px] text-right text-xs">
+              <table className="w-full min-w-[940px] text-right text-xs">
                 <thead>
                   <tr className="border-b border-workspace-border bg-workspace-elevated/45 text-[10px] text-workspace-soft">
                     <th className="px-5 py-3 font-semibold">شرکت</th>
@@ -243,28 +263,52 @@ function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-workspace-border">
-                  {companies.map((company) => {
-                    const manager = company.managers[0];
-                    return (
-                      <tr key={company.id} className="transition hover:bg-workspace-hover/55">
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <Avatar name={company.name} />
-                            <p className="font-bold text-workspace-ink">{company.name}</p>
+                  {companies.map((company) => (
+                    <tr key={company.id} className="transition hover:bg-workspace-hover/55">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={company.name} />
+                          <p className="font-bold text-workspace-ink">{company.name}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {company.managers.length > 0 ? (
+                          <div className="space-y-2">
+                            {company.managers.map((manager) => (
+                              <div key={manager.membershipId}>
+                                <p className="font-semibold text-workspace-muted">{manager.fullName}</p>
+                                {manager.jobTitle && <p className="mt-0.5 text-[9px] text-workspace-soft">{manager.jobTitle}</p>}
+                              </div>
+                            ))}
                           </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <p className="font-semibold text-workspace-muted">{manager?.fullName ?? '—'}</p>
-                          {company.managers.length > 1 && (
-                            <p className="mt-1 text-[9px] text-workspace-soft">+ {toFa(company.managers.length - 1)} مدیر دیگر</p>
-                          )}
-                        </td>
-                        <td className="tnum px-4 py-3.5 text-workspace-muted" dir="ltr">{manager?.mobile ?? '—'}</td>
-                        <td className="px-4 py-3.5"><CompanyStatusBadge active={company.isActive} /></td>
-                        <td className="tnum px-4 py-3.5 font-bold text-workspace-muted">{toFa(company.memberCount)}</td>
-                        <td className="tnum px-4 py-3.5 font-bold text-workspace-muted">{toFa(company.caseCount)}</td>
-                        <td className="tnum px-4 py-3.5 text-[10px] text-workspace-soft">{faDate(company.createdAt)}</td>
-                        <td className="px-4 py-3.5">
+                        ) : (
+                          <span className="text-workspace-soft">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {company.managers.length > 0 ? (
+                          <div className="space-y-2">
+                            {company.managers.map((manager) => (
+                              <p key={manager.membershipId} className="tnum text-workspace-muted" dir="ltr">{manager.mobile}</p>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-workspace-soft">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5"><CompanyStatusBadge active={company.isActive} /></td>
+                      <td className="tnum px-4 py-3.5 font-bold text-workspace-muted">{toFa(company.memberCount)}</td>
+                      <td className="tnum px-4 py-3.5 font-bold text-workspace-muted">{toFa(company.caseCount)}</td>
+                      <td className="tnum px-4 py-3.5 text-[10px] text-workspace-soft">{faDate(company.createdAt)}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditTarget(company)}
+                            className="rounded-lg border border-workspace-borderStrong bg-workspace-elevated px-3 py-2 text-[10px] font-semibold text-workspace-muted transition hover:bg-workspace-hover hover:text-white"
+                          >
+                            ویرایش
+                          </button>
                           <button
                             type="button"
                             disabled={busyId === company.id}
@@ -277,10 +321,10 @@ function AdminDashboard() {
                           >
                             {company.isActive ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -292,6 +336,12 @@ function AdminDashboard() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={load}
+        onAuthFailure={handleAdminAuthFailure}
+      />
+      <EditCompanyModal
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={load}
         onAuthFailure={handleAdminAuthFailure}
       />
     </div>
@@ -443,6 +493,193 @@ function CreateCompanyModal({
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function EditCompanyModal({
+  target,
+  onClose,
+  onSaved,
+  onAuthFailure,
+}: {
+  target: CompanyRow | null;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  onAuthFailure: (err: unknown) => boolean;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const applyManager = useCallback((manager: CompanyManager | null) => {
+    setSelectedUserId(manager?.userId ?? '');
+    setFirstName(manager?.firstName ?? '');
+    setLastName(manager?.lastName ?? '');
+    setMobile(manager?.mobile ?? '');
+    setJobTitle(manager?.jobTitle ?? '');
+  }, []);
+
+  useEffect(() => {
+    if (!target) {
+      setName('');
+      applyManager(null);
+      return;
+    }
+    setName(target.name);
+    applyManager(target.managers.length === 1 ? target.managers[0] : null);
+  }, [applyManager, target]);
+
+  const close = () => {
+    if (busy) return;
+    onClose();
+  };
+
+  const selectedManager = target?.managers.find((manager) => manager.userId === selectedUserId) ?? null;
+  const managerRequired = Boolean(target && target.managers.length > 0);
+
+  return (
+    <Modal open={Boolean(target)} onClose={close} title="ویرایش شرکت" wide>
+      {target && (
+        <form
+          className="space-y-5"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (managerRequired && !selectedManager) return;
+            setBusy(true);
+            try {
+              const payload: {
+                name: string;
+                manager?: {
+                  userId: string;
+                  firstName: string;
+                  lastName: string;
+                  mobile: string;
+                  jobTitle: string | null;
+                };
+              } = { name: name.trim() };
+
+              if (selectedManager) {
+                payload.manager = {
+                  userId: selectedManager.userId,
+                  firstName: firstName.trim(),
+                  lastName: lastName.trim(),
+                  mobile,
+                  jobTitle: jobTitle.trim() || null,
+                };
+              }
+
+              const res = await api.patch<{ message: string }>(`/admin/companies/${target.id}`, payload);
+              toast.success(res.message);
+              onClose();
+              await onSaved();
+            } catch (err) {
+              if (!onAuthFailure(err)) {
+                toast.error(err instanceof Error ? err.message : 'خطا در ویرایش شرکت');
+              }
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <Field label="نام شرکت" required>
+            <input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+          </Field>
+
+          <div className="border-t border-workspace-border pt-5">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-xl border border-brand-400/20 bg-brand-400/10 text-brand-200">
+                <EmployeesIcon className="h-4 w-4" />
+              </span>
+              <div>
+                <h4 className="text-sm font-black text-white">اطلاعات مدیر شرکت</h4>
+                <p className="mt-0.5 text-[10px] text-workspace-soft">اطلاعات همان کاربر و عضویت فعلی به‌روزرسانی می‌شود.</p>
+              </div>
+            </div>
+
+            {target.managers.length > 1 && (
+              <div className="mb-4">
+                <Field label="مدیر مورد ویرایش" required>
+                  <select
+                    className={inputClass}
+                    value={selectedUserId}
+                    onChange={(event) => {
+                      const manager = target.managers.find((item) => item.userId === event.target.value) ?? null;
+                      applyManager(manager);
+                    }}
+                  >
+                    <option value="">انتخاب مدیر</option>
+                    {target.managers.map((manager) => (
+                      <option key={manager.membershipId} value={manager.userId}>
+                        {manager.fullName} — {manager.mobile}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
+
+            {target.managers.length === 0 ? (
+              <div className="rounded-xl border border-workspace-border bg-workspace-elevated/45 p-3 text-xs leading-6 text-workspace-muted">
+                مدیری برای این شرکت ثبت نشده است؛ در این مرحله فقط نام شرکت قابل ویرایش است.
+              </div>
+            ) : selectedManager ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="نام مدیر" required>
+                  <input className={inputClass} value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+                </Field>
+                <Field label="نام خانوادگی مدیر" required>
+                  <input className={inputClass} value={lastName} onChange={(event) => setLastName(event.target.value)} />
+                </Field>
+                <Field label="شماره موبایل مدیر" required>
+                  <input
+                    className={`${inputClass} tnum text-left`}
+                    dir="ltr"
+                    inputMode="numeric"
+                    placeholder="09123456789"
+                    value={mobile}
+                    onChange={(event) => setMobile(event.target.value)}
+                  />
+                </Field>
+                <Field label="سمت مدیر">
+                  <input className={inputClass} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="مدیر شرکت" />
+                </Field>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-brand-400/20 bg-brand-400/5 p-3 text-xs leading-6 text-workspace-muted">
+                برای ویرایش اطلاعات مدیر، یکی از مدیران این شرکت را انتخاب کنید.
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col-reverse gap-3 border-t border-workspace-border pt-5 sm:flex-row">
+            <button type="button" onClick={close} disabled={busy} className={`${btnSecondary} flex-1`}>
+              انصراف
+            </button>
+            <button
+              type="submit"
+              disabled={
+                busy ||
+                name.trim().length < 2 ||
+                (managerRequired && (
+                  !selectedManager ||
+                  !firstName.trim() ||
+                  !lastName.trim() ||
+                  mobile.trim().length < 10
+                ))
+              }
+              className={`${btnPrimary} flex-1`}
+            >
+              {busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}
+            </button>
+          </div>
+        </form>
+      )}
     </Modal>
   );
 }
