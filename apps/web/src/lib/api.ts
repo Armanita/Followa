@@ -16,16 +16,35 @@ export function getToken(): string | null {
 export function setAuth(token: string, user: unknown) {
   localStorage.setItem('followa_token', token);
   localStorage.setItem('followa_user', JSON.stringify(user));
+  localStorage.removeItem('followa_admin');
+}
+
+export function setAdminAuth(token: string, admin: unknown) {
+  localStorage.setItem('followa_token', token);
+  localStorage.setItem('followa_admin', JSON.stringify(admin));
+  localStorage.removeItem('followa_user');
 }
 
 export function clearAuth() {
   localStorage.removeItem('followa_token');
   localStorage.removeItem('followa_user');
+  localStorage.removeItem('followa_admin');
+}
+
+export function clearAdminAuth() {
+  localStorage.removeItem('followa_token');
+  localStorage.removeItem('followa_admin');
 }
 
 export function getCachedUser<T>(): T | null {
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem('followa_user');
+  return raw ? (JSON.parse(raw) as T) : null;
+}
+
+export function getCachedAdmin<T>(): T | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('followa_admin');
   return raw ? (JSON.parse(raw) as T) : null;
 }
 
