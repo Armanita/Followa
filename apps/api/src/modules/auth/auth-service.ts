@@ -78,7 +78,7 @@ async function issueOtp(mobile: string, purpose: OtpPurpose): Promise<void> {
   const code = String(randomInt(100000, 1000000));
   otpStore.set(key, { code, attempts: 0, expiresAt: Date.now() + OTP_TTL_MS });
   try {
-    await otpProvider.sendOtp(mobile, code);
+    await otpProvider.sendOtp(mobile, code, purpose);
   } catch (err) {
     otpStore.delete(key);
     throw err;

@@ -1,11 +1,17 @@
 import { config } from '../../config.js';
 import { prisma } from '../../lib/prisma.js';
-import { createTelegramClient } from '../telegram/telegram-client.js';
+import { createTelegramClient, type TelegramReplyMarkup } from '../telegram/telegram-client.js';
 import { createTelegramRepository } from '../telegram/telegram-repository.js';
+
+export type OtpDeliveryPurpose = 'ACTIVATION' | 'PASSWORD_RESET';
 
 export interface OtpProvider {
   readonly name: string;
-  sendOtp(mobile: string, code: string): Promise<void>;
+  sendOtp(
+    mobile: string,
+    code: string,
+    ...context: [purpose?: OtpDeliveryPurpose]
+  ): Promise<void>;
 }
 
 /**
@@ -69,7 +75,11 @@ type TelegramOtpRepository = {
   findIdentityByUserId(userId: string): Promise<{ telegramUserId: string; userId: string } | null>;
 };
 type TelegramOtpClient = {
-  sendMessage(chatId: number | string, text: string): Promise<unknown>;
+  sendMessage(
+    chatId: number | string,
+    text: string,
+    replyMarkup?: TelegramReplyMarkup,
+  ): Promise<unknown>;
 };
 
 export class TelegramOtpProvider implements OtpProvider {
@@ -79,7 +89,12 @@ export class TelegramOtpProvider implements OtpProvider {
     private readonly client: TelegramOtpClient = createTelegramClient(),
   ) {}
 
-  async sendOtp(mobile: string, code: string): Promise<void> {
+  async sendOtp(
+    mobile: string,
+    code: string,
+    ...context: [purpose?: OtpDeliveryPurpose]
+  ): Promise<void> {
+    const [purpose] = context;
     const user = await this.repository.findUserByMobile(mobile);
     if (!user) {
       throw new Error('telegram_otp_user_not_found');
@@ -89,6 +104,24 @@ export class TelegramOtpProvider implements OtpProvider {
       // No linked Telegram account — cannot deliver. Fail loudly so the
       // caller knows delivery did not happen (OTP state is rolled back).
       throw new Error('telegram_otp_identity_not_linked');
+    }
+
+    if (purpose === 'ACTIVATION') {
+      await this.client.sendMessage(
+        identity.telegramUserId,
+        `🔐 کد فعال‌سازی فالوآ\n\nکد یکبارمصرف شما:\n\n${code}\n\n⏱ اعتبار کد: ۵ دقیقه\n🔒 این کد را در اختیار دیگران قرار ندهید.`,
+        {
+          inline_keyboard: [
+            [
+              {
+                text: '📋 کپی کد',
+                copy_text: { text: code },
+              },
+            ],
+          ],
+        },
+      );
+      return;
     }
 
     await this.client.sendMessage(
