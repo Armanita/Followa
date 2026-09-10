@@ -21,10 +21,7 @@ export function createTelegramClient() {
       replyMarkup?: TelegramReplyMarkup,
     ): Promise<TelegramSendMessageResult> {
       if (!config.telegramBotToken) {
-        return {
-          ok: false,
-          description: 'telegram_bot_token_missing',
-        };
+        throw new Error('telegram_bot_token_missing');
       }
 
       const response = await fetch(
