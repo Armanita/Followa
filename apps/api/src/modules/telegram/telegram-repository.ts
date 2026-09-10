@@ -38,6 +38,13 @@ export function createTelegramRepository(db: TelegramDatabase) {
       });
     },
 
+    findIdentityByTelegramUserId(telegramUserId: string): Promise<TelegramIdentityRecord | null> {
+      return db.telegramIdentity.findUnique({
+        where: { telegramUserId },
+        select: { telegramUserId: true, userId: true },
+      });
+    },
+
     async createPendingConnection(input: Omit<TelegramPendingConnection, 'createdAt' | 'expiresAt'>) {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + PENDING_CONNECTION_TTL_MS);

@@ -38,6 +38,7 @@ const CONFIRM_CONNECTION_MARKUP = {
 
 export function createTelegramService(repository: {
   findUserByMobile(mobile: string): Promise<{ id: string; mobile: string } | null>;
+  findIdentityByTelegramUserId(telegramUserId: string): Promise<{ telegramUserId: string; userId: string } | null>;
   createPendingConnection(input: { telegramUserId: string; userId: string }): Promise<unknown>;
   confirmTelegramIdentity(input: {
     telegramUserId: string;
@@ -49,6 +50,23 @@ export function createTelegramService(repository: {
 }) {
   return {
     async handleStart(payload: TelegramStartPayload) {
+      const existingIdentity = await repository.findIdentityByTelegramUserId(
+        String(payload.telegramUserId),
+      );
+
+      if (existingIdentity) {
+        await telegramClient?.sendMessage(
+          payload.telegramUserId,
+          'حساب تلگرام شما قبلاً به Followa متصل شده است.',
+        );
+
+        return {
+          status: 'already_connected',
+          action: 'identity_already_connected',
+          telegramUserId: payload.telegramUserId,
+        };
+      }
+
       await telegramClient?.sendMessage(
         payload.telegramUserId,
         'برای اتصال حساب Followa، لطفاً شماره تماس خود را ارسال کنید.',
