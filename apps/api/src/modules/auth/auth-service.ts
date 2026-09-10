@@ -166,7 +166,7 @@ export const authService = {
     const code = String(randomInt(100000, 1000000));
     otpStore.set(key, { code, attempts: 0, expiresAt: Date.now() + OTP_TTL_MS });
     try {
-      await otpProvider.sendOtp(mobile, code);
+      await otpProvider.sendOtp(mobile, code, 'PASSWORD_RESET');
     } catch (err) {
       // Delivery failed — the user never received the code, so the stored
       // entry must not block re-requesting for the next 5 minutes.

@@ -124,6 +124,24 @@ export class TelegramOtpProvider implements OtpProvider {
       return;
     }
 
+    if (purpose === 'PASSWORD_RESET') {
+      await this.client.sendMessage(
+        identity.telegramUserId,
+        `🔑 بازیابی رمز عبور فالوآ\n\nکد تأیید شما:\n\n${code}\n\n⏱ اعتبار کد: ۵ دقیقه\n🔒 این کد را در اختیار دیگران قرار ندهید.`,
+        {
+          inline_keyboard: [
+            [
+              {
+                text: '📋 کپی کد',
+                copy_text: { text: code },
+              },
+            ],
+          ],
+        },
+      );
+      return;
+    }
+
     await this.client.sendMessage(
       identity.telegramUserId,
       `کد یکبارمصرف فالوآ: ${code}\nمدت اعتبار: ۵ دقیقه`,

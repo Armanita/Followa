@@ -58,6 +58,7 @@ export function createTelegramService(repository: {
         await telegramClient?.sendMessage(
           payload.telegramUserId,
           'حساب تلگرام شما قبلاً به Followa متصل شده است.',
+          { remove_keyboard: true },
         );
 
         return {
