@@ -179,45 +179,74 @@ export const assignmentService = {
     if (c.status !== 'WAITING_ACCEPTANCE') {
       throw conflict('این پرونده در وضعیت انتظار پذیرش نیست');
     }
-    if (!pending.fromUserId) {
+    const senderUserId = pending.fromUserId;
+    if (!senderUserId) {
       throw conflict('این ارجاع فرستنده ندارد و قابل رد شدن نیست');
     }
 
-    await prisma.$transaction([
-      prisma.caseAssignment.update({
+    const returnedToActiveSender = await prisma.$transaction(async (tx) => {
+      const activeSenderMembership = await tx.companyMembership.findFirst({
+        where: {
+          companyId: c.companyId,
+          userId: senderUserId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      const canReturnToSender = Boolean(activeSenderMembership);
+
+      await tx.caseAssignment.update({
         where: { id: pending.id },
         data: { status: 'REJECTED', rejectReason, respondedAt: new Date() },
-      }),
-      prisma.caseAssignment.create({
-        data: {
-          caseId,
-          fromUserId: actor.userId,
-          toUserId: pending.fromUserId,
-          reason: 'RETURN_AFTER_REJECT',
-          note: `رد شد: ${rejectReason}`,
-          status: 'ACCEPTED',
-          respondedAt: new Date(),
-        },
-      }),
-      prisma.case.update({
+      });
+
+      if (canReturnToSender) {
+        await tx.caseAssignment.create({
+          data: {
+            caseId,
+            fromUserId: actor.userId,
+            toUserId: senderUserId,
+            reason: 'RETURN_AFTER_REJECT',
+            note: `رد شد: ${rejectReason}`,
+            status: 'ACCEPTED',
+            respondedAt: new Date(),
+          },
+        });
+      }
+
+      await tx.case.update({
         where: { id: caseId },
-        data: {
-          status: 'IN_PROGRESS',
-          currentOwnerId: pending.fromUserId,
-        },
-      }),
-      prisma.caseActivity.create({
+        data: canReturnToSender
+          ? {
+              status: 'IN_PROGRESS',
+              currentOwnerId: senderUserId,
+            }
+          : {
+              status: 'OPEN',
+              currentOwnerId: null,
+            },
+      });
+
+      await tx.caseActivity.create({
         data: {
           caseId,
           type: 'REJECT',
           actorId: actor.userId,
-          payload: { rejectReason, returnedTo: pending.fromUserId },
+          payload: canReturnToSender
+            ? { rejectReason, returnedTo: senderUserId }
+            : {
+                rejectReason,
+                returnedTo: null,
+                fallback: 'OPEN_FOR_ACTIVE_MANAGERS',
+              },
         },
-      }),
-    ]);
+      });
+
+      return canReturnToSender;
+    });
 
     const body = `${c.title} — دلیل: ${rejectReason}`;
-    await notifyHistoricalSenderIfStillActive(c.companyId, actor, pending.fromUserId, {
+    await notifyHistoricalSenderIfStillActive(c.companyId, actor, senderUserId, {
       type: 'CASE_REJECTED',
       title: 'ارجاع پرونده رد شد',
       body,
@@ -235,7 +264,11 @@ export const assignmentService = {
         linkId: caseId,
       });
     }
-    return { message: 'پرونده رد شد و به ارجاع‌دهنده بازگشت' };
+    return {
+      message: returnedToActiveSender
+        ? 'پرونده رد شد و به ارجاع‌دهنده بازگشت'
+        : 'پرونده رد شد و برای پیگیری مدیران فعال شرکت باز شد',
+    };
   },
 
   async history(actor: Actor, caseId: string) {
