@@ -169,7 +169,8 @@ export const caseService = {
       if (!type || type.companyId !== actor.companyId)
         throw badRequest('نوع پرونده معتبر نیست');
     }
-    return prisma.case.update({
+    const hasChanges = Object.values(input).some((value) => value !== undefined);
+    const updated = await prisma.case.update({
       where: { id: caseId },
       data: {
         ...(input.title !== undefined ? { title: input.title } : {}),
@@ -179,6 +180,19 @@ export const caseService = {
         ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
       },
     });
+
+    if (actor.role === 'EMPLOYEE' && hasChanges) {
+      await notificationService.notifyActiveCompanyManagers({
+        companyId: actor.companyId,
+        excludeUserId: actor.userId,
+        type: 'CASE_UPDATED',
+        title: 'پرونده به‌روزرسانی شد',
+        body: updated.title,
+        linkType: 'CASE',
+        linkId: caseId,
+      });
+    }
+    return updated;
   },
 
   async addResult(
@@ -273,15 +287,39 @@ export const caseService = {
       return nextCase;
     });
 
-    if (complete && c.createdById !== actor.userId) {
-      await notificationService.notify({
-        userId: c.createdById,
-        type: 'CASE_COMPLETED',
-        title: 'پرونده تکمیل شد',
+    if (actor.role === 'EMPLOYEE') {
+      await notificationService.notifyActiveCompanyManagers({
+        companyId: actor.companyId,
+        excludeUserId: actor.userId,
+        type: complete ? 'CASE_COMPLETED' : 'CASE_UPDATED',
+        title: complete ? 'پرونده تکمیل شد' : 'نتیجه پرونده ثبت شد',
         body: c.title,
         linkType: 'CASE',
         linkId: caseId,
       });
+    }
+
+    if (complete && c.createdById !== actor.userId) {
+      const creatorMembership = await prisma.companyMembership.findFirst({
+        where: {
+          companyId: actor.companyId,
+          userId: c.createdById,
+          isActive: true,
+        },
+        select: { role: true },
+      });
+      const coveredByManagerBroadcast =
+        actor.role === 'EMPLOYEE' && creatorMembership?.role === 'COMPANY_MANAGER';
+      if (creatorMembership && !coveredByManagerBroadcast) {
+        await notificationService.notify({
+          userId: c.createdById,
+          type: 'CASE_COMPLETED',
+          title: 'پرونده تکمیل شد',
+          body: c.title,
+          linkType: 'CASE',
+          linkId: caseId,
+        });
+      }
     }
     return updated;
   },

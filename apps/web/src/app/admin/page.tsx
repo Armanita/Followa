@@ -40,6 +40,8 @@ type CompanyManager = {
   mobile: string;
   jobTitle: string | null;
   isActive: boolean;
+  telegramConnected: boolean;
+  hasPassword: boolean;
 };
 
 type CompanyRow = {
@@ -50,6 +52,11 @@ type CompanyRow = {
   managers: CompanyManager[];
   memberCount: number;
   caseCount: number;
+};
+
+type ReplaceTarget = {
+  company: CompanyRow;
+  manager: CompanyManager;
 };
 
 export default function AdminPage() {
@@ -74,6 +81,7 @@ function AdminDashboard() {
   const [error, setError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<CompanyRow | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<ReplaceTarget | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const handleAdminAuthFailure = useCallback((err: unknown) => {
@@ -229,13 +237,25 @@ function AdminDashboard() {
                   {company.managers.length > 0 ? (
                     <div className="space-y-2">
                       {company.managers.map((manager) => (
-                        <div key={manager.membershipId} className="flex items-center gap-3 rounded-xl border border-workspace-border bg-workspace-elevated/35 p-3">
-                          <Avatar name={manager.fullName} size="sm" />
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-bold text-workspace-ink">{manager.fullName}</p>
-                            <p className="tnum mt-0.5 text-[10px] text-workspace-soft" dir="ltr">{manager.mobile}</p>
-                            {manager.jobTitle && <p className="mt-0.5 text-[9px] text-workspace-soft">{manager.jobTitle}</p>}
+                        <div key={manager.membershipId} className="rounded-xl border border-workspace-border bg-workspace-elevated/35 p-3">
+                          <div className="flex items-start gap-3">
+                            <Avatar name={manager.fullName} size="sm" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-bold text-workspace-ink">{manager.fullName}</p>
+                              <p className="tnum mt-0.5 text-[10px] text-workspace-soft" dir="ltr">{manager.mobile}</p>
+                              {manager.jobTitle && <p className="mt-0.5 text-[9px] text-workspace-soft">{manager.jobTitle}</p>}
+                            </div>
+                            {manager.isActive && (
+                              <button
+                                type="button"
+                                onClick={() => setReplaceTarget({ company, manager })}
+                                className="shrink-0 rounded-lg border border-amber-400/20 px-2.5 py-1.5 text-[9px] font-semibold text-amber-300 transition hover:bg-amber-400/10"
+                              >
+                                تعویض مدیر
+                              </button>
+                            )}
                           </div>
+                          <ManagerBadges manager={manager} />
                         </div>
                       ))}
                     </div>
@@ -249,7 +269,7 @@ function AdminDashboard() {
             </div>
 
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[940px] text-right text-xs">
+              <table className="w-full min-w-[1040px] text-right text-xs">
                 <thead>
                   <tr className="border-b border-workspace-border bg-workspace-elevated/45 text-[10px] text-workspace-soft">
                     <th className="px-5 py-3 font-semibold">شرکت</th>
@@ -273,11 +293,23 @@ function AdminDashboard() {
                       </td>
                       <td className="px-4 py-3.5">
                         {company.managers.length > 0 ? (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {company.managers.map((manager) => (
                               <div key={manager.membershipId}>
-                                <p className="font-semibold text-workspace-muted">{manager.fullName}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-workspace-muted">{manager.fullName}</p>
+                                  {manager.isActive && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setReplaceTarget({ company, manager })}
+                                      className="rounded-lg border border-amber-400/20 px-2 py-1 text-[9px] font-semibold text-amber-300 transition hover:bg-amber-400/10"
+                                    >
+                                      تعویض مدیر
+                                    </button>
+                                  )}
+                                </div>
                                 {manager.jobTitle && <p className="mt-0.5 text-[9px] text-workspace-soft">{manager.jobTitle}</p>}
+                                <ManagerBadges manager={manager} />
                               </div>
                             ))}
                           </div>
@@ -287,7 +319,7 @@ function AdminDashboard() {
                       </td>
                       <td className="px-4 py-3.5">
                         {company.managers.length > 0 ? (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {company.managers.map((manager) => (
                               <p key={manager.membershipId} className="tnum text-workspace-muted" dir="ltr">{manager.mobile}</p>
                             ))}
@@ -344,6 +376,12 @@ function AdminDashboard() {
         onSaved={load}
         onAuthFailure={handleAdminAuthFailure}
       />
+      <ReplaceManagerModal
+        target={replaceTarget}
+        onClose={() => setReplaceTarget(null)}
+        onReplaced={load}
+        onAuthFailure={handleAdminAuthFailure}
+      />
     </div>
   );
 }
@@ -357,6 +395,22 @@ function CompanyStatusBadge({ active }: { active: boolean }) {
     }`}>
       {active ? 'فعال' : 'غیرفعال'}
     </span>
+  );
+}
+
+function ManagerBadges({ manager }: { manager: CompanyManager }) {
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${manager.isActive ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-workspace-borderStrong bg-workspace-elevated text-workspace-soft'}`}>
+        {manager.isActive ? 'مدیر فعال' : 'مدیر غیرفعال'}
+      </span>
+      <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${manager.telegramConnected ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-workspace-borderStrong bg-workspace-elevated text-workspace-soft'}`}>
+        {manager.telegramConnected ? 'تلگرام متصل' : 'تلگرام متصل نیست'}
+      </span>
+      <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${manager.hasPassword ? 'border-brand-400/20 bg-brand-400/10 text-brand-200' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>
+        {manager.hasPassword ? 'حساب فعال' : 'نیاز به فعال‌سازی'}
+      </span>
+    </div>
   );
 }
 
@@ -616,7 +670,7 @@ function EditCompanyModal({
                     <option value="">انتخاب مدیر</option>
                     {target.managers.map((manager) => (
                       <option key={manager.membershipId} value={manager.userId}>
-                        {manager.fullName} — {manager.mobile}
+                        {manager.fullName} — {manager.mobile} — {manager.isActive ? 'فعال' : 'غیرفعال'}
                       </option>
                     ))}
                   </select>
@@ -629,26 +683,31 @@ function EditCompanyModal({
                 مدیری برای این شرکت ثبت نشده است؛ در این مرحله فقط نام شرکت قابل ویرایش است.
               </div>
             ) : selectedManager ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="نام مدیر" required>
-                  <input className={inputClass} value={firstName} onChange={(event) => setFirstName(event.target.value)} />
-                </Field>
-                <Field label="نام خانوادگی مدیر" required>
-                  <input className={inputClass} value={lastName} onChange={(event) => setLastName(event.target.value)} />
-                </Field>
-                <Field label="شماره موبایل مدیر" required>
-                  <input
-                    className={`${inputClass} tnum text-left`}
-                    dir="ltr"
-                    inputMode="numeric"
-                    placeholder="09123456789"
-                    value={mobile}
-                    onChange={(event) => setMobile(event.target.value)}
-                  />
-                </Field>
-                <Field label="سمت مدیر">
-                  <input className={inputClass} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="مدیر شرکت" />
-                </Field>
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="نام مدیر" required>
+                    <input className={inputClass} value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+                  </Field>
+                  <Field label="نام خانوادگی مدیر" required>
+                    <input className={inputClass} value={lastName} onChange={(event) => setLastName(event.target.value)} />
+                  </Field>
+                  <Field label="شماره موبایل مدیر" required>
+                    <input
+                      className={`${inputClass} tnum text-left`}
+                      dir="ltr"
+                      inputMode="numeric"
+                      placeholder="09123456789"
+                      value={mobile}
+                      onChange={(event) => setMobile(event.target.value)}
+                    />
+                  </Field>
+                  <Field label="سمت مدیر">
+                    <input className={inputClass} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="مدیر شرکت" />
+                  </Field>
+                </div>
+                <p className="rounded-xl border border-workspace-border bg-workspace-elevated/45 px-3 py-2.5 text-[10px] leading-5 text-workspace-soft">
+                  این بخش برای اصلاح اطلاعات همان شخص است. برای تغییر شخص مدیر، از «تعویض مدیر» استفاده کنید.
+                </p>
               </div>
             ) : (
               <div className="rounded-xl border border-brand-400/20 bg-brand-400/5 p-3 text-xs leading-6 text-workspace-muted">
@@ -679,6 +738,170 @@ function EditCompanyModal({
             </button>
           </div>
         </form>
+      )}
+    </Modal>
+  );
+}
+
+function ReplaceManagerModal({
+  target,
+  onClose,
+  onReplaced,
+  onAuthFailure,
+}: {
+  target: ReplaceTarget | null;
+  onClose: () => void;
+  onReplaced: () => Promise<void>;
+  onAuthFailure: (err: unknown) => boolean;
+}) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [passwordWasOmitted, setPasswordWasOmitted] = useState(false);
+
+  useEffect(() => {
+    setFirstName('');
+    setLastName('');
+    setMobile('');
+    setJobTitle('');
+    setPassword('');
+    setBusy(false);
+    setSuccess(false);
+    setPasswordWasOmitted(false);
+  }, [target]);
+
+  const close = () => {
+    if (busy) return;
+    if (success) void onReplaced();
+    onClose();
+  };
+
+  return (
+    <Modal open={Boolean(target)} onClose={close} title="تعویض مدیر" wide>
+      {target && (
+        success ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+              <p className="text-sm font-black text-emerald-200">مدیر جدید جایگزین شد.</p>
+              <p className="mt-2 text-xs leading-6 text-workspace-muted">
+                مدیر قبلی حذف نشده و عضویت او برای این شرکت غیرفعال شده است. سوابق قبلی حفظ شده‌اند.
+              </p>
+            </div>
+            <div className="rounded-xl border border-brand-400/20 bg-brand-400/5 p-4">
+              <p className="text-xs font-black text-white">اتصال تلگرام مدیر جدید</p>
+              <p className="mt-2 text-xs leading-6 text-workspace-muted">
+                مدیر جدید هنوز به تلگرام متصل نیست. برای اتصال، مدیر جدید ربات فالوآ را باز کند، /start را بزند و شماره موبایل ثبت‌شده خود را از طریق دکمه ارسال شماره تماس تأیید کند.
+              </p>
+              {passwordWasOmitted && (
+                <p className="mt-2 text-xs leading-6 text-amber-200">
+                  پس از اتصال تلگرام، مدیر می‌تواند از «فعال‌سازی با کد یکبارمصرف» برای تعیین رمز عبور استفاده کند.
+                </p>
+              )}
+            </div>
+            <button type="button" onClick={close} className={btnPrimary}>بستن</button>
+          </div>
+        ) : (
+          <form
+            className="space-y-5"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const ok = await confirm({
+                title: 'تعویض مدیر شرکت؟',
+                message: 'دسترسی مدیر فعلی به این شرکت غیرفعال می‌شود و مدیر جدید جایگزین او خواهد شد. سوابق قبلی حذف نمی‌شوند.',
+                confirmLabel: 'تعویض مدیر',
+                danger: true,
+              });
+              if (!ok) return;
+
+              setBusy(true);
+              try {
+                const res = await api.post<{ message: string }>(
+                  `/admin/companies/${target.company.id}/managers/${target.manager.membershipId}/replace`,
+                  {
+                    newManager: {
+                      firstName: firstName.trim(),
+                      lastName: lastName.trim(),
+                      mobile,
+                      jobTitle: jobTitle.trim() || undefined,
+                      password: password || undefined,
+                    },
+                  },
+                );
+                toast.success(res.message);
+                setPasswordWasOmitted(password.length === 0);
+                setSuccess(true);
+              } catch (err) {
+                if (!onAuthFailure(err)) {
+                  toast.error(err instanceof Error ? err.message : 'خطا در تعویض مدیر');
+                }
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <div className="rounded-xl border border-workspace-border bg-workspace-elevated/45 p-4">
+              <p className="text-[10px] text-workspace-soft">مدیر فعلی شرکت {target.company.name}</p>
+              <p className="mt-1 text-sm font-black text-white">{target.manager.fullName}</p>
+              <p className="tnum mt-1 text-[10px] text-workspace-muted" dir="ltr">{target.manager.mobile}</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="نام مدیر جدید" required>
+                <input className={inputClass} value={firstName} onChange={(event) => setFirstName(event.target.value)} autoFocus />
+              </Field>
+              <Field label="نام خانوادگی" required>
+                <input className={inputClass} value={lastName} onChange={(event) => setLastName(event.target.value)} />
+              </Field>
+              <Field label="شماره موبایل" required>
+                <input
+                  className={`${inputClass} tnum text-left`}
+                  dir="ltr"
+                  inputMode="numeric"
+                  placeholder="09123456789"
+                  value={mobile}
+                  onChange={(event) => setMobile(event.target.value)}
+                />
+              </Field>
+              <Field label="سمت">
+                <input className={inputClass} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="مدیر شرکت" />
+              </Field>
+            </div>
+
+            <Field label="رمز عبور اولیه (اختیاری)">
+              <input
+                type="password"
+                className={inputClass}
+                dir="ltr"
+                minLength={8}
+                maxLength={72}
+                autoComplete="new-password"
+                placeholder="خالی = فعال‌سازی با کد یکبارمصرف"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </Field>
+            <p className="text-[10px] leading-5 text-workspace-soft">
+              در صورت خالی بودن، مدیر پس از اتصال تلگرام می‌تواند با کد یکبارمصرف حساب خود را فعال کند.
+            </p>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-workspace-border pt-5 sm:flex-row">
+              <button type="button" onClick={close} disabled={busy} className={`${btnSecondary} flex-1`}>انصراف</button>
+              <button
+                type="submit"
+                disabled={busy || !firstName.trim() || !lastName.trim() || mobile.trim().length < 10 || (password.length > 0 && password.length < 8)}
+                className={`${btnPrimary} flex-1`}
+              >
+                {busy ? 'در حال تعویض…' : 'تعویض مدیر'}
+              </button>
+            </div>
+          </form>
+        )
       )}
     </Modal>
   );

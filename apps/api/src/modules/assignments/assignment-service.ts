@@ -3,6 +3,44 @@ import { badRequest, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { assertCanViewCase, type Actor } from '../cases/case-service.js';
 import { notificationService } from '../notifications/notification-service.js';
 
+async function notifyHistoricalSenderIfStillActive(
+  companyId: string,
+  actor: Actor,
+  senderUserId: string | null,
+  input: {
+    type: 'CASE_ACCEPTED' | 'CASE_REJECTED';
+    title: string;
+    body: string;
+    caseId: string;
+  },
+): Promise<void> {
+  if (!senderUserId || senderUserId === actor.userId) return;
+
+  const membership = await prisma.companyMembership.findFirst({
+    where: {
+      companyId,
+      userId: senderUserId,
+      isActive: true,
+    },
+    select: { role: true },
+  });
+  if (!membership) return;
+
+  // When an employee responds to a current manager, the manager broadcast below
+  // already covers that recipient. Preserve direct feedback for active employees
+  // (and for manager-originated flows) without duplicating manager notifications.
+  if (actor.role === 'EMPLOYEE' && membership.role === 'COMPANY_MANAGER') return;
+
+  await notificationService.notify({
+    userId: senderUserId,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    linkType: 'CASE',
+    linkId: input.caseId,
+  });
+}
+
 export const assignmentService = {
   /**
    * Transfer the case to another active employee in the same company. Only the
@@ -68,6 +106,18 @@ export const assignmentService = {
       linkType: 'CASE',
       linkId: caseId,
     });
+
+    if (actor.role === 'EMPLOYEE') {
+      await notificationService.notifyActiveCompanyManagers({
+        companyId: actor.companyId,
+        excludeUserId: actor.userId,
+        type: 'CASE_UPDATED',
+        title: 'پرونده منتقل شد',
+        body: c.title,
+        linkType: 'CASE',
+        linkId: caseId,
+      });
+    }
     return result;
   },
 
@@ -97,9 +147,17 @@ export const assignmentService = {
       }),
     ]);
 
-    if (pending.fromUserId && pending.fromUserId !== actor.userId) {
-      await notificationService.notify({
-        userId: pending.fromUserId,
+    await notifyHistoricalSenderIfStillActive(c.companyId, actor, pending.fromUserId, {
+      type: 'CASE_ACCEPTED',
+      title: 'ارجاع پرونده پذیرفته شد',
+      body: c.title,
+      caseId,
+    });
+
+    if (actor.role === 'EMPLOYEE') {
+      await notificationService.notifyActiveCompanyManagers({
+        companyId: c.companyId,
+        excludeUserId: actor.userId,
         type: 'CASE_ACCEPTED',
         title: 'ارجاع پرونده پذیرفته شد',
         body: c.title,
@@ -158,14 +216,25 @@ export const assignmentService = {
       }),
     ]);
 
-    await notificationService.notify({
-      userId: pending.fromUserId,
+    const body = `${c.title} — دلیل: ${rejectReason}`;
+    await notifyHistoricalSenderIfStillActive(c.companyId, actor, pending.fromUserId, {
       type: 'CASE_REJECTED',
       title: 'ارجاع پرونده رد شد',
-      body: `${c.title} — دلیل: ${rejectReason}`,
-      linkType: 'CASE',
-      linkId: caseId,
+      body,
+      caseId,
     });
+
+    if (actor.role === 'EMPLOYEE') {
+      await notificationService.notifyActiveCompanyManagers({
+        companyId: c.companyId,
+        excludeUserId: actor.userId,
+        type: 'CASE_REJECTED',
+        title: 'ارجاع پرونده رد شد',
+        body,
+        linkType: 'CASE',
+        linkId: caseId,
+      });
+    }
     return { message: 'پرونده رد شد و به ارجاع‌دهنده بازگشت' };
   },
 

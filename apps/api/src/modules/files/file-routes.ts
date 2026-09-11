@@ -6,6 +6,7 @@ import { prisma } from '../../lib/prisma.js';
 import { config } from '../../config.js';
 import { badRequest, forbidden, notFound } from '../../lib/errors.js';
 import { assertCanViewCase, logActivity } from '../cases/case-service.js';
+import { notificationService } from '../notifications/notification-service.js';
 
 const ALLOWED_MIME = new Set([
   'application/pdf',
@@ -122,6 +123,19 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
       filename: record.filename,
       fileId: record.id,
     });
+
+    if (request.actor.role === 'EMPLOYEE') {
+      await notificationService.notifyActiveCompanyManagers({
+        companyId: request.actor.companyId!,
+        excludeUserId: userId,
+        type: 'CASE_UPDATED',
+        title: 'فایل جدید به پرونده افزوده شد',
+        body: c.title,
+        linkType: 'CASE',
+        linkId: caseId,
+      });
+    }
+
     reply.status(201);
     return { message: 'فایل ذخیره شد', file: record };
   });

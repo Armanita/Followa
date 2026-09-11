@@ -28,6 +28,16 @@ const updateCompanySchema = z.object({
   }).optional(),
 });
 
+const replaceManagerSchema = z.object({
+  newManager: z.object({
+    firstName: z.string().min(1).max(50),
+    lastName: z.string().min(1).max(50),
+    mobile: z.string().min(10).max(20),
+    jobTitle: z.string().max(80).optional(),
+    password: z.string().min(8).max(72).optional(),
+  }),
+});
+
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // All routes here are system-admin only (checked per route because the global
   // hook only enforces token presence).
@@ -45,7 +55,10 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const companies = await prisma.company.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        memberships: { where: { role: 'COMPANY_MANAGER' }, include: { user: true } },
+        memberships: {
+          where: { role: 'COMPANY_MANAGER' },
+          include: { user: { include: { telegramIdentity: true } } },
+        },
         _count: { select: { cases: true, memberships: true } },
       },
     });
@@ -65,6 +78,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           mobile: m.user.mobile,
           jobTitle: m.jobTitle,
           isActive: m.isActive,
+          telegramConnected: Boolean(m.user.telegramIdentity),
+          hasPassword: Boolean(m.user.passwordHash),
         })),
         memberCount: c._count.memberships,
         caseCount: c._count.cases,
@@ -119,6 +134,76 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return { message: 'شرکت و مدیر آن ساخته شد', companyId: company.id };
+  });
+
+  app.post('/companies/:companyId/managers/:membershipId/replace', async (request) => {
+    const { companyId, membershipId } = request.params as {
+      companyId: string;
+      membershipId: string;
+    };
+    const body = parseWith(replaceManagerSchema, request.body);
+    const mobile = normalizeMobile(body.newManager.mobile);
+    const passwordHash = body.newManager.password
+      ? await bcrypt.hash(body.newManager.password, 10)
+      : null;
+
+    await prisma.$transaction(async (tx) => {
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { id: true },
+      });
+      if (!company) throw notFound('شرکت یافت نشد');
+
+      const oldMembership = await tx.companyMembership.findFirst({
+        where: {
+          id: membershipId,
+          companyId,
+          role: 'COMPANY_MANAGER',
+        },
+        select: { id: true, userId: true, isActive: true },
+      });
+      if (!oldMembership) throw notFound('عضویت مدیر شرکت یافت نشد');
+      if (!oldMembership.isActive) {
+        throw conflict('این مدیر قبلاً غیرفعال شده است');
+      }
+
+      const existingUser = await tx.user.findUnique({
+        where: { mobile },
+        select: { id: true },
+      });
+      if (existingUser) {
+        if (existingUser.id === oldMembership.userId) {
+          throw conflict('برای اصلاح اطلاعات همین مدیر از «ویرایش» استفاده کنید');
+        }
+        throw conflict('کاربری با این شماره موبایل از قبل وجود دارد');
+      }
+
+      const newUser = await tx.user.create({
+        data: {
+          firstName: body.newManager.firstName,
+          lastName: body.newManager.lastName,
+          mobile,
+          passwordHash,
+        },
+      });
+
+      await tx.companyMembership.create({
+        data: {
+          userId: newUser.id,
+          companyId,
+          role: 'COMPANY_MANAGER',
+          isActive: true,
+          jobTitle: body.newManager.jobTitle ?? 'مدیر شرکت',
+        },
+      });
+
+      await tx.companyMembership.update({
+        where: { id: oldMembership.id },
+        data: { isActive: false },
+      });
+    });
+
+    return { message: 'مدیر شرکت با موفقیت جایگزین شد' };
   });
 
   app.patch('/companies/:id', async (request) => {

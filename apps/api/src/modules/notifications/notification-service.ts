@@ -18,6 +18,11 @@ export interface NotificationInput {
   linkId?: string;
 }
 
+type ManagerNotificationInput = Omit<NotificationInput, 'userId'> & {
+  companyId: string;
+  excludeUserId?: string;
+};
+
 export interface PushAdapter {
   readonly name: string;
   send(userId: string, title: string, body: string): Promise<void>;
@@ -88,5 +93,30 @@ export const notificationService = {
         console.error('[notifications] external delivery failed', err);
       });
     }
+  },
+
+  async notifyActiveCompanyManagers(input: ManagerNotificationInput): Promise<void> {
+    const memberships = await prisma.companyMembership.findMany({
+      where: {
+        companyId: input.companyId,
+        role: 'COMPANY_MANAGER',
+        isActive: true,
+      },
+      select: { userId: true },
+    });
+
+    const userIds = [...new Set(memberships.map((membership) => membership.userId))]
+      .filter((userId) => userId !== input.excludeUserId);
+
+    await Promise.all(
+      userIds.map((userId) => notificationService.notify({
+        userId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        linkType: input.linkType,
+        linkId: input.linkId,
+      })),
+    );
   },
 };
