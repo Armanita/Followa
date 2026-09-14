@@ -101,7 +101,7 @@ export const authService = {
       throw badRequest('این شماره در سیستم ثبت نشده است. با مدیر شرکت تماس بگیرید.');
     }
     const membership = await prisma.companyMembership.findFirst({
-      where: { userId: user.id, isActive: true },
+      where: { userId: user.id, isActive: true, company: { isActive: true } },
     });
     if (!membership) {
       throw forbidden('عضویت فعالی برای این شماره وجود ندارد.');
@@ -124,6 +124,11 @@ export const authService = {
     if (!user) throw notFound('کاربر یافت نشد');
     if (user.passwordHash) throw conflict('رمز عبور قبلاً تنظیم شده است');
 
+    const membership = await prisma.companyMembership.findFirst({
+      where: { userId: user.id, isActive: true, company: { isActive: true } },
+    });
+    if (!membership) throw forbidden('عضویت فعال در شرکت فعال یافت نشد.');
+
     const resetToken = await issueToken(user, 'ACTIVATION');
     return { resetToken, purpose: 'ACTIVATION' };
   },
@@ -137,6 +142,11 @@ export const authService = {
     const user = await prisma.user.findUnique({ where: { mobile } });
     if (!user) throw notFound('کاربر یافت نشد');
     if (user.passwordHash) throw conflict('رمز عبور قبلاً تنظیم شده است');
+
+    const membership = await prisma.companyMembership.findFirst({
+      where: { userId: user.id, isActive: true, company: { isActive: true } },
+    });
+    if (!membership) throw forbidden('عضویت فعال در شرکت فعال یافت نشد.');
     const tokenUserId = consumeToken(resetToken, 'ACTIVATION');
     if (tokenUserId !== user.id) throw unauthorized('توکن تأیید نامعتبر است');
     const passwordHash = await bcrypt.hash(password, 10);
@@ -159,7 +169,7 @@ export const authService = {
     const user = await prisma.user.findUnique({ where: { mobile } });
     if (!user || !user.passwordHash) return;
     const membership = await prisma.companyMembership.findFirst({
-      where: { userId: user.id, isActive: true },
+      where: { userId: user.id, isActive: true, company: { isActive: true } },
     });
     if (!membership) return;
 
@@ -187,6 +197,12 @@ export const authService = {
       // is impossible unless state changed — treat as invalid code.
       throw badRequest('کد تأیید نادرست است.');
     }
+
+    const membership = await prisma.companyMembership.findFirst({
+      where: { userId: user.id, isActive: true, company: { isActive: true } },
+    });
+    if (!membership) throw badRequest('کد تأیید نادرست است.');
+
     const resetToken = await issueToken(user, 'PASSWORD_RESET');
     return { resetToken, purpose: 'PASSWORD_RESET' };
   },
@@ -199,6 +215,11 @@ export const authService = {
     const mobile = normalizeMobile(rawMobile);
     const user = await prisma.user.findUnique({ where: { mobile } });
     if (!user) throw unauthorized('توکن تأیید نامعتبر است');
+
+    const membership = await prisma.companyMembership.findFirst({
+      where: { userId: user.id, isActive: true, company: { isActive: true } },
+    });
+    if (!membership) throw unauthorized('توکن تأیید نامعتبر است');
     const tokenUserId = consumeToken(resetToken, 'PASSWORD_RESET');
     if (tokenUserId !== user.id) throw unauthorized('توکن تأیید نامعتبر است');
     const passwordHash = await bcrypt.hash(password, 10);
@@ -240,7 +261,7 @@ export const authService = {
     if (!ok) throw unauthorized('شماره موبایل یا رمز عبور نادرست است');
 
     const membership = await prisma.companyMembership.findFirst({
-      where: { userId: user.id, isActive: true },
+      where: { userId: user.id, isActive: true, company: { isActive: true } },
       orderBy: { createdAt: 'asc' },
     });
     if (!membership) throw forbidden('عضویت فعال شما در شرکتی وجود ندارد');

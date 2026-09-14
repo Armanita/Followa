@@ -67,14 +67,17 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
         companyId: payload.companyId,
         role: payload.role,
       };
-      // Enforce live membership state so suspension takes effect immediately.
+      // Enforce live membership and company state so suspension takes effect immediately.
       if (payload.kind === 'COMPANY_USER' && payload.membershipId) {
         const membership = await prisma.companyMembership.findUnique({
           where: { id: payload.membershipId },
-          select: { isActive: true, role: true, companyId: true },
+          select: { isActive: true, role: true, companyId: true, company: { select: { isActive: true } } },
         });
         if (!membership || !membership.isActive) {
           throw forbidden('عضویت شما غیرفعال است. با مدیر شرکت تماس بگیرید.');
+        }
+        if (!membership.company.isActive) {
+          throw forbidden('شرکت شما غیرفعال است. با مدیر سیستم تماس بگیرید.');
         }
         request.actor.role = membership.role;
         request.actor.companyId = membership.companyId;
@@ -115,14 +118,18 @@ export function requireManager(req: Req, _reply: Reply): void {
   }
 }
 
-/** Reloads membership state so suspended users / role changes take effect immediately. */
+/** Reloads membership and company state so suspensions / role changes take effect immediately. */
 export async function refreshMembership(req: Req): Promise<void> {
   if (req.actor?.kind !== 'COMPANY_USER' || !req.actor.membershipId) return;
   const membership = await prisma.companyMembership.findUnique({
     where: { id: req.actor.membershipId },
+    include: { company: { select: { isActive: true } } },
   });
   if (!membership || !membership.isActive) {
     throw forbidden('عضویت شما غیرفعال است. با مدیر شرکت تماس بگیرید.');
+  }
+  if (!membership.company.isActive) {
+    throw forbidden('شرکت شما غیرفعال است. با مدیر سیستم تماس بگیرید.');
   }
   req.actor.role = membership.role;
 }
