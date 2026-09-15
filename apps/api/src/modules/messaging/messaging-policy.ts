@@ -27,6 +27,15 @@ export function resolveNotificationPolicy(input: {
   } as const;
 }
 
+export function resolveOtpPolicy(input: {
+  systemEnabled: boolean;
+  systemOtpEnabled: boolean;
+}) {
+  return {
+    enabled: input.systemEnabled && input.systemOtpEnabled,
+  } as const;
+}
+
 export function isSettingsChannel(channel: MessagingChannel): channel is MessagingSettingsChannel {
   return MESSAGING_SETTINGS_CHANNELS.includes(channel as MessagingSettingsChannel);
 }

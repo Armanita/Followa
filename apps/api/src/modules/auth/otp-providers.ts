@@ -2,6 +2,8 @@ import { config } from '../../config.js';
 import { prisma } from '../../lib/prisma.js';
 import type { TelegramReplyMarkup } from '../telegram/telegram-client.js';
 import type { MessagingProvider } from '../messaging/messaging-types.js';
+import { createSelectedChannelOtpProvider } from '../messaging/otp-dispatcher.js';
+import { getBaleProvider } from '../messaging/providers/bale-provider.js';
 import {
   getTelegramProvider,
   TelegramProvider,
@@ -166,7 +168,7 @@ export class TelegramOtpProvider implements OtpProvider {
   }
 }
 
-export function createOtpProvider(): OtpProvider {
+function createLegacyOtpProvider(): OtpProvider {
   switch (config.otpProvider) {
     case 'sms':
       return new SmsOtpProvider(process.env.SMS_API_KEY, process.env.SMS_SENDER);
@@ -179,6 +181,17 @@ export function createOtpProvider(): OtpProvider {
     default:
       return new MockOtpProvider();
   }
+}
+
+export function createOtpProvider(): OtpProvider {
+  const legacyProvider = createLegacyOtpProvider();
+  if (!config.multiChannelOtpEnabled) {
+    return legacyProvider;
+  }
+  return createSelectedChannelOtpProvider(prisma, legacyProvider, {
+    telegram: getTelegramProvider(),
+    bale: getBaleProvider(),
+  });
 }
 
 /** Exposed for tests: instantiates the Telegram provider with fakes, no network. */

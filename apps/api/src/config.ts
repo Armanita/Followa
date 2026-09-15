@@ -35,6 +35,8 @@ export const config = {
   messagingIdentityBackfillEnabled: enabled(
     'MESSAGING_IDENTITY_BACKFILL_ENABLED',
   ),
+  // P9 rollout is opt-in. When off, OTP_PROVIDER behavior is unchanged.
+  multiChannelOtpEnabled: enabled('MULTI_CHANNEL_OTP_ENABLED'),
   // P8 rollout is opt-in. The legacy immediate sender remains active when off.
   multiChannelNotificationsEnabled: enabled(
     'MULTI_CHANNEL_NOTIFICATIONS_ENABLED',
