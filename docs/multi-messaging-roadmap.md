@@ -8,12 +8,12 @@
 - تاریخ آخرین به‌روزرسانی: 2026-09-15
 - Repository: [Armanita/Followa](https://github.com/Armanita/Followa)
 - شاخهٔ مبنا: `main`
-- آخرین Commit کد بررسی‌شده: `1976c05603b4ba6a335d1ab14800adc7b9643d83`
-- آخرین مرحلهٔ اجراشده در این مسیر: **P7 — ذخیره مستقل وضعیت تحویل**؛ Schema، Migration و Repository در Git تکمیل شده‌اند، اما Migration، تست DB/Vitest و پذیرش دستی اجرا نشده‌اند.
+- آخرین Commit کد بررسی‌شده: `ef1b719d3d6979507e904e9b5a13ad0e72855271`
+- آخرین مرحلهٔ اجراشده در این مسیر: **P8 — Notification چندکاناله و Worker**؛ کد opt-in در Git تکمیل شده، اما Flagها خاموش، Migrationهای پیش‌نیاز و تست DB/Live اجرا نشده‌اند.
 - مرحلهٔ در حال اجرای کد: هیچ‌کدام.
-- مرحلهٔ بعدی پیشنهادی: اجرای Migrationهای P3/P6/P7 و تست P4 تا P7 روی کپی ایزوله؛ P8 فقط پس از تأیید مستقل شروع شود.
-- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P7؛ مجوز Migration، Backfill یا فعال‌سازی Dispatcher/Worker داده نشده است.
-- P8 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
+- مرحلهٔ بعدی پیشنهادی: اجرای Migrationهای P3/P6/P7 و تست P4 تا P8 روی کپی ایزوله، سپس Rollout آزمایشی کنترل‌شده؛ P9 فقط پس از تأیید مستقل شروع شود.
+- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P8؛ مجوز Migration، Backfill، فعال‌سازی Flagها یا ارسال واقعی داده نشده است.
+- P9 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
 - وضعیت استقرار، تنظیمات واقعی ربات و تست زنده: تأیید نشده؛ وضعیت Repository معادل وضعیت سرور نیست.
 - Provider و اتصال امن Bale به‌صورت opt-in افزوده شده، اما Provider اعلان/OTP و ارسال چندکاناله فعال نشده است؛ خواندن عملیاتی Telegram همچنان Legacy است.
 
@@ -137,11 +137,11 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 | P5 | اتصال امن Bale و پیام آزمایشی | منتظر Migration، تست ربات/DB و تأیید مالک — اجرای کد تکمیل | 2026-09-15؛ بدون مجوز Deploy/Webhook | [8dc7a81](https://github.com/Armanita/Followa/commit/8dc7a814c78b357afbdb5abb7afd65a2680b1e78) | اجرا نشده | خیر؛ استفاده از P3 |
 | P6 | تنظیمات سیستم، شرکت و User | منتظر Migration، تست DB/Build و تأیید مالک — Repository تکمیل | 2026-09-15؛ بدون مجوز Production | [0ce519a](https://github.com/Armanita/Followa/commit/0ce519a8117aeeb35d852c19f5f2bf5471d8d3f7) | اجرا نشده | افزایشی؛ اجرا نشده |
 | P7 | ذخیرهٔ مستقل وضعیت تحویل | منتظر Migration، تست DB/Vitest و تأیید مالک — Repository تکمیل | 2026-09-15؛ بدون مجوز Production | [1976c05](https://github.com/Armanita/Followa/commit/1976c05603b4ba6a335d1ab14800adc7b9643d83) | اجرا نشده | افزایشی؛ اجرا نشده |
-| P8 | Notification چندکاناله و Worker | باقی‌مانده | لازم | — | — | خیر؛ استفاده از P7 |
+| P8 | Notification چندکاناله و Worker | منتظر Migration، تست DB/Live و تأیید مالک — اجرای کد opt-in تکمیل | 2026-09-15؛ Flagها خاموش | [ef1b719](https://github.com/Armanita/Followa/commit/ef1b719d3d6979507e904e9b5a13ad0e72855271) | اجرا نشده | خیر؛ استفاده از P7 |
 | P9 | انتخاب کانال OTP | باقی‌مانده | لازم | — | — | خیر |
 | P10 | خواندن Telegram از مدل عمومی | باقی‌مانده | لازم | — | — | بدون Migration تخریبی |
 
-هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P7 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migrationهای P3/P6/P7 و Backfill P4 اجرا نشده‌اند؛ مسیر ارسال جاری هیچ Delivery جدیدی ایجاد یا مصرف نمی‌کند. P8 شروع نشده است.
+هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P8 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migrationهای P3/P6/P7 و Backfill P4 اجرا نشده‌اند؛ Flagهای P8 پیش‌فرض خاموش‌اند و مسیر ارسال جاری هنوز Legacy است. P9 شروع نشده است.
 
 ## 5. قرارداد اجرای هر مرحله
 
@@ -829,6 +829,71 @@ pnpm --filter @followa/api test
 - مجوز شروع مرحلهٔ بعد: ثبت نشده.
 - قدم بعدی دقیق: Migration/Vitest/تست دستی P7 را روی کپی DB انجام بده و نتیجه را ثبت کن. P8 بدون مجوز مستقل شروع نشود.
 
+### رکورد مرحله: P8 — Notification چندکاناله و Worker
+
+- وضعیت: اجرای کد opt-in در Repository تکمیل؛ Flagها خاموش، Migrationهای پیش‌نیاز، Vitest/DB، ارسال Live و پذیرش مالک در انتظار.
+- تاریخ و مسئول اجرا: 2026-09-15، Codex با درخواست مالک Repository.
+- مجوز مالک: شروع و اجرای P8 و Checkpoint مستنداتی؛ هیچ مجوزی برای P9، Migration، Backfill، فعال‌سازی Flagها یا ارسال واقعی ثبت نشد.
+- Branch / Base SHA: `main` / `abfcd82bf93e7d95d2d719a3bfac0483331bece7`.
+- فایل‌های واقعاً تغییرکرده:
+  - `.env.example`
+  - `.env.prod.example`
+  - `docker-compose.prod.yml`
+  - `apps/api/package.json`
+  - `apps/api/src/config.ts`
+  - `apps/api/src/modules/notifications/notification-service.ts`
+  - `apps/api/src/modules/messaging/delivery-repository.ts`
+  - `apps/api/src/modules/messaging/notification-context.ts`
+  - `apps/api/src/modules/messaging/notification-dispatcher.ts`
+  - `apps/api/src/modules/messaging/delivery-worker.ts`
+  - `apps/api/tests/multi-channel-notifications.test.ts`
+  - `docs/multi-messaging-roadmap.md` فقط در Checkpoint مستنداتی بعد از Commit اجرا
+- Commit اجرا: [ef1b719d3d6979507e904e9b5a13ad0e72855271](https://github.com/Armanita/Followa/commit/ef1b719d3d6979507e904e9b5a13ad0e72855271).
+- Commit مستنداتی ثبت نتیجه: Commit بلافاصله بعد از `ef1b719` در تاریخچه `main`؛ SHA خود این Checkpoint در Checkpoint بعدی ثبت شود.
+- Merge SHA: Commit مستقیم و fast-forward روی `main`؛ Merge جدا ندارد.
+- Database / Migration:
+  - P8 Migration جدید ندارد و فقط Schema/Repository افزایشی P3، P6 و P7 را مصرف می‌کند.
+  - هیچ Migration، Backfill، NotificationDelivery یا پیام خارجی در این اجرا به‌صورت دستی ایجاد/ارسال نشد.
+- Feature Flag و استقرار:
+  - `MULTI_CHANNEL_NOTIFICATIONS_ENABLED=false` مسیر قدیمی را حفظ می‌کند؛ Dispatcher جدید فقط با روشن‌کردن صریح آن جایگزین ارسال فوری Legacy می‌شود و هم‌زمان با آن اجرا نمی‌شود.
+  - `NOTIFICATION_WORKER_ENABLED=false` Worker را در حالت Idle نگه می‌دارد؛ فعال‌سازی نیازمند آماده‌بودن Migrationها، Providerها و سیاست‌های P6 است.
+  - Worker به موفقیت سرویس migrate در Compose وابسته شد و Poll، Lease و سقف تلاش تنظیم‌پذیر هستند.
+  - Push به main Build/Deploy خودکار را آغاز کرد و هر دو سرویس API و Web موفق شدند. هیچ Flag واقعی توسط این Commit روشن نشد.
+- خلاصه تغییرات:
+  - وقتی Flag خاموش است، ایجاد Notification و ارسال Adapter قدیمی بدون تغییر رفتاری ادامه دارد.
+  - وقتی Flag روشن است، Notification داخلی و Deliveryهای مجاز Telegram/Bale در یک تراکنش Serializable ثبت می‌شوند.
+  - زمینه شرکت فقط از `companyId` داخلی یا Link معتبر CASE/REMINDER استخراج می‌شود؛ زمینه مبهم فقط Notification داخلی می‌سازد.
+  - تقدم سیاست P6 در سطح System، Company و Membership برای Telegram-only، Bale-only، both و none اعمال می‌شود.
+  - Telegram تا P10 از `TelegramIdentity` Legacy خوانده می‌شود؛ Bale فقط Identity عمومی Active و verified را می‌پذیرد.
+  - مقصد و نسخه Identity هنگام Queue شدن Snapshot می‌شوند؛ تغییر اتصال، کار قبلی را به مقصد جدید منحرف نمی‌کند.
+  - Claim با Lease و `FOR UPDATE SKIP LOCKED` انجام می‌شود تا Workerهای هم‌زمان یک کار را هم‌زمان برندارند و Crash پس از پایان Lease قابل بازیابی باشد.
+  - پیش از هر ارسال، فعال‌بودن شرکت/عضویت، سیاست جاری، Identity و Snapshot مقصد دوباره کنترل می‌شوند؛ مورد نامعتبر Cancel می‌شود.
+  - شکست یک Provider فقط Delivery همان Channel را Failed/Retry می‌کند؛ کانال دیگر مستقل باقی می‌ماند.
+  - هیچ تضمین exactly-once خارجی در Timeout ادعا نمی‌شود؛ ارسال موفق پیش از شکست ثبت DB می‌تواند Retry و پیام تکراری ایجاد کند.
+  - فایل‌های Case، Assignment، File، Reminder، OTP و Auth Service تغییر نکردند.
+- تست‌های انجام‌شده:
+  - PASS: Diff یک Commit از Base؛ دقیقاً ۱۱ فایل P8، بدون تغییر فایل‌های کسب‌وکار، OTP، Auth Service، Prisma Schema یا Migration.
+  - PASS: Syntax check پنج فایل TypeScript اجرایی و تست جدید با `node --experimental-strip-types --check`.
+  - PASS: Build/Deploy خودکار Railway برای API و Web؛ این نتیجه جایگزین Vitest، تست DB/Live یا پذیرش مالک نیست.
+  - ADDED / NOT RUN: `multi-channel-notifications.test.ts` برای both، none، یک Notification داخلی، شکست مستقل Bale، غیرفعال‌شدن شرکت، تغییر Snapshot مقصد و زمینه مبهم.
+  - NOT RUN: Vitest، تست PostgreSQL، Migrationهای پیش‌نیاز، Worker واقعی، Telegram/Bale Live و تمرین Rollback.
+- تست دستی مالک:
+  - اجرا نشده؛ ابتدا روی کپی DB، Migrationهای P3/P6/P7، Backfill لازم، تنظیم سیاست‌ها و هویت‌های آزمایشی تأیید شوند.
+  - با Flag API روشن و Worker ابتدا خاموش، ایجاد یک Notification و Deliveryهای موردانتظار بررسی شود؛ سپس Worker روشن شود.
+  - Telegram-only، Bale-only، both و none؛ شکست یکی از Providerها؛ شرکت/عضویت غیرفعال؛ تغییر Identity؛ Restart Worker و خاموش‌کردن کنترل‌شده آزموده شوند.
+  - پس از تست، تعداد Notification، Delivery، Attempt و پیام دریافتی تطبیق داده شود؛ پیام ارسال‌شده با Rollback قابل پس‌گرفتن نیست.
+- روش Rollback دقیق:
+  - ابتدا `MULTI_CHANNEL_NOTIFICATIONS_ENABLED=false` کن تا کار جدید ساخته نشود؛ سپس `NOTIFICATION_WORKER_ENABLED=false` و Worker را بعد از پایان کار جاری متوقف کن.
+  - Deliveryهای Pending/Failed را خودکار Replay یا حذف نکن؛ Snapshot و تاریخچه برای تصمیم دستی حفظ شوند.
+  - کد با `git revert ef1b719d3d6979507e904e9b5a13ad0e72855271` یا Deploy نسخه `abfcd82bf93e7d95d2d719a3bfac0483331bece7` برمی‌گردد.
+  - Migration rollback ندارد چون P8 Migration تازه ندارد؛ جدول‌های P3/P6/P7 و داده‌های Delivery حفظ شوند.
+  - پیام‌های قبلاً ارسال‌شده قابل برگشت نیستند؛ تعیین تکلیف کارهای in-flight و احتمال پیام تکراری باید در گزارش Rollback ثبت شود.
+- نتیجهٔ تمرین Rollback: اجرا نشده؛ نیازمند دیتابیس و Provider آزمایشی است.
+- ریسک باقی‌مانده / مانع: Build موفق است اما Migration/Vitest/Live انجام نشده و exactly-once خارجی قابل تضمین نیست؛ Flagها نباید پیش از تست و پذیرش مالک روشن شوند.
+- پذیرش مالک برای اتمام این مرحله: ثبت نشده.
+- مجوز شروع مرحلهٔ بعد: ثبت نشده.
+- قدم بعدی دقیق: Migration و تست کامل P8 را روی کپی DB اجرا و Rollout آزمایشی دو Flag را مرحله‌ای انجام بده. P9 بدون مجوز مستقل شروع نشود.
+
 ### Checkpoint توقف میان مرحله
 
 - آخرین کار تکمیل‌شده:
@@ -871,6 +936,10 @@ pnpm --filter @followa/api test
 | 2026-09-15 | P7: یکتایی کار | هر Notification/Channel فقط یک Delivery دارد و Upsert تکراری Snapshot مقصد را تغییر نمی‌دهد | اجراشده |
 | 2026-09-15 | P7: تاریخچه تلاش | Attemptها ردیف مستقل و ترتیبی هستند؛ Delivery فقط خلاصه آخرین وضعیت را نگه می‌دارد | اجراشده |
 | 2026-09-15 | P7: مرز رفتار | Ledger فقط ذخیره‌سازی است؛ ساخت کار عملیاتی و Worker تا P8 ممنوع است | اجراشده |
+| 2026-09-15 | P8: Rollout | مسیر چندکاناله و Worker دو Flag مستقل و پیش‌فرض خاموش دارند؛ Legacy و Worker هم‌زمان ارسال نمی‌کنند | اجراشده؛ فعال‌سازی نشده |
+| 2026-09-15 | P8: زمینه شرکت | فقط companyId داخلی یا CASE/REMINDER معتبر؛ مورد مبهم External Delivery ندارد | اجراشده |
+| 2026-09-15 | P8: مقصد کار | Delivery به Snapshot مقصد/Identity version مقید است و پیش از Send دوباره اعتبارسنجی می‌شود | اجراشده |
+| 2026-09-15 | P8: تضمین ارسال | Lease/Retry از رقابت جلوگیری می‌کند ولی exactly-once Provider در Timeout ادعا نمی‌شود | ثبت‌شده |
 
 ## 10. تاریخچه، Commitها و اسناد مرتبط
 
@@ -888,7 +957,8 @@ pnpm --filter @followa/api test
 | P5: اتصال امن Bale و پیام آزمایشی | اجرای کد opt-in تکمیل؛ تست ربات/DB و پذیرش ثبت نشده | [8dc7a81](https://github.com/Armanita/Followa/commit/8dc7a814c78b357afbdb5abb7afd65a2680b1e78) |
 | P6: سیاست‌ها و تنظیمات دریافت | کد/Migration در Repository تکمیل؛ اجرا و پذیرش DB/UI ثبت نشده | [0ce519a](https://github.com/Armanita/Followa/commit/0ce519a8117aeeb35d852c19f5f2bf5471d8d3f7) |
 | P7: ذخیره مستقل وضعیت تحویل | Schema/Repository در Git تکمیل؛ Migration و پذیرش DB ثبت نشده | [1976c05](https://github.com/Armanita/Followa/commit/1976c05603b4ba6a335d1ab14800adc7b9643d83) |
-| P8 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
+| P8: Notification چندکاناله و Worker | کد opt-in تکمیل؛ Flagها خاموش و تست DB/Live ثبت نشده | [ef1b719](https://github.com/Armanita/Followa/commit/ef1b719d3d6979507e904e9b5a13ad0e72855271) |
+| P9 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
 
 برای یافتن SHA دقیق P0، بدون مشکل خودارجاعی SHA داخل همان Commit:
 
@@ -907,4 +977,4 @@ git log --diff-filter=A --format='%H %s' -- docs/multi-messaging-roadmap.md
 - [راهنمای تست دستی](manual-testing-guide-fa.md)
 - [استقرار](deployment.md)
 
-**وضعیت پایان این جلسه: P7 در Repository با Commit مستقل تکمیل و Checkpoint ثبت شد؛ Migrationهای P3/P6/P7، Backfill P4، Vitest، تست DB/UI/ربات و پذیرش مالک ثبت نشده‌اند. هیچ Delivery عملیاتی یا ارسال جدید فعال نشده، P8 شروع نشده و تا مجوز مستقل STOP.**
+**وضعیت پایان این جلسه: P8 به‌صورت opt-in در Repository تکمیل و Checkpoint ثبت شد؛ هر دو Flag خاموش‌اند و Migrationهای P3/P6/P7، Backfill P4، Vitest، تست DB/Live، Rollback و پذیرش مالک ثبت نشده‌اند. P9 شروع نشده و تا مجوز مستقل STOP.**
