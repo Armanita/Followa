@@ -8,6 +8,10 @@ function required(name: string, fallback?: string): string {
   return value;
 }
 
+function enabled(name: string): boolean {
+  return process.env[name]?.trim().toLowerCase() === 'true';
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3001),
   host: process.env.HOST ?? '0.0.0.0',
@@ -19,6 +23,13 @@ export const config = {
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
   telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME ?? '',
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? '',
+  // Both migration features are opt-in. Deploying code alone changes no writes.
+  messagingIdentityDualWriteEnabled: enabled(
+    'MESSAGING_IDENTITY_DUAL_WRITE_ENABLED',
+  ),
+  messagingIdentityBackfillEnabled: enabled(
+    'MESSAGING_IDENTITY_BACKFILL_ENABLED',
+  ),
   storageDir: process.env.STORAGE_DIR ?? './storage/files',
   maxFileSizeMb: Number(process.env.MAX_FILE_SIZE_MB ?? 20),
   databaseUrl: required(

@@ -1,5 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { Prisma, PrismaClient } from '@prisma/client';
+import {
+  MessagingChannel,
+  MessagingIdentityStatus,
+  type Prisma,
+  type PrismaClient,
+} from '@prisma/client';
 import { config } from '../../config.js';
 
 export type TelegramIdentityRecord = {
@@ -21,10 +26,15 @@ type TelegramPendingConnection = {
 };
 
 const PENDING_CONNECTION_TTL_MS = 10 * 60 * 1000;
+const SECURE_VERIFICATION_METHOD = 'TELEGRAM_SIGNED_CALLBACK_V1';
 
 type TelegramDatabase = Pick<
   PrismaClient,
-  'user' | 'telegramIdentity' | 'telegramPendingConnection' | '$transaction'
+  | 'user'
+  | 'telegramIdentity'
+  | 'telegramPendingConnection'
+  | 'messagingIdentity'
+  | '$transaction'
 >;
 
 const eligibleMembership = {
@@ -136,6 +146,37 @@ export function createTelegramRepository(db: TelegramDatabase) {
           return null;
         }
 
+        if (config.messagingIdentityDualWriteEnabled) {
+          const [byUser, byExternal] = await Promise.all([
+            tx.messagingIdentity.findUnique({
+              where: {
+                userId_channel: {
+                  userId: user.id,
+                  channel: MessagingChannel.TELEGRAM,
+                },
+              },
+            }),
+            tx.messagingIdentity.findUnique({
+              where: {
+                channel_externalUserId: {
+                  channel: MessagingChannel.TELEGRAM,
+                  externalUserId: input.telegramUserId,
+                },
+              },
+            }),
+          ]);
+          const sameIdentity =
+            byUser &&
+            byExternal &&
+            byUser.id === byExternal.id &&
+            byUser.userId === user.id &&
+            byUser.externalUserId === input.telegramUserId;
+
+          if ((byUser || byExternal) && !sameIdentity) {
+            return null;
+          }
+        }
+
         const previous = await tx.telegramPendingConnection.findUnique({
           where: { telegramUserId: input.telegramUserId },
         });
@@ -221,6 +262,42 @@ export function createTelegramRepository(db: TelegramDatabase) {
             };
           }
 
+          let genericIdentity: { id: string } | null = null;
+          if (config.messagingIdentityDualWriteEnabled) {
+            const [byUser, byExternal] = await Promise.all([
+              tx.messagingIdentity.findUnique({
+                where: {
+                  userId_channel: {
+                    userId: user.id,
+                    channel: MessagingChannel.TELEGRAM,
+                  },
+                },
+              }),
+              tx.messagingIdentity.findUnique({
+                where: {
+                  channel_externalUserId: {
+                    channel: MessagingChannel.TELEGRAM,
+                    externalUserId: telegramUserId,
+                  },
+                },
+              }),
+            ]);
+            const sameIdentity =
+              byUser &&
+              byExternal &&
+              byUser.id === byExternal.id &&
+              byUser.userId === user.id &&
+              byUser.externalUserId === telegramUserId;
+
+            if ((byUser || byExternal) && !sameIdentity) {
+              return {
+                status: 'rejected',
+                reason: 'messaging_identity_conflict',
+              };
+            }
+            genericIdentity = sameIdentity ? { id: byUser.id } : null;
+          }
+
           const consumed = await tx.telegramPendingConnection.deleteMany({
             where: {
               telegramUserId,
@@ -246,6 +323,36 @@ export function createTelegramRepository(db: TelegramDatabase) {
               phoneNumber: user.mobile,
             },
           });
+
+          if (config.messagingIdentityDualWriteEnabled) {
+            const verifiedAt = new Date();
+            if (genericIdentity) {
+              await tx.messagingIdentity.update({
+                where: { id: genericIdentity.id },
+                data: {
+                  destinationId: telegramUserId,
+                  status: MessagingIdentityStatus.ACTIVE,
+                  verifiedAt,
+                  verificationMethod: SECURE_VERIFICATION_METHOD,
+                  legacySource: null,
+                  revokedAt: null,
+                  version: { increment: 1 },
+                },
+              });
+            } else {
+              await tx.messagingIdentity.create({
+                data: {
+                  userId: user.id,
+                  channel: MessagingChannel.TELEGRAM,
+                  externalUserId: telegramUserId,
+                  destinationId: telegramUserId,
+                  status: MessagingIdentityStatus.ACTIVE,
+                  verifiedAt,
+                  verificationMethod: SECURE_VERIFICATION_METHOD,
+                },
+              });
+            }
+          }
 
           return { status: 'connected' };
         });
