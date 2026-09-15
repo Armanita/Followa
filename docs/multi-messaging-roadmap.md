@@ -8,14 +8,14 @@
 - تاریخ آخرین به‌روزرسانی: 2026-09-15
 - Repository: [Armanita/Followa](https://github.com/Armanita/Followa)
 - شاخهٔ مبنا: `main`
-- آخرین Commit کد بررسی‌شده: `f228ac88080b3e8d93cb6c39fd9dd39e03456dc4`
-- آخرین مرحلهٔ اجراشده در این مسیر: **P4 — انتقال و همگام‌سازی هویت Telegram**؛ ابزار و سازگاری در Repository تکمیل شده‌اند، اما Migration پیش‌نیاز P3، Backfill، تست DB و پذیرش دستی اجرا نشده‌اند.
+- آخرین Commit کد بررسی‌شده: `8dc7a814c78b357afbdb5abb7afd65a2680b1e78`
+- آخرین مرحلهٔ اجراشده در این مسیر: **P5 — اتصال امن Bale و پیام آزمایشی**؛ کد opt-in در Repository تکمیل شده، اما Migration پیش‌نیاز P3، ربات آزمایشی، تست DB/Live و پذیرش دستی اجرا نشده‌اند.
 - مرحلهٔ در حال اجرای کد: هیچ‌کدام.
-- مرحلهٔ بعدی پیشنهادی: Backup قابل‌بازیابی، اجرای Migration P3 و Dry-run دستورالعمل P4 روی کپی ایزوله دیتابیس؛ هیچ Phase بعدی شروع نشود.
-- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P4؛ مجوز Deploy، اجرای Migration یا Backfill روی Production داده نشده است.
-- P5 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
+- مرحلهٔ بعدی پیشنهادی: اجرای Migration P3 و تست P4/P5 روی کپی ایزوله، سپس اتصال ربات آزمایشی Bale با Flag کنترل‌شده؛ هیچ Phase بعدی شروع نشود.
+- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P5؛ مجوز Deploy، Migration، Backfill یا ثبت Webhook واقعی داده نشده است.
+- P6 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
 - وضعیت استقرار، تنظیمات واقعی ربات و تست زنده: تأیید نشده؛ وضعیت Repository معادل وضعیت سرور نیست.
-- هیچ Provider واقعی بله یا ارسال چندکاناله در این مسیر پیاده نشده است؛ مدل عمومی هویت P3 و سازگاری آزمایشی P4 هنوز مصرف خواندن عملیاتی ندارند.
+- Provider و اتصال امن Bale به‌صورت opt-in افزوده شده، اما Provider اعلان/OTP و ارسال چندکاناله فعال نشده است؛ خواندن عملیاتی Telegram همچنان Legacy است.
 
 اصلاح شرط شرکت فعال در Auth قبلاً در Commit بالا انجام شده است؛ این اصلاح یکی از مراحل انجام‌شدهٔ Multi Messaging محسوب نمی‌شود و باید حفظ شود.
 
@@ -134,14 +134,14 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 | P2 | قرارداد مشترک Provider | منتظر تأیید دستی مالک — اجرای کد تکمیل | 2026-09-15 | [83f6474](https://github.com/Armanita/Followa/commit/83f6474dfb63ef1216074e6d44c11338aeb5831b)؛ تکمیل 3 Commit مقدماتی | اجرا نشده | خیر |
 | P3 | مدل عمومی هویت، بدون مصرف عملیاتی | منتظر تست Migration و تأیید مالک — Repository تکمیل | 2026-09-15؛ بدون مجوز Production | [92e5701](https://github.com/Armanita/Followa/commit/92e5701e96c8c2780be47fb47843e324da005cd9) | اجرا نشده | افزایشی؛ اجرا نشده |
 | P4 | Backfill و همگام‌سازی آزمایشی Telegram | منتظر تست DB، Backfill مجاز و تأیید مالک — اجرای کد تکمیل | 2026-09-15؛ بدون مجوز Production | [f228ac8](https://github.com/Armanita/Followa/commit/f228ac88080b3e8d93cb6c39fd9dd39e03456dc4) | اجرا نشده | انتقال داده اجرا نشده؛ Schema جدید ندارد |
-| P5 | اتصال امن Bale و پیام آزمایشی | باقی‌مانده | لازم | — | — | خیر؛ استفاده از P3 |
+| P5 | اتصال امن Bale و پیام آزمایشی | منتظر Migration، تست ربات/DB و تأیید مالک — اجرای کد تکمیل | 2026-09-15؛ بدون مجوز Deploy/Webhook | [8dc7a81](https://github.com/Armanita/Followa/commit/8dc7a814c78b357afbdb5abb7afd65a2680b1e78) | اجرا نشده | خیر؛ استفاده از P3 |
 | P6 | تنظیمات سیستم، شرکت و User | باقی‌مانده | لازم | — | — | افزایشی |
 | P7 | ذخیرهٔ مستقل وضعیت تحویل | باقی‌مانده | لازم | — | — | افزایشی |
 | P8 | Notification چندکاناله و Worker | باقی‌مانده | لازم | — | — | خیر؛ استفاده از P7 |
 | P9 | انتخاب کانال OTP | باقی‌مانده | لازم | — | — | خیر |
 | P10 | خواندن Telegram از مدل عمومی | باقی‌مانده | لازم | — | — | بدون Migration تخریبی |
 
-هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P4 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migration P3 صرفاً به Git افزوده شده و روی دیتابیس اجرا نشده؛ در نتیجه Backfill P4 نیز اجرا نشده است. وضعیت Deployment و تست زنده تأیید نشده است و P5 شروع نشده است.
+هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P5 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migration P3 و Backfill P4 اجرا نشده‌اند؛ بنابراین Bale linking نیز Deploy یا فعال نشده است. وضعیت ربات واقعی و تست زنده تأیید نشده و P6 شروع نشده است.
 
 ## 5. قرارداد اجرای هر مرحله
 
@@ -660,6 +660,72 @@ pnpm --filter @followa/api test
 - مجوز شروع مرحلهٔ بعد: ثبت نشده.
 - قدم بعدی دقیق: طبق `docs/messaging-migration-runbook.md` روی کپی ایزوله، Backup/Restore، Migration P3، Build/Vitest، Dry-run و شمارش/تعارض را اجرا و نتیجه را ثبت کن. P5 بدون مجوز مستقل شروع نشود.
 
+### رکورد مرحله: P5 — اتصال امن Bale و پیام آزمایشی
+
+- وضعیت: اجرای کد opt-in در Repository تکمیل؛ Build/Vitest کامل، Migration پیش‌نیاز، تست DB، ربات آزمایشی، Webhook و پذیرش مالک در انتظار.
+- تاریخ و مسئول اجرا: 2026-09-15، Codex با درخواست مالک Repository.
+- مجوز مالک: شروع و اجرای P5 و Checkpoint مستنداتی؛ هیچ مجوزی برای P6، Deploy، Migration، Backfill یا ثبت Webhook واقعی ثبت نشد.
+- Branch / Base SHA: `main` / `c1ec70c0024e02557651a2558e62291ff67c508b`.
+- فایل‌های واقعاً تغییرکرده:
+  - `.env.example`
+  - `.env.prod.example`
+  - `docker-compose.prod.yml`
+  - `apps/api/src/config.ts`
+  - `apps/api/src/plugins/auth.ts` فقط allowlist دقیق Webhook بله
+  - `apps/api/src/server.ts`
+  - `apps/api/src/modules/messaging/messaging-repository.ts`
+  - `apps/api/src/modules/messaging/messaging-link-service.ts`
+  - `apps/api/src/modules/messaging/providers/bale-provider.ts`
+  - `apps/api/src/modules/bale/bale-client.ts`
+  - `apps/api/src/modules/bale/bale-service.ts`
+  - `apps/api/src/modules/bale/bale-routes.ts`
+  - `apps/api/tests/bale-linking.test.ts`
+  - `docs/multi-messaging-roadmap.md` فقط در Checkpoint مستنداتی بعد از Commit اجرا
+- فایل پیشنهادی `messaging-routes.ts` عمداً ایجاد نشد؛ پیام تأیید اتصال، آزمون ارسال P5 را فراهم می‌کند و Endpoint عملیاتی اضافی پیش از سیاست‌های P6 ایجاد نشد.
+- Commit اجرا: [8dc7a814c78b357afbdb5abb7afd65a2680b1e78](https://github.com/Armanita/Followa/commit/8dc7a814c78b357afbdb5abb7afd65a2680b1e78).
+- Commit مستنداتی ثبت نتیجه: Commit بلافاصله بعد از `8dc7a81` در تاریخچه `main`؛ SHA خود این Checkpoint در Checkpoint بعدی ثبت شود.
+- Merge SHA: Commit مستقیم و fast-forward روی `main`؛ Merge جدا ندارد.
+- Database / Migration:
+  - P5 Migration یا تغییر Schema تازه ندارد و از `MessagingIdentity` و `MessagingLinkChallenge` مرحله P3 استفاده می‌کند.
+  - Migration P3 هنوز اجرا نشده؛ در نتیجه `BALE_LINKING_ENABLED` نباید در محیط واقعی فعال شود.
+  - هیچ داده Bale، Challenge واقعی یا پیام خارجی در این اجرا ساخته/ارسال نشد.
+- Feature Flag و تنظیمات:
+  - `BALE_LINKING_ENABLED=false` پیش‌فرض امن است و از انتخاب `OTP_PROVIDER` و `NOTIFICATION_PROVIDER` مستقل است.
+  - `BALE_BOT_TOKEN`، `BALE_BOT_USERNAME` و `BALE_WEBHOOK_SECRET` فقط از Environment خوانده می‌شوند؛ Secret واقعی وارد Git نشد.
+  - Secret مسیر Webhook باید حداقل ۳۲ کاراکتر تصادفی باشد؛ Route برای جلوگیری از ثبت Secret در Log سطح `silent` دارد.
+- خلاصه تغییرات:
+  - Client رسمی Bale روی `https://tapi.bale.ai/bot<TOKEN>/METHOD` با HTTPS، JSON و Timeout ده‌ثانیه‌ای اضافه شد.
+  - Bale به قرارداد مشترک `MessagingProvider` اضافه شد، ولی به OTP یا Notification متصل نشد.
+  - اتصال با Contact خود فرستنده در گفت‌وگوی private آغاز می‌شود؛ شماره به User فعال با عضویت فعال و Company فعال نگاشت می‌شود.
+  - Challenge تصادفی ۱۲۸ بیتی است؛ فقط SHA-256 آن با TTL ده دقیقه در DB ذخیره می‌شود و توکن/User ID در پاسخ HTTP افشا نمی‌شود.
+  - Callback به Bale sender، Channel و Challenge یک‌بارمصرف مقید است؛ شرکت و عضویت هنگام Confirm دوباره بررسی می‌شوند.
+  - مصرف Challenge و ایجاد Identity تأییدشده در یک تراکنش Serializable انجام می‌شود؛ تعارض یکتایی موجب Rollback و عدم انتقال مالکیت است.
+  - شکست ارسال Challenge آن را مصرف می‌کند؛ شکست پیام تأیید پس از Commit، اتصال موفق را قابل استفاده مجدد نشان نمی‌دهد.
+  - مستندات رسمی Bale برای `setWebhook` Header امضاشده/secret-token مستند نمی‌کنند؛ بنابراین URL با Secret پرقدرت به‌عنوان لایه ورودی و Challenge خروجی یک‌بارمصرف به‌عنوان اثبات کنترل حساب استفاده شد.
+  - Route وب‌هوک تنها استثنای عمومی جدید Auth است و خود Route بدون Flag، Token و Secret معتبر Fail-closed می‌شود.
+- تست‌های انجام‌شده:
+  - PASS: Diff یک Commit از Base؛ ۱۳ فایل P5، بدون تغییر Auth Service، OTP، Notification، Telegram، Prisma Schema یا Migration.
+  - PASS: Syntax check ده فایل TypeScript افزوده/تغییرکرده با `node --experimental-strip-types --check`.
+  - ADDED / NOT RUN: `bale-linking.test.ts` با ۱۱ سناریو برای URL/بدنه API رسمی، Provider mapping، Hash-only و one-time challenge، مقصد مقید، expiry، مالک Contact، شرکت/عضویت غیرفعال، عدم انتقال Identity، شکست ارسال و perimeter وب‌هوک.
+  - NOT RUN: Build، Typecheck و Vitest واقعی؛ checkout کامل، dependencyهای نصب‌شده و PostgreSQL ایزوله در محیط Connector در دسترس نبود.
+  - NOT RUN: ربات Bale واقعی، `setWebhook`، پیام آزمایشی خارجی، Production و آزمون عدم اثر روی Telegram.
+- تست دستی مالک:
+  - اجرا نشده؛ ابتدا Migration P3 روی کپی DB، سپس ربات آزمایشی و Secret تصادفی تنظیم شود.
+  - Contact خود کاربر، Callback یک‌بارمصرف، انقضا، مقصد دیگر، شرکت/عضویت غیرفعال، تعویض مدیر و اختلال Bale بررسی شوند.
+  - Telegram OTP و Notification قبل و بعد آزمون باید بدون تغییر و دقیقاً یک‌بار کار کنند.
+- روش Rollback دقیق:
+  - ابتدا `BALE_LINKING_ENABLED=false` و سپس Webhook ربات Bale را با `deleteWebhook` غیرفعال کن؛ Token/Secret را در صورت احتمال افشا rotate کن.
+  - کد P5 با `git revert 8dc7a814c78b357afbdb5abb7afd65a2680b1e78` یا Deploy نسخه `c1ec70c0024e02557651a2558e62291ff67c508b` برمی‌گردد؛ DB Migration rollback ندارد.
+  - Identity و Challengeهای Bale ساخته‌شده را حذف یا جدول‌های P3 را Drop نکن؛ نسخه قبلی آن‌ها را نمی‌خواند و برای بررسی/ادامه آینده حفظ می‌شوند.
+  - پیام خارجی ارسال‌شده قابل بازگرداندن نیست؛ Rollback نباید Challengeهای قبلی را بازپخش کند.
+- نتیجهٔ تمرین Rollback: اجرا نشده؛ نیازمند ربات و دیتابیس آزمایشی است.
+- ریسک باقی‌مانده / مانع:
+  - اصالت مبدأ شبکه Webhook به دلیل نبود امضای مستند رسمی Bale قابل اثبات مستقیم نیست؛ Secret URL و proof خروجی ریسک جعل اتصال را می‌بندند، اما Rate Limit لبه شبکه پیش از Production توصیه می‌شود.
+  - Build/Vitest، Migration، تست زنده و پذیرش مالک انجام نشده‌اند.
+- پذیرش مالک برای اتمام این مرحله: ثبت نشده.
+- مجوز شروع مرحلهٔ بعد: ثبت نشده.
+- قدم بعدی دقیق: Migration P3 و تست کامل P4/P5 روی کپی DB، سپس تنظیم ربات آزمایشی و اجرای تست‌های دستی P5. P6 بدون مجوز مستقل شروع نشود.
+
 ### Checkpoint توقف میان مرحله
 
 - آخرین کار تکمیل‌شده:
@@ -692,6 +758,10 @@ pnpm --filter @followa/api test
 | 2026-09-15 | P4: Legacy verification | Backfill با verifiedAt خالی و provenance صریح؛ داده قدیمی بازتأییدشده محسوب نشود | اجراشده |
 | 2026-09-15 | P4: کنترل اجرا | Dry-run پیش‌فرض؛ Apply فقط با Flag و آرگومان صریح؛ توقف روی اولین تعارض | اجراشده؛ اجرای DB مجاز نشده |
 | 2026-09-15 | P4: Dual-write | پیش‌فرض خاموش و در اتصال امن جدید اتمیک؛ هیچ ارسال شبکه‌ای داخل تراکنش | اجراشده؛ فعال‌سازی مجاز نشده |
+| 2026-09-15 | P5: Webhook Bale | API رسمی Header امضاشده مستند نمی‌کند؛ Secret URL پرقدرت + عدم Log + Challenge خروجی | اجراشده؛ تست Live لازم |
+| 2026-09-15 | P5: اثبات مالکیت | Contact خود فرستنده + توکن ۱۲۸ بیتی Hash-only و یک‌بارمصرف + بازبینی دسترسی | اجراشده |
+| 2026-09-15 | P5: دامنه ارسال | فقط پیام‌های فرایند اتصال؛ OTP و Notification به Bale متصل نشوند | اجراشده |
+| 2026-09-15 | P5: Rollout | Flag مستقل و پیش‌فرض خاموش؛ Migration P3 پیش‌نیاز فعال‌سازی | اجراشده؛ Deploy مجاز نشده |
 
 ## 10. تاریخچه، Commitها و اسناد مرتبط
 
@@ -706,7 +776,8 @@ pnpm --filter @followa/api test
 | P2: قرارداد مشترک Provider | اجرای کد تکمیل؛ پذیرش دستی ثبت نشده | [83f6474](https://github.com/Armanita/Followa/commit/83f6474dfb63ef1216074e6d44c11338aeb5831b)؛ پس از سه Commit مقدماتی |
 | P3: Schema عمومی هویت | کد/Migration در Repository تکمیل؛ اجرا و پذیرش DB ثبت نشده | [92e5701](https://github.com/Armanita/Followa/commit/92e5701e96c8c2780be47fb47843e324da005cd9) |
 | P4: Backfill و همگام‌سازی آزمایشی | اجرای کد/Runbook تکمیل؛ Migration، Backfill و پذیرش DB ثبت نشده | [f228ac8](https://github.com/Armanita/Followa/commit/f228ac88080b3e8d93cb6c39fd9dd39e03456dc4) |
-| P5 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
+| P5: اتصال امن Bale و پیام آزمایشی | اجرای کد opt-in تکمیل؛ تست ربات/DB و پذیرش ثبت نشده | [8dc7a81](https://github.com/Armanita/Followa/commit/8dc7a814c78b357afbdb5abb7afd65a2680b1e78) |
+| P6 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
 
 برای یافتن SHA دقیق P0، بدون مشکل خودارجاعی SHA داخل همان Commit:
 
@@ -725,4 +796,4 @@ git log --diff-filter=A --format='%H %s' -- docs/multi-messaging-roadmap.md
 - [راهنمای تست دستی](manual-testing-guide-fa.md)
 - [استقرار](deployment.md)
 
-**وضعیت پایان این جلسه: P4 در Repository با Commit مستقل تکمیل و Checkpoint ثبت شد؛ Migration P3، Backfill P4، Build/Vitest، تست DB، پذیرش مالک و استقرار ثبت نشده‌اند. P5 شروع نشده و تا مجوز مستقل STOP.**
+**وضعیت پایان این جلسه: P5 به‌صورت opt-in در Repository تکمیل و Checkpoint ثبت شد؛ Migration P3، Backfill P4، Build/Vitest، تست DB/ربات Bale، پذیرش مالک و استقرار ثبت نشده‌اند. P6 شروع نشده و تا مجوز مستقل STOP.**
