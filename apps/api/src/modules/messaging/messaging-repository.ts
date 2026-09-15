@@ -1,6 +1,6 @@
 import {
   MessagingChannel,
-  type MessagingIdentityStatus,
+  MessagingIdentityStatus,
   type Prisma,
   type PrismaClient,
 } from '@prisma/client';
@@ -42,9 +42,46 @@ export type LegacyTelegramImportResult =
         | 'inconsistent_identity';
     };
 
+export type BeginLinkChallengeInput = {
+  mobile: string;
+  channel: MessagingChannel;
+  externalUserId: string;
+  destinationId: string;
+  tokenHash: string;
+  expiresAt: Date;
+};
+
+export type BeginLinkChallengeResult =
+  | { status: 'created' }
+  | {
+      status: 'rejected';
+      reason:
+        | 'user_not_eligible'
+        | 'identity_already_linked'
+        | 'identity_conflict';
+    };
+
+export type ConfirmLinkChallengeInput = {
+  channel: MessagingChannel;
+  externalUserId: string;
+  tokenHash: string;
+  verificationMethod: string;
+};
+
+export type ConfirmLinkChallengeResult =
+  | { status: 'connected'; userId: string }
+  | {
+      status: 'rejected';
+      reason:
+        | 'invalid_confirmation'
+        | 'user_not_eligible'
+        | 'identity_already_linked'
+        | 'identity_conflict';
+    };
+
 type MessagingDatabase = Pick<
   PrismaClient,
-  'messagingIdentity' | 'messagingLinkChallenge' | '$transaction'
+  'user' | 'messagingIdentity' | 'messagingLinkChallenge' | '$transaction'
 >;
 
 type IdentityReader = Pick<
@@ -54,6 +91,12 @@ type IdentityReader = Pick<
 
 const LEGACY_SOURCE = 'telegram_identities';
 const LEGACY_VERIFICATION_METHOD = 'LEGACY_IMPORT_UNVERIFIED';
+const eligibleMembership = {
+  some: {
+    isActive: true,
+    company: { isActive: true },
+  },
+};
 
 async function inspectLegacyTelegramIdentity(
   db: IdentityReader,
@@ -182,6 +225,220 @@ export function createMessagingRepository(db: MessagingDatabase) {
           expiresAt: { gt: now },
         },
       });
+    },
+
+    beginLinkChallenge(
+      input: BeginLinkChallengeInput,
+    ): Promise<BeginLinkChallengeResult> {
+      if (!input.tokenHash.trim()) {
+        throw new Error('messaging_challenge_hash_required');
+      }
+
+      return serializable(async (tx) => {
+        const user = await tx.user.findFirst({
+          where: {
+            mobile: input.mobile,
+            memberships: eligibleMembership,
+          },
+          select: { id: true },
+        });
+        if (!user) {
+          return { status: 'rejected', reason: 'user_not_eligible' };
+        }
+
+        const [byUser, byExternal] = await Promise.all([
+          tx.messagingIdentity.findUnique({
+            where: {
+              userId_channel: {
+                userId: user.id,
+                channel: input.channel,
+              },
+            },
+          }),
+          tx.messagingIdentity.findUnique({
+            where: {
+              channel_externalUserId: {
+                channel: input.channel,
+                externalUserId: input.externalUserId,
+              },
+            },
+          }),
+        ]);
+
+        if (
+          byUser &&
+          byExternal &&
+          byUser.id === byExternal.id &&
+          byUser.userId === user.id &&
+          byUser.externalUserId === input.externalUserId
+        ) {
+          return {
+            status: 'rejected',
+            reason: 'identity_already_linked',
+          };
+        }
+        if (byUser || byExternal) {
+          return { status: 'rejected', reason: 'identity_conflict' };
+        }
+
+        const now = new Date();
+        await tx.messagingLinkChallenge.updateMany({
+          where: {
+            consumedAt: null,
+            OR: [
+              { userId: user.id, channel: input.channel },
+              {
+                channel: input.channel,
+                externalUserId: input.externalUserId,
+              },
+            ],
+          },
+          data: { consumedAt: now },
+        });
+        await tx.messagingLinkChallenge.create({
+          data: {
+            userId: user.id,
+            channel: input.channel,
+            externalUserId: input.externalUserId,
+            destinationId: input.destinationId,
+            tokenHash: input.tokenHash,
+            expiresAt: input.expiresAt,
+          },
+        });
+
+        return { status: 'created' };
+      });
+    },
+
+    cancelLinkChallenge(tokenHash: string) {
+      return db.messagingLinkChallenge.updateMany({
+        where: { tokenHash, consumedAt: null },
+        data: { consumedAt: new Date() },
+      });
+    },
+
+    async confirmLinkChallenge(
+      input: ConfirmLinkChallengeInput,
+    ): Promise<ConfirmLinkChallengeResult> {
+      try {
+        return await serializable(async (tx) => {
+          const now = new Date();
+          const challenge = await tx.messagingLinkChallenge.findUnique({
+            where: { tokenHash: input.tokenHash },
+          });
+          if (
+            !challenge ||
+            challenge.channel !== input.channel ||
+            challenge.externalUserId !== input.externalUserId ||
+            challenge.consumedAt ||
+            challenge.expiresAt <= now
+          ) {
+            return {
+              status: 'rejected',
+              reason: 'invalid_confirmation',
+            };
+          }
+
+          const user = await tx.user.findFirst({
+            where: {
+              id: challenge.userId,
+              memberships: eligibleMembership,
+            },
+            select: { id: true },
+          });
+          if (!user) {
+            return { status: 'rejected', reason: 'user_not_eligible' };
+          }
+
+          const [byUser, byExternal] = await Promise.all([
+            tx.messagingIdentity.findUnique({
+              where: {
+                userId_channel: {
+                  userId: user.id,
+                  channel: input.channel,
+                },
+              },
+            }),
+            tx.messagingIdentity.findUnique({
+              where: {
+                channel_externalUserId: {
+                  channel: input.channel,
+                  externalUserId: input.externalUserId,
+                },
+              },
+            }),
+          ]);
+          if (
+            byUser &&
+            byExternal &&
+            byUser.id === byExternal.id &&
+            byUser.userId === user.id &&
+            byUser.externalUserId === input.externalUserId
+          ) {
+            return {
+              status: 'rejected',
+              reason: 'identity_already_linked',
+            };
+          }
+          if (byUser || byExternal) {
+            return { status: 'rejected', reason: 'identity_conflict' };
+          }
+
+          const consumed = await tx.messagingLinkChallenge.updateMany({
+            where: {
+              id: challenge.id,
+              tokenHash: input.tokenHash,
+              channel: input.channel,
+              externalUserId: input.externalUserId,
+              consumedAt: null,
+              expiresAt: { gt: now },
+            },
+            data: { consumedAt: now },
+          });
+          if (consumed.count !== 1) {
+            return {
+              status: 'rejected',
+              reason: 'invalid_confirmation',
+            };
+          }
+
+          await tx.messagingIdentity.create({
+            data: {
+              userId: user.id,
+              channel: input.channel,
+              externalUserId: input.externalUserId,
+              destinationId:
+                challenge.destinationId ?? input.externalUserId,
+              status: MessagingIdentityStatus.ACTIVE,
+              verifiedAt: now,
+              verificationMethod: input.verificationMethod,
+            },
+          });
+
+          await tx.messagingLinkChallenge.updateMany({
+            where: {
+              id: { not: challenge.id },
+              consumedAt: null,
+              OR: [
+                { userId: user.id, channel: input.channel },
+                {
+                  channel: input.channel,
+                  externalUserId: input.externalUserId,
+                },
+              ],
+            },
+            data: { consumedAt: now },
+          });
+
+          return { status: 'connected', userId: user.id };
+        });
+      } catch (error) {
+        // Uniqueness races roll the token consumption back with the identity.
+        if ((error as { code?: string }).code === 'P2002') {
+          return { status: 'rejected', reason: 'identity_conflict' };
+        }
+        throw error;
+      }
     },
 
     inspectLegacyTelegramIdentity(input: LegacyTelegramIdentityInput) {

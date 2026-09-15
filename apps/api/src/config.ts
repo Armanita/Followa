@@ -23,6 +23,11 @@ export const config = {
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
   telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME ?? '',
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? '',
+  baleBotToken: process.env.BALE_BOT_TOKEN ?? '',
+  baleBotUsername: process.env.BALE_BOT_USERNAME ?? '',
+  baleWebhookSecret: process.env.BALE_WEBHOOK_SECRET ?? '',
+  // Bale linking is isolated from OTP/notification provider selection.
+  baleLinkingEnabled: enabled('BALE_LINKING_ENABLED'),
   // Both migration features are opt-in. Deploying code alone changes no writes.
   messagingIdentityDualWriteEnabled: enabled(
     'MESSAGING_IDENTITY_DUAL_WRITE_ENABLED',
