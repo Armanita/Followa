@@ -8,12 +8,12 @@
 - تاریخ آخرین به‌روزرسانی: 2026-09-15
 - Repository: [Armanita/Followa](https://github.com/Armanita/Followa)
 - شاخهٔ مبنا: `main`
-- آخرین Commit کد بررسی‌شده: `a4cc13253e793198ea52cdd37a403272c6ca098b`
-- آخرین مرحلهٔ اجراشده در این مسیر: **P1 — امنیت اتصال فعلی تلگرام**؛ کد تکمیل شده و پذیرش دستی مالک هنوز ثبت نشده است.
+- آخرین Commit کد بررسی‌شده: `83f6474dfb63ef1216074e6d44c11338aeb5831b`
+- آخرین مرحلهٔ اجراشده در این مسیر: **P2 — قرارداد مشترک Provider**؛ کد تکمیل شده و پذیرش دستی مالک هنوز ثبت نشده است.
 - مرحلهٔ در حال اجرای کد: هیچ‌کدام.
-- مرحلهٔ بعدی پیشنهادی: اجرای تست دستی و ثبت پذیرش P1؛ هیچ Phase بعدی شروع نشود.
-- مجوز ثبت‌شده: اجرای P1 و Checkpoint مستنداتی همین مرحله.
-- P2 و تمام مراحل بعدی: در این جلسه مجوز اجرا نداشته‌اند و شروع نمی‌شوند.
+- مرحلهٔ بعدی پیشنهادی: اجرای Build/Vitest و تست دستی سازگاری P1/P2؛ هیچ Phase بعدی شروع نشود.
+- مجوز ثبت‌شده: اجرای P2 و Checkpoint مستنداتی همین مرحله.
+- P3 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
 - وضعیت استقرار، تنظیمات واقعی ربات و تست زنده: تأیید نشده؛ وضعیت Repository معادل وضعیت سرور نیست.
 - هیچ Provider واقعی بله، مدل عمومی هویت یا ارسال چندکاناله در این مسیر پیاده نشده است.
 
@@ -131,7 +131,7 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 |---|---|---|---|---|---|---|
 | P0 | بررسی و ثبت Roadmap | انجام‌شده — مستندات | فقط مستندات مجاز | [6ceb94f](https://github.com/Armanita/Followa/commit/6ceb94fdcae35388b603f39209d6d9c1ea29ae9b) | — | خیر |
 | P1 | امنیت اتصال فعلی Telegram | منتظر تأیید دستی مالک — اجرای کد تکمیل | 2026-09-15 | [a4cc132](https://github.com/Armanita/Followa/commit/a4cc13253e793198ea52cdd37a403272c6ca098b) | اجرا نشده | خیر |
-| P2 | قرارداد مشترک Provider | کد جزئی از قبل روی main مشاهده شد؛ در این جلسه اجرا/تأیید نشد | لازم | 3 Commit پیش از مبنای P1؛ نیازمند بررسی جدا | — | خیر |
+| P2 | قرارداد مشترک Provider | منتظر تأیید دستی مالک — اجرای کد تکمیل | 2026-09-15 | [83f6474](https://github.com/Armanita/Followa/commit/83f6474dfb63ef1216074e6d44c11338aeb5831b)؛ تکمیل 3 Commit مقدماتی | اجرا نشده | خیر |
 | P3 | مدل عمومی هویت، بدون مصرف عملیاتی | باقی‌مانده | لازم | — | — | افزایشی |
 | P4 | Backfill و همگام‌سازی آزمایشی Telegram | باقی‌مانده | لازم | — | — | انتقال داده؛ بدون Schema جدید |
 | P5 | اتصال امن Bale و پیام آزمایشی | باقی‌مانده | لازم | — | — | خیر؛ استفاده از P3 |
@@ -141,7 +141,7 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 | P9 | انتخاب کانال OTP | باقی‌مانده | لازم | — | — | خیر |
 | P10 | خواندن Telegram از مدل عمومی | باقی‌مانده | لازم | — | — | بدون Migration تخریبی |
 
-هیچ مرحله‌ای اکنون در حال اجرا نیست. P1 در کد تکمیل شده ولی تا ثبت تست دستی مالک «پذیرفته‌شده» محسوب نمی‌شود. وضعیت Deployment و تست زنده تأیید نشده است. هنگام شروع P1، سه Commit مقدماتی با عنوان P2 از قبل روی `main` وجود داشت؛ در این اجرا هیچ فایل P2 تغییر نکرد و تکمیل/پذیرش آن ادعا نمی‌شود.
+هیچ مرحله‌ای اکنون در حال اجرا نیست. P1 و P2 در کد تکمیل شده‌اند ولی تا ثبت تست دستی مالک «پذیرفته‌شده» محسوب نمی‌شوند. وضعیت Deployment و تست زنده تأیید نشده است. سه Commit مقدماتی P2 که پیش‌تر روی `main` وجود داشتند در Commit نهایی P2 بازبینی و تکمیل شدند؛ P3 شروع نشده است.
 
 ## 5. قرارداد اجرای هر مرحله
 
@@ -483,7 +483,7 @@ pnpm --filter @followa/api test
   - `apps/api/tests/telegram-linking.test.ts`
   - `docs/multi-messaging-roadmap.md` فقط در Checkpoint مستنداتی بعد از Commit اجرا
 - Commitهای اجرا: [a4cc13253e793198ea52cdd37a403272c6ca098b](https://github.com/Armanita/Followa/commit/a4cc13253e793198ea52cdd37a403272c6ca098b). Commit قدیمی [2e69be7](https://github.com/Armanita/Followa/commit/2e69be72d16ca5ea41f0879a40d2068808c1cd84) بخشی از P1 را پیش‌تر اعمال کرده بود؛ Commit نهایی این رکورد کاستی‌های آن را کامل می‌کند.
-- Commit مستنداتی ثبت نتیجه: Commit بلافاصله بعد از `a4cc132` در تاریخچه `main`؛ SHA خود این Checkpoint به‌علت خودارجاعی در Checkpoint بعدی ثبت می‌شود.
+- Commit مستنداتی ثبت نتیجه: [f06ce92](https://github.com/Armanita/Followa/commit/f06ce92bfaa81016123bccd3afa508807a7a0c49).
 - Merge SHA: Commit مستقیم و fast-forward روی `main`؛ Merge جدا ندارد.
 - Migrationها / نسخهٔ Schema / نتیجهٔ اجرا: ندارد؛ Schema و داده تغییر نکرد.
 - Backfill checkpoint / شمارش / تعارض‌ها: ندارد.
@@ -514,6 +514,56 @@ pnpm --filter @followa/api test
 - مجوز شروع مرحلهٔ بعد: ثبت نشده.
 - قدم بعدی دقیق: اجرای تست‌های خودکار در محیط پروژه و تست دستی P1؛ سپس ثبت پذیرش یا مشکل. تا تأیید جداگانه، هیچ Phase بعدی شروع نشود.
 
+### رکورد مرحله: P2 — قرارداد مشترک Provider
+
+- وضعیت: اجرای کد تکمیل؛ منتظر Build/Vitest، تست دستی و پذیرش مالک.
+- تاریخ و مسئول اجرا: 2026-09-15، Codex با درخواست مالک Repository.
+- مجوز مالک: شروع و اجرای P2؛ هیچ مجوزی برای P3 یا مراحل بعد ثبت نشد.
+- Branch / Base SHA: `main` / `f06ce92bfaa81016123bccd3afa508807a7a0c49`.
+- فایل‌های مجاز نهایی: سه فایل Messaging تعریف‌شده در P2، `otp-providers.ts`، `notification-service.ts`، تست Provider، تست سازگاری OTP و همین Roadmap.
+- فایل‌های واقعاً تغییرکرده:
+  - `apps/api/src/modules/messaging/messaging-types.ts`
+  - `apps/api/src/modules/messaging/provider-registry.ts`
+  - `apps/api/src/modules/messaging/providers/telegram-provider.ts`
+  - `apps/api/src/modules/auth/otp-providers.ts`
+  - `apps/api/src/modules/notifications/notification-service.ts`
+  - `apps/api/tests/messaging-providers.test.ts`
+  - `apps/api/tests/auth-otp.test.ts`
+  - `docs/multi-messaging-roadmap.md` فقط در Checkpoint مستنداتی بعد از Commit اجرا
+- Commitهای اجرا:
+  - Commit نهایی P2: [83f6474dfb63ef1216074e6d44c11338aeb5831b](https://github.com/Armanita/Followa/commit/83f6474dfb63ef1216074e6d44c11338aeb5831b).
+  - Commitهای مقدماتی موجود پیش از شروع این جلسه: [9b14150](https://github.com/Armanita/Followa/commit/9b14150fe7f5d3d034bfe114c1b8d68d08f5b466)، [fc88c81](https://github.com/Armanita/Followa/commit/fc88c8152562fa5b35a5a2428f12fe50fb1bdd5f)، [22ef568](https://github.com/Armanita/Followa/commit/22ef5683e3e9df64fce62ae73679ce9e8cd2c8e5). این سه Commit فقط اسکلت اولیه را افزوده بودند؛ Commit نهایی قرارداد را مصرف عملیاتی و تست آن را کامل کرد.
+- Commit مستنداتی ثبت نتیجه: Commit بلافاصله بعد از `83f6474` در تاریخچه `main`؛ SHA خود این Checkpoint در Checkpoint بعدی ثبت شود.
+- Merge SHA: Commit مستقیم و fast-forward روی `main`؛ Merge جدا ندارد.
+- Migrationها / نسخهٔ Schema / نتیجهٔ اجرا: ندارد؛ Schema و داده تغییر نکرد.
+- Backfill checkpoint / شمارش / تعارض‌ها: ندارد.
+- محیط و SHA مستقرشده: استقرار انجام یا تأیید نشده؛ Repository معادل Production فرض نشده است.
+- Feature Flagهای واقعی: Feature Flag جدید ندارد؛ انتخاب `OTP_PROVIDER` و `NOTIFICATION_PROVIDER` مانند قبل تک‌مقداری و تک‌کاناله باقی مانده است.
+- خلاصه تغییرات:
+  - قرارداد `MessagingProvider` برای destination، متن و metadata اختیاری تثبیت شد.
+  - `ProviderRegistry` ثبت idempotent همان instance، جلوگیری از جایگزینی خاموش و دریافت صریح Provider را فراهم می‌کند.
+  - `TelegramProvider` تنها Adapter تبدیل قرارداد مشترک به `telegram-client.sendMessage` است و متن و Reply Markup را بدون تغییر عبور می‌دهد.
+  - Telegram OTP پس از همان lookup موبایل و TelegramIdentity از قرارداد مشترک ارسال می‌کند؛ متن، Purpose، کیبورد کپی، تولید و اعتبار OTP دست‌نخورده‌اند.
+  - Telegram Notification پس از همان lookup User/Identity از قرارداد مشترک ارسال می‌کند؛ یک Notification داخلی، قالب عنوان/بدنه، رفتار کاربر بدون Identity و سیاست catch خطا حفظ شده‌اند.
+  - هیچ Provider واقعی Bale، ارسال چندکاناله، تنظیمات کاربر، Schema، Migration یا تغییر رفتار کسب‌وکار اضافه نشد.
+  - هیچ فایل مسیر امن اتصال P1 تغییر نکرد.
+- تست خودکار:
+  - PASS: خواندن فایل‌ها از Commit و بررسی Syntax هفت فایل TypeScript با `node --experimental-strip-types --check`.
+  - ADDED / NOT RUN: `messaging-providers.test.ts` با 9 سناریو برای Registry، نگاشت Telegram، Reply Markup، propagation خطا و مرز Notification.
+  - UPDATED / NOT RUN: یک سناریوی سازگاری در `auth-otp.test.ts` برای حفظ متن فعال‌سازی و کیبورد کپی کد.
+  - NOT RUN: `pnpm --filter @followa/api build`، `typecheck` و Vitest؛ Checkout احراز‌شده، dependencyها و دیتابیس تست در محیط Connector در دسترس نبود.
+  - NOT RUN: Telegram واقعی و Production.
+- تست دستی مالک: اجرا نشده؛ Telegram OTP فعال‌سازی/فراموشی رمز، یک اعلان دقیقاً یک‌بار، کاربر بدون Identity، Mock و خطای ارسال باید بررسی شوند.
+- Rollback دقیق:
+  - برگشت Commit نهایی با `git revert 83f6474dfb63ef1216074e6d44c11338aeb5831b` مسیر OTP/Notification را به پیاده‌سازی مستقیم قبل برمی‌گرداند؛ DB rollback و Migration ندارد.
+  - برای حذف کامل اسکلت P2، پس از Revert بالا Commitهای مقدماتی را از جدید به قدیم revert کن: `22ef5683e3e9df64fce62ae73679ce9e8cd2c8e5`، سپس `fc88c8152562fa5b35a5a2428f12fe50fb1bdd5f` و سپس `9b14150fe7f5d3d034bfe114c1b8d68d08f5b466`.
+  - قبل از Production rollback وضعیت ارسال یک OTP و یک Notification آزمایشی بررسی شود؛ پیام خارجی قبلاً ارسال‌شده قابل بازگرداندن نیست.
+- نتیجهٔ تمرین Rollback: اجرا نشده؛ تغییر فقط کد است و داده‌ای برای برگشت ندارد.
+- ریسک باقی‌مانده / مانع: Build و Vitest واقعی اجرا نشده‌اند؛ تست دستی و استقرار تأیید نشده‌اند.
+- پذیرش مالک برای اتمام این مرحله: ثبت نشده.
+- مجوز شروع مرحلهٔ بعد: ثبت نشده.
+- قدم بعدی دقیق: Build/Typecheck/Vitest و تست دستی سازگاری P1/P2؛ سپس ثبت پذیرش. P3 بدون مجوز مستقل شروع نشود.
+
 ### Checkpoint توقف میان مرحله
 
 - آخرین کار تکمیل‌شده:
@@ -533,7 +583,10 @@ pnpm --filter @followa/api test
 | 2026-09-14 | مسیر فنی | ۱۰ مرحله، مدل عمومی با مهاجرت افزایشی | پیشنهاد؛ اجرا نیازمند تأیید مرحله‌ای |
 | 2026-09-15 | P1: نبود Webhook Secret | اتصال جدید Fail-closed با 503؛ ارسال خروجی موجود مستقل | اجراشده در P1 |
 | 2026-09-15 | P1: اتمیک بودن | تراکنش Serializable، مصرف شرطی Pending و Retry محدود conflict | اجراشده در P1 |
-| 2026-09-15 | تغییر هم‌زمان main | حفظ Commitهای موجود و بازسازی P1 روی HEAD جدید بدون Force | اجراشده؛ P2 در این جلسه بررسی/تکمیل نشد |
+| 2026-09-15 | تغییر هم‌زمان main | حفظ Commitهای موجود و بازسازی P1 روی HEAD جدید بدون Force | اجراشده؛ P2 در آن جلسه بررسی/تکمیل نشد |
+| 2026-09-15 | P2: قرارداد Provider | Registry مشترک و Adapter تلگرام؛ انتخاب همچنان تک‌Provider | اجراشده؛ پذیرش دستی لازم |
+| 2026-09-15 | P2: metadata | فقط داده نمایشی Provider مانند Reply Markup؛ هویت/Secret ممنوع | اجراشده |
+| 2026-09-15 | مرز P2 | Telegram/Bale هم‌زمان و Provider واقعی Bale خارج محدوده | اجرا نشده؛ مربوط به مراحل بعد |
 
 ## 10. تاریخچه، Commitها و اسناد مرتبط
 
@@ -545,7 +598,7 @@ pnpm --filter @followa/api test
 | Audit تلگرام و برنامهٔ چندمرحله‌ای | انجام‌شده در بررسی؛ هیچ اجرای مرحلهٔ کد | مبنای این سند |
 | P0: ایجاد این Roadmap | مستندات تنها | [6ceb94f](https://github.com/Armanita/Followa/commit/6ceb94fdcae35388b603f39209d6d9c1ea29ae9b) |
 | P1: امنیت اتصال Telegram | اجرای کد تکمیل؛ پذیرش دستی ثبت نشده | [a4cc132](https://github.com/Armanita/Followa/commit/a4cc13253e793198ea52cdd37a403272c6ca098b) |
-| P2 | سه Commit جزئی پیش از شروع این اجرای P1 روی main مشاهده شد؛ در این جلسه تغییر نکرد | نیازمند بررسی و تأیید جداگانه |
+| P2: قرارداد مشترک Provider | اجرای کد تکمیل؛ پذیرش دستی ثبت نشده | [83f6474](https://github.com/Armanita/Followa/commit/83f6474dfb63ef1216074e6d44c11338aeb5831b)؛ پس از سه Commit مقدماتی |
 | P3 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
 
 برای یافتن SHA دقیق P0، بدون مشکل خودارجاعی SHA داخل همان Commit:
@@ -565,4 +618,4 @@ git log --diff-filter=A --format='%H %s' -- docs/multi-messaging-roadmap.md
 - [راهنمای تست دستی](manual-testing-guide-fa.md)
 - [استقرار](deployment.md)
 
-**وضعیت پایان این جلسه: اجرای P1 در کد تکمیل و Checkpoint ثبت شد؛ تست دستی/پذیرش مالک و وضعیت استقرار هنوز ثبت نشده‌اند. قدم بعدی فقط پذیرش P1 است؛ تا مجوز مستقل، هیچ Phase بعدی شروع نشود. STOP.**
+**وضعیت پایان این جلسه: اجرای P2 در کد تکمیل و Checkpoint ثبت شد؛ Build/Vitest، تست دستی، پذیرش مالک و وضعیت استقرار هنوز ثبت نشده‌اند. P3 شروع نشده و تا مجوز مستقل STOP.**
