@@ -1,6 +1,7 @@
 ﻿import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest';
 import { getTestApp, closeTestApp, seedFixture } from './helpers.js';
 import { prisma } from '../src/lib/prisma.js';
+import type { TelegramReplyMarkup } from '../src/modules/telegram/telegram-client.js';
 import {
   createTelegramOtpProviderForTests,
   createOtpProvider,
@@ -568,5 +569,51 @@ describe('Provider selection', () => {
     expect(provider.name).toBe('telegram');
     // Runtime selection in createOtpProvider() is env-driven (OTP_PROVIDER=telegram);
     // both branches exist and are type-checked; no network access is needed here.
+  });
+});
+
+
+describe('Telegram OTP messaging contract compatibility', () => {
+  it('preserves activation text and the copy-code keyboard', async () => {
+    const calls: Array<{
+      destination: number | string;
+      text: string;
+      replyMarkup?: TelegramReplyMarkup;
+    }> = [];
+    const provider = createTelegramOtpProviderForTests(
+      {
+        findUserByMobile: async (mobile: string) => ({
+          id: 'contract-user',
+          mobile,
+        }),
+        findIdentityByUserId: async (userId: string) => ({
+          telegramUserId: '888000111',
+          userId,
+        }),
+      },
+      {
+        sendMessage: async (destination, text, replyMarkup) => {
+          calls.push({ destination, text, replyMarkup });
+          return { ok: true };
+        },
+      },
+    );
+
+    await provider.sendOtp('09120000010', '314159', 'ACTIVATION');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.destination).toBe('888000111');
+    expect(calls[0]!.text).toContain('کد فعال‌سازی فالوآ');
+    expect(calls[0]!.text).toContain('314159');
+    expect(calls[0]!.replyMarkup).toEqual({
+      inline_keyboard: [
+        [
+          {
+            text: '📋 کپی کد',
+            copy_text: { text: '314159' },
+          },
+        ],
+      ],
+    });
   });
 });

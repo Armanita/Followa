@@ -1,6 +1,11 @@
 import { config } from '../../config.js';
 import { prisma } from '../../lib/prisma.js';
-import { createTelegramClient, type TelegramReplyMarkup } from '../telegram/telegram-client.js';
+import type { TelegramReplyMarkup } from '../telegram/telegram-client.js';
+import type { MessagingProvider } from '../messaging/messaging-types.js';
+import {
+  getTelegramProvider,
+  TelegramProvider,
+} from '../messaging/providers/telegram-provider.js';
 import { createTelegramRepository } from '../telegram/telegram-repository.js';
 
 export type OtpDeliveryPurpose = 'ACTIVATION' | 'PASSWORD_RESET';
@@ -86,8 +91,20 @@ export class TelegramOtpProvider implements OtpProvider {
   readonly name = 'telegram';
   constructor(
     private readonly repository: TelegramOtpRepository = createTelegramRepository(prisma),
-    private readonly client: TelegramOtpClient = createTelegramClient(),
+    private readonly provider: MessagingProvider = getTelegramProvider(),
   ) {}
+
+  private async sendTelegram(
+    destination: string,
+    text: string,
+    replyMarkup?: TelegramReplyMarkup,
+  ): Promise<void> {
+    await this.provider.send({
+      destination,
+      text,
+      ...(replyMarkup ? { metadata: { replyMarkup } } : {}),
+    });
+  }
 
   async sendOtp(
     mobile: string,
@@ -107,7 +124,7 @@ export class TelegramOtpProvider implements OtpProvider {
     }
 
     if (purpose === 'ACTIVATION') {
-      await this.client.sendMessage(
+      await this.sendTelegram(
         identity.telegramUserId,
         `🔐 کد فعال‌سازی فالوآ\n\nکد یکبارمصرف شما:\n\n${code}\n\n⏱ اعتبار کد: ۵ دقیقه\n🔒 این کد را در اختیار دیگران قرار ندهید.`,
         {
@@ -125,7 +142,7 @@ export class TelegramOtpProvider implements OtpProvider {
     }
 
     if (purpose === 'PASSWORD_RESET') {
-      await this.client.sendMessage(
+      await this.sendTelegram(
         identity.telegramUserId,
         `🔑 بازیابی رمز عبور فالوآ\n\nکد تأیید شما:\n\n${code}\n\n⏱ اعتبار کد: ۵ دقیقه\n🔒 این کد را در اختیار دیگران قرار ندهید.`,
         {
@@ -142,7 +159,7 @@ export class TelegramOtpProvider implements OtpProvider {
       return;
     }
 
-    await this.client.sendMessage(
+    await this.sendTelegram(
       identity.telegramUserId,
       `کد یکبارمصرف فالوآ: ${code}\nمدت اعتبار: ۵ دقیقه`,
     );
@@ -169,5 +186,5 @@ export function createTelegramOtpProviderForTests(
   repository: TelegramOtpRepository,
   client: TelegramOtpClient,
 ): OtpProvider {
-  return new TelegramOtpProvider(repository, client);
+  return new TelegramOtpProvider(repository, new TelegramProvider(client));
 }

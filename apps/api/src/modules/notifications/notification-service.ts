@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { config } from '../../config.js';
-import { createTelegramClient } from '../telegram/telegram-client.js';
+import type { MessagingProvider } from '../messaging/messaging-types.js';
+import { getTelegramProvider } from '../messaging/providers/telegram-provider.js';
 import { createTelegramRepository } from '../telegram/telegram-repository.js';
 
 export interface NotificationInput {
@@ -46,17 +47,40 @@ class MessengerNotificationAdapter implements PushAdapter {
   }
 }
 
+type TelegramNotificationRepository = {
+  findIdentityByUserId(
+    userId: string,
+  ): Promise<{ telegramUserId: string; userId: string } | null>;
+};
+
 class TelegramNotificationAdapter implements PushAdapter {
   readonly name = 'telegram';
-  private readonly telegramClient = createTelegramClient();
-  private readonly telegramRepository = createTelegramRepository(prisma);
+
+  constructor(
+    private readonly telegramRepository: TelegramNotificationRepository =
+      createTelegramRepository(prisma),
+    private readonly provider: MessagingProvider = getTelegramProvider(),
+  ) {}
 
   async send(userId: string, title: string, body: string): Promise<void> {
-    const identity = await this.telegramRepository.findIdentityByUserId(userId);
-    if (!identity) return; // user has no linked Telegram account — in-app row is the delivery
+    const identity =
+      await this.telegramRepository.findIdentityByUserId(userId);
+    if (!identity) {
+      return; // The in-app row remains the delivery for an unlinked user.
+    }
 
-    await this.telegramClient.sendMessage(identity.telegramUserId, `${title}\n${body}`);
+    await this.provider.send({
+      destination: identity.telegramUserId,
+      text: `${title}\n${body}`,
+    });
   }
+}
+
+export function createTelegramNotificationAdapterForTests(
+  repository: TelegramNotificationRepository,
+  provider: MessagingProvider,
+): PushAdapter {
+  return new TelegramNotificationAdapter(repository, provider);
 }
 
 function createPushAdapter(): PushAdapter {

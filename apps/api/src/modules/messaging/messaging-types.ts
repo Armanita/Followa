@@ -1,9 +1,11 @@
 export type MessagingProviderName = 'telegram' | 'bale' | 'eitaa';
 
 export interface MessagingSendRequest {
+  /** Provider-owned destination, never accepted directly from an API caller. */
   destination: string;
   text: string;
-  metadata?: Record<string, unknown>;
+  /** Opaque provider-specific rendering data; authentication data is forbidden. */
+  metadata?: Readonly<Record<string, unknown>>;
 }
 
 export interface MessagingProvider {
