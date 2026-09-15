@@ -87,6 +87,7 @@ model Company {
   customers         Customer[]
   sensitiveAuditLog SensitiveAuditLog[]
   messagingPolicies CompanyMessagingPolicy[]
+  notifications     Notification[]
 
   @@map("companies")
 }
@@ -400,6 +401,7 @@ model File {
 model Notification {
   id        String           @id @default(cuid())
   userId    String
+  companyId String?
   type      NotificationType
   title     String
   body      String?
@@ -408,9 +410,12 @@ model Notification {
   readAt    DateTime?
   createdAt DateTime         @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company    Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  deliveries NotificationDelivery[]
 
   @@index([userId, readAt, createdAt])
+  @@index([companyId, createdAt])
   @@map("notifications")
 }
 
@@ -485,6 +490,7 @@ model MessagingIdentity {
   updatedAt          DateTime                @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
 
   // One current row per user/channel. Relinking must update this row explicitly;
   // create/upsert must never silently transfer an external identity.
@@ -567,4 +573,68 @@ model UserMessagingPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_messaging_preferences")
+}
+
+// ---------------------------------------------------------------------------
+// Notification delivery ledger (P7 storage only; no dispatcher/worker yet)
+// ---------------------------------------------------------------------------
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+
+  @@map("notification_delivery_status")
+}
+
+enum NotificationDeliveryAttemptOutcome {
+  SENT
+  FAILED
+
+  @@map("notification_delivery_attempt_outcome")
+}
+
+model NotificationDelivery {
+  id                  String                     @id @default(cuid())
+  notificationId      String
+  channel             MessagingChannel
+  messagingIdentityId String?
+  identityVersion     Int?
+  destinationId       String
+  status              NotificationDeliveryStatus @default(PENDING)
+  attemptCount        Int                        @default(0)
+  availableAt         DateTime                   @default(now())
+  lastAttemptAt       DateTime?
+  sentAt              DateTime?
+  cancelledAt         DateTime?
+  providerMessageId   String?
+  lastError           String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  notification     Notification                 @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  messagingIdentity MessagingIdentity?           @relation(fields: [messagingIdentityId], references: [id], onDelete: SetNull)
+  attempts          NotificationDeliveryAttempt[]
+
+  // A business notification gets at most one immutable job per channel.
+  @@unique([notificationId, channel])
+  @@index([status, availableAt])
+  @@index([messagingIdentityId])
+  @@map("notification_deliveries")
+}
+
+model NotificationDeliveryAttempt {
+  id            String                              @id @default(cuid())
+  deliveryId    String
+  attemptNumber Int
+  outcome       NotificationDeliveryAttemptOutcome
+  errorMessage  String?
+  attemptedAt   DateTime                            @default(now())
+
+  delivery NotificationDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, attemptNumber])
+  @@index([deliveryId, attemptedAt])
+  @@map("notification_delivery_attempts")
 }
