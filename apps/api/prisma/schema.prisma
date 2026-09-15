@@ -527,6 +527,9 @@ model MessagingLinkChallenge {
 
 model MessagingSystemPolicy {
   channel             MessagingChannel @id
+  displayName         String?
+  botUsername         String?
+  credentialsEncrypted String?
   enabled             Boolean          @default(false)
   notificationEnabled Boolean          @default(false)
   otpEnabled          Boolean          @default(false)
