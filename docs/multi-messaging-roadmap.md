@@ -8,14 +8,14 @@
 - تاریخ آخرین به‌روزرسانی: 2026-09-15
 - Repository: [Armanita/Followa](https://github.com/Armanita/Followa)
 - شاخهٔ مبنا: `main`
-- آخرین Commit کد بررسی‌شده: `92e5701e96c8c2780be47fb47843e324da005cd9`
-- آخرین مرحلهٔ اجراشده در این مسیر: **P3 — Schema عمومی هویت**؛ کد و Migration افزایشی در Repository تکمیل شده‌اند، اما Migration اجرا و پذیرش دستی ثبت نشده است.
+- آخرین Commit کد بررسی‌شده: `f228ac88080b3e8d93cb6c39fd9dd39e03456dc4`
+- آخرین مرحلهٔ اجراشده در این مسیر: **P4 — انتقال و همگام‌سازی هویت Telegram**؛ ابزار و سازگاری در Repository تکمیل شده‌اند، اما Migration پیش‌نیاز P3، Backfill، تست DB و پذیرش دستی اجرا نشده‌اند.
 - مرحلهٔ در حال اجرای کد: هیچ‌کدام.
-- مرحلهٔ بعدی پیشنهادی: Backup و اجرای Migration/تست روی کپی ایزوله دیتابیس؛ هیچ Phase بعدی شروع نشود.
-- مجوز ثبت‌شده: اجرای P3 و Checkpoint مستنداتی همین مرحله؛ مجوز Deploy یا اجرای Migration روی Production داده نشده است.
-- P4 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
+- مرحلهٔ بعدی پیشنهادی: Backup قابل‌بازیابی، اجرای Migration P3 و Dry-run دستورالعمل P4 روی کپی ایزوله دیتابیس؛ هیچ Phase بعدی شروع نشود.
+- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P4؛ مجوز Deploy، اجرای Migration یا Backfill روی Production داده نشده است.
+- P5 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
 - وضعیت استقرار، تنظیمات واقعی ربات و تست زنده: تأیید نشده؛ وضعیت Repository معادل وضعیت سرور نیست.
-- هیچ Provider واقعی بله، مدل عمومی هویت یا ارسال چندکاناله در این مسیر پیاده نشده است.
+- هیچ Provider واقعی بله یا ارسال چندکاناله در این مسیر پیاده نشده است؛ مدل عمومی هویت P3 و سازگاری آزمایشی P4 هنوز مصرف خواندن عملیاتی ندارند.
 
 اصلاح شرط شرکت فعال در Auth قبلاً در Commit بالا انجام شده است؛ این اصلاح یکی از مراحل انجام‌شدهٔ Multi Messaging محسوب نمی‌شود و باید حفظ شود.
 
@@ -133,7 +133,7 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 | P1 | امنیت اتصال فعلی Telegram | منتظر تأیید دستی مالک — اجرای کد تکمیل | 2026-09-15 | [a4cc132](https://github.com/Armanita/Followa/commit/a4cc13253e793198ea52cdd37a403272c6ca098b) | اجرا نشده | خیر |
 | P2 | قرارداد مشترک Provider | منتظر تأیید دستی مالک — اجرای کد تکمیل | 2026-09-15 | [83f6474](https://github.com/Armanita/Followa/commit/83f6474dfb63ef1216074e6d44c11338aeb5831b)؛ تکمیل 3 Commit مقدماتی | اجرا نشده | خیر |
 | P3 | مدل عمومی هویت، بدون مصرف عملیاتی | منتظر تست Migration و تأیید مالک — Repository تکمیل | 2026-09-15؛ بدون مجوز Production | [92e5701](https://github.com/Armanita/Followa/commit/92e5701e96c8c2780be47fb47843e324da005cd9) | اجرا نشده | افزایشی؛ اجرا نشده |
-| P4 | Backfill و همگام‌سازی آزمایشی Telegram | باقی‌مانده | لازم | — | — | انتقال داده؛ بدون Schema جدید |
+| P4 | Backfill و همگام‌سازی آزمایشی Telegram | منتظر تست DB، Backfill مجاز و تأیید مالک — اجرای کد تکمیل | 2026-09-15؛ بدون مجوز Production | [f228ac8](https://github.com/Armanita/Followa/commit/f228ac88080b3e8d93cb6c39fd9dd39e03456dc4) | اجرا نشده | انتقال داده اجرا نشده؛ Schema جدید ندارد |
 | P5 | اتصال امن Bale و پیام آزمایشی | باقی‌مانده | لازم | — | — | خیر؛ استفاده از P3 |
 | P6 | تنظیمات سیستم، شرکت و User | باقی‌مانده | لازم | — | — | افزایشی |
 | P7 | ذخیرهٔ مستقل وضعیت تحویل | باقی‌مانده | لازم | — | — | افزایشی |
@@ -141,7 +141,7 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 | P9 | انتخاب کانال OTP | باقی‌مانده | لازم | — | — | خیر |
 | P10 | خواندن Telegram از مدل عمومی | باقی‌مانده | لازم | — | — | بدون Migration تخریبی |
 
-هیچ مرحله‌ای اکنون در حال اجرا نیست. P1 و P2 در کد و P3 در Repository تکمیل شده‌اند، اما پذیرش دستی ثبت نشده است. Migration P3 صرفاً به Git افزوده شده و روی دیتابیس اجرا نشده؛ وضعیت Deployment و تست زنده تأیید نشده است. P4 شروع نشده است.
+هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P4 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migration P3 صرفاً به Git افزوده شده و روی دیتابیس اجرا نشده؛ در نتیجه Backfill P4 نیز اجرا نشده است. وضعیت Deployment و تست زنده تأیید نشده است و P5 شروع نشده است.
 
 ## 5. قرارداد اجرای هر مرحله
 
@@ -611,6 +611,55 @@ pnpm --filter @followa/api test
 - مجوز شروع مرحلهٔ بعد: ثبت نشده.
 - قدم بعدی دقیق: Backup قابل‌بازیابی، اجرای `prisma migrate deploy` روی کپی DB، Build/Typecheck/Vitest و اجرای نسخه قبلی API؛ سپس ثبت نتیجه. P4 بدون مجوز مستقل شروع نشود.
 
+### رکورد مرحله: P4 — انتقال و همگام‌سازی هویت Telegram
+
+- وضعیت: اجرای کد و Runbook در Repository تکمیل؛ Migration پیش‌نیاز، Dry-run/Apply، تست DB و پذیرش مالک در انتظار.
+- تاریخ و مسئول اجرا: 2026-09-15، Codex با درخواست مالک Repository.
+- مجوز مالک: شروع و اجرای P4 و Checkpoint مستنداتی؛ هیچ مجوزی برای P5، Deploy، Migration یا Backfill روی Production ثبت نشد.
+- Branch / Base SHA: `main` / `9d247f9edc7842124503d55f5beccdfcafa16a5a`.
+- فایل‌های واقعاً تغییرکرده:
+  - `apps/api/scripts/backfill-messaging-identities.ts`
+  - `apps/api/src/config.ts`
+  - `apps/api/src/modules/messaging/messaging-repository.ts`
+  - `apps/api/src/modules/telegram/telegram-repository.ts`
+  - `apps/api/tests/messaging-compatibility.test.ts`
+  - `docs/messaging-migration-runbook.md`
+  - `docs/multi-messaging-roadmap.md` فقط در Checkpoint مستنداتی بعد از Commit اجرا
+- Commit اجرا: [f228ac88080b3e8d93cb6c39fd9dd39e03456dc4](https://github.com/Armanita/Followa/commit/f228ac88080b3e8d93cb6c39fd9dd39e03456dc4).
+- Commit مستنداتی ثبت نتیجه: Commit بلافاصله بعد از `f228ac8` در تاریخچه `main`؛ SHA خود این Checkpoint در Checkpoint بعدی ثبت شود.
+- Merge SHA: Commit مستقیم و fast-forward روی `main`؛ Merge جدا ندارد.
+- Migrationها / نسخهٔ Schema / نتیجهٔ اجرا:
+  - P4 هیچ Schema یا Migration تازه‌ای ندارد.
+  - Migration افزایشی P3 پیش‌نیاز فعال‌سازی dual-write و اجرای Apply است و هنوز روی هیچ دیتابیس اجرا نشده است.
+  - Backfill اجرا نشده؛ checkpoint، شمارش واقعی و تعارض عملیاتی وجود ندارد.
+- محیط و SHA مستقرشده: استقرار انجام یا تأیید نشده؛ Repository معادل Production فرض نشده است.
+- Feature Flagهای واقعی:
+  - `MESSAGING_IDENTITY_DUAL_WRITE_ENABLED` پیش‌فرض `false`.
+  - `MESSAGING_IDENTITY_BACKFILL_ENABLED` پیش‌فرض `false`؛ Apply علاوه بر Flag به `--apply` صریح نیاز دارد.
+- خلاصه تغییرات:
+  - اسکریپت Backfill دسته‌ای با Dry-run پیش‌فرض، Apply دوگانه‌محافظت‌شده، checkpoint قابل ادامه، حد batch و توقف در اولین تعارض اضافه شد.
+  - Import idempotent است؛ تعارض مالک User/Channel یا external ID را overwrite نمی‌کند و race یکتایی را دوباره بررسی می‌کند.
+  - Identityهای Legacy با `verifiedAt = null`، روش `LEGACY_IMPORT_UNVERIFIED` و provenance برابر `telegram_identities` ثبت می‌شوند؛ انتقال داده به معنی بازتأیید امن نیست.
+  - اتصال امن جدید P1 در صورت فعال‌بودن Flag، `TelegramIdentity` و `MessagingIdentity` را در همان تراکنش Serializable می‌نویسد یا در تعارض هیچ‌کدام را ثبت نمی‌کند.
+  - تمام خواندن‌های عملیاتی Telegram همچنان از `TelegramIdentity` هستند؛ OTP و Notification تغییر نکردند و Backfill هیچ پیام شبکه‌ای ارسال نمی‌کند.
+  - Runbook شامل پیش‌نیاز، Dry-run، Resume، Apply، تطبیق شمارش، توقف و Rollback افزوده شد.
+- تست‌های انجام‌شده:
+  - PASS: بررسی Diff از Base تا Commit نهایی؛ فقط ۶ فایل P4، بدون Schema/Migration/OTP/Notification.
+  - PASS: بررسی Syntax پنج فایل TypeScript تغییرکرده/افزوده با `node --experimental-strip-types --check`.
+  - ADDED / NOT RUN: `messaging-compatibility.test.ts` با ۸ سناریو برای Dry-run، checkpoint، توقف تعارض، resume/idempotency، provenance تأییدنشده، جلوگیری از overwrite، رفتار Flag خاموش، dual-write اتمیک و تعارض دیرهنگام.
+  - NOT RUN: Build، Typecheck و Vitest واقعی؛ checkout کامل، dependencyهای نصب‌شده و PostgreSQL ایزوله در محیط Connector در دسترس نبود.
+  - NOT RUN: Migration P3، Dry-run/Apply Backfill، Telegram واقعی، Production و تست دستی OTP/Notification.
+- روش Rollback دقیق:
+  - قبل از هر Backfill، هر دو Flag را `false` نگه دار و با `git revert f228ac88080b3e8d93cb6c39fd9dd39e03456dc4` یا Deploy نسخه `9d247f9edc7842124503d55f5beccdfcafa16a5a` کد P4 را برگردان؛ DB rollback ندارد.
+  - پس از شروع Backfill، ابتدا Apply و dual-write را خاموش کن. خواندن‌ها همچنان Legacy هستند؛ ردیف‌های عمومی ساخته‌شده را حذف یا جدول‌ها را Drop نکن.
+  - پیام خارجی ناشی از Backfill وجود ندارد. پیش از شروع دوباره، Dry-run و تطبیق مالکیت/شمارش را اجرا و از آخرین checkpoint موفق ادامه بده؛ رکورد تعارض checkpoint محسوب نمی‌شود.
+  - اگر dual-write پس از Migration فعال شده باشد، خاموش‌کردن Flag مسیر قدیمی را حفظ می‌کند؛ قبل از استفاده مجدد مدل عمومی، اتصال‌های جدید دوره توقف دوباره تطبیق داده شوند.
+- نتیجهٔ تمرین Rollback: اجرا نشده؛ نیازمند دیتابیس ایزوله است.
+- ریسک باقی‌مانده / مانع: P3 هنوز migrate/validate نشده، Backfill واقعی و تست DB انجام نشده و داده Legacy امنِ جدید تلقی نمی‌شود.
+- پذیرش مالک برای اتمام این مرحله: ثبت نشده.
+- مجوز شروع مرحلهٔ بعد: ثبت نشده.
+- قدم بعدی دقیق: طبق `docs/messaging-migration-runbook.md` روی کپی ایزوله، Backup/Restore، Migration P3، Build/Vitest، Dry-run و شمارش/تعارض را اجرا و نتیجه را ثبت کن. P5 بدون مجوز مستقل شروع نشود.
+
 ### Checkpoint توقف میان مرحله
 
 - آخرین کار تکمیل‌شده:
@@ -639,6 +688,10 @@ pnpm --filter @followa/api test
 | 2026-09-15 | P3: تاریخچه | وضعیت/نسخه روی ردیف جاری؛ تاریخچه چندردیفی فعلاً ایجاد نشد | اجراشده؛ بازطراحی آینده نیازمند Phase جدا |
 | 2026-09-15 | P3: Challenge | فقط Hash یکتا ذخیره شود؛ Pending قدیمی مهاجرت نشود | اجراشده |
 | 2026-09-15 | P3: Migration | فقط ثبت در Git؛ اجرای Production مجاز نیست | اجرا نشده |
+| 2026-09-15 | P4: خواندن دوره گذار | همه خواندن‌های عملیاتی روی TelegramIdentity قدیمی باقی بمانند | اجراشده؛ تغییر منبع خواندن مربوط به P10 |
+| 2026-09-15 | P4: Legacy verification | Backfill با verifiedAt خالی و provenance صریح؛ داده قدیمی بازتأییدشده محسوب نشود | اجراشده |
+| 2026-09-15 | P4: کنترل اجرا | Dry-run پیش‌فرض؛ Apply فقط با Flag و آرگومان صریح؛ توقف روی اولین تعارض | اجراشده؛ اجرای DB مجاز نشده |
+| 2026-09-15 | P4: Dual-write | پیش‌فرض خاموش و در اتصال امن جدید اتمیک؛ هیچ ارسال شبکه‌ای داخل تراکنش | اجراشده؛ فعال‌سازی مجاز نشده |
 
 ## 10. تاریخچه، Commitها و اسناد مرتبط
 
@@ -652,7 +705,8 @@ pnpm --filter @followa/api test
 | P1: امنیت اتصال Telegram | اجرای کد تکمیل؛ پذیرش دستی ثبت نشده | [a4cc132](https://github.com/Armanita/Followa/commit/a4cc13253e793198ea52cdd37a403272c6ca098b) |
 | P2: قرارداد مشترک Provider | اجرای کد تکمیل؛ پذیرش دستی ثبت نشده | [83f6474](https://github.com/Armanita/Followa/commit/83f6474dfb63ef1216074e6d44c11338aeb5831b)؛ پس از سه Commit مقدماتی |
 | P3: Schema عمومی هویت | کد/Migration در Repository تکمیل؛ اجرا و پذیرش DB ثبت نشده | [92e5701](https://github.com/Armanita/Followa/commit/92e5701e96c8c2780be47fb47843e324da005cd9) |
-| P4 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
+| P4: Backfill و همگام‌سازی آزمایشی | اجرای کد/Runbook تکمیل؛ Migration، Backfill و پذیرش DB ثبت نشده | [f228ac8](https://github.com/Armanita/Followa/commit/f228ac88080b3e8d93cb6c39fd9dd39e03456dc4) |
+| P5 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
 
 برای یافتن SHA دقیق P0، بدون مشکل خودارجاعی SHA داخل همان Commit:
 
@@ -671,4 +725,4 @@ git log --diff-filter=A --format='%H %s' -- docs/multi-messaging-roadmap.md
 - [راهنمای تست دستی](manual-testing-guide-fa.md)
 - [استقرار](deployment.md)
 
-**وضعیت پایان این جلسه: P3 به‌صورت افزایشی در Repository تکمیل و Checkpoint ثبت شد؛ Migration اجرا نشده و Build/Vitest، تست DB، پذیرش مالک و استقرار ثبت نشده‌اند. P4 شروع نشده و تا مجوز مستقل STOP.**
+**وضعیت پایان این جلسه: P4 در Repository با Commit مستقل تکمیل و Checkpoint ثبت شد؛ Migration P3، Backfill P4، Build/Vitest، تست DB، پذیرش مالک و استقرار ثبت نشده‌اند. P5 شروع نشده و تا مجوز مستقل STOP.**
