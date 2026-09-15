@@ -8,12 +8,12 @@
 - تاریخ آخرین به‌روزرسانی: 2026-09-15
 - Repository: [Armanita/Followa](https://github.com/Armanita/Followa)
 - شاخهٔ مبنا: `main`
-- آخرین Commit کد بررسی‌شده: `ef1b719d3d6979507e904e9b5a13ad0e72855271`
-- آخرین مرحلهٔ اجراشده در این مسیر: **P8 — Notification چندکاناله و Worker**؛ کد opt-in در Git تکمیل شده، اما Flagها خاموش، Migrationهای پیش‌نیاز و تست DB/Live اجرا نشده‌اند.
+- آخرین Commit کد بررسی‌شده: `7f39a3be580bddd99ea56f99ed460af727513b7d`
+- آخرین مرحلهٔ اجراشده در این مسیر: **P9 — کانال منتخب OTP**؛ کد opt-in در Git تکمیل شده و Build خودکار موفق است، اما Flag خاموش و Vitest/DB/Live/پذیرش مالک اجرا نشده‌اند.
 - مرحلهٔ در حال اجرای کد: هیچ‌کدام.
-- مرحلهٔ بعدی پیشنهادی: اجرای Migrationهای P3/P6/P7 و تست P4 تا P8 روی کپی ایزوله، سپس Rollout آزمایشی کنترل‌شده؛ P9 فقط پس از تأیید مستقل شروع شود.
-- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P8؛ مجوز Migration، Backfill، فعال‌سازی Flagها یا ارسال واقعی داده نشده است.
-- P9 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
+- مرحلهٔ بعدی پیشنهادی: اجرای Migrationهای P3/P6/P7 و تست P4 تا P9 روی کپی ایزوله؛ P10 فقط پس از تأیید مستقل شروع شود.
+- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P9؛ مجوز Migration، Backfill، فعال‌سازی Flagها یا ارسال واقعی داده نشده است.
+- P10: نیازمند مجوز مستقل است و شروع نشده است.
 - وضعیت استقرار، تنظیمات واقعی ربات و تست زنده: تأیید نشده؛ وضعیت Repository معادل وضعیت سرور نیست.
 - Provider و اتصال امن Bale به‌صورت opt-in افزوده شده، اما Provider اعلان/OTP و ارسال چندکاناله فعال نشده است؛ خواندن عملیاتی Telegram همچنان Legacy است.
 
@@ -138,10 +138,10 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 | P6 | تنظیمات سیستم، شرکت و User | منتظر Migration، تست DB/Build و تأیید مالک — Repository تکمیل | 2026-09-15؛ بدون مجوز Production | [0ce519a](https://github.com/Armanita/Followa/commit/0ce519a8117aeeb35d852c19f5f2bf5471d8d3f7) | اجرا نشده | افزایشی؛ اجرا نشده |
 | P7 | ذخیرهٔ مستقل وضعیت تحویل | منتظر Migration، تست DB/Vitest و تأیید مالک — Repository تکمیل | 2026-09-15؛ بدون مجوز Production | [1976c05](https://github.com/Armanita/Followa/commit/1976c05603b4ba6a335d1ab14800adc7b9643d83) | اجرا نشده | افزایشی؛ اجرا نشده |
 | P8 | Notification چندکاناله و Worker | منتظر Migration، تست DB/Live و تأیید مالک — اجرای کد opt-in تکمیل | 2026-09-15؛ Flagها خاموش | [ef1b719](https://github.com/Armanita/Followa/commit/ef1b719d3d6979507e904e9b5a13ad0e72855271) | اجرا نشده | خیر؛ استفاده از P7 |
-| P9 | انتخاب کانال OTP | باقی‌مانده | لازم | — | — | خیر |
+| P9 | انتخاب کانال OTP | منتظر Vitest/DB/Live و تأیید مالک — اجرای کد opt-in تکمیل | 2026-09-15؛ Flag خاموش | [7f39a3b](https://github.com/Armanita/Followa/commit/7f39a3be580bddd99ea56f99ed460af727513b7d) | اجرا نشده | خیر |
 | P10 | خواندن Telegram از مدل عمومی | باقی‌مانده | لازم | — | — | بدون Migration تخریبی |
 
-هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P8 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migrationهای P3/P6/P7 و Backfill P4 اجرا نشده‌اند؛ Flagهای P8 پیش‌فرض خاموش‌اند و مسیر ارسال جاری هنوز Legacy است. P9 شروع نشده است.
+هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P9 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migrationهای P3/P6/P7 و Backfill P4 اجرا نشده‌اند؛ Flagهای P8 و P9 پیش‌فرض خاموش‌اند و مسیرهای ارسال جاری هنوز Legacy هستند. P10 شروع نشده است.
 
 ## 5. قرارداد اجرای هر مرحله
 
@@ -894,6 +894,57 @@ pnpm --filter @followa/api test
 - مجوز شروع مرحلهٔ بعد: ثبت نشده.
 - قدم بعدی دقیق: Migration و تست کامل P8 را روی کپی DB اجرا و Rollout آزمایشی دو Flag را مرحله‌ای انجام بده. P9 بدون مجوز مستقل شروع نشود.
 
+### رکورد مرحله: P9 — کانال منتخب OTP
+
+- وضعیت: اجرای کد opt-in در Repository تکمیل؛ Flag خاموش، Vitest/DB/Live و پذیرش مالک در انتظار.
+- تاریخ و مسئول اجرا: 2026-09-15، Codex با درخواست مالک Repository.
+- مجوز مالک: شروع و اجرای P9 و Checkpoint مستنداتی؛ هیچ مجوزی برای P10، Migration، Backfill، فعال‌سازی Flag یا ارسال واقعی ثبت نشد.
+- Branch / Base SHA: `main` / `2a3910627a15d79d5165c1c4655557b24bdcaa05`.
+- فایل‌های واقعاً تغییرکرده:
+  - `apps/api/src/config.ts`
+  - `apps/api/src/modules/auth/otp-providers.ts`
+  - `apps/api/src/modules/messaging/messaging-policy.ts`
+  - `apps/api/src/modules/messaging/otp-dispatcher.ts`
+  - `apps/api/tests/multi-channel-otp.test.ts`
+  - `docs/multi-messaging-roadmap.md` فقط در Checkpoint مستنداتی بعد از Commit اجرا
+- Commit اجرا: [7f39a3be580bddd99ea56f99ed460af727513b7d](https://github.com/Armanita/Followa/commit/7f39a3be580bddd99ea56f99ed460af727513b7d).
+- Commit مستنداتی ثبت نتیجه: Commit بلافاصله بعد از `7f39a3b` در تاریخچه `main`؛ SHA خود این Checkpoint در Checkpoint بعدی ثبت شود.
+- Merge SHA: Commit مستقیم و fast-forward روی `main`؛ Merge جدا ندارد.
+- Database / Migration:
+  - P9 Migration تازه ندارد و از `UserMessagingPreference` و `MessagingSystemPolicy` مرحله P6 و Identityهای P3 استفاده می‌کند.
+  - هیچ Migration، Backfill، تغییر داده یا ارسال پیام واقعی در این اجرا انجام نشد.
+- Feature Flag و Bootstrap:
+  - `MULTI_CHANNEL_OTP_ENABLED=false` مسیر `OTP_PROVIDER` قبلی را بدون تغییر حفظ می‌کند؛ مقدار پیش‌فرض Flag خاموش است.
+  - با روشن‌شدن Flag، انتخاب صریح User فقط یک کانال را فعال می‌کند؛ نبود Preference به‌عنوان Bootstrap از Provider قدیمی استفاده می‌کند.
+  - نبود مقصد، سیاست غیرفعال یا خطای Provider منتخب Fail-closed است و به کانال دیگری fallback نمی‌شود؛ OTP وارد صف Notification/Retry نمی‌شود.
+- خلاصه تغییرات:
+  - Dispatcher جدید پیش از ارسال، وجود User و عضویت فعال در شرکت فعال را دوباره بررسی می‌کند.
+  - سیاست System باید هم `enabled` و هم `otpEnabled` باشد.
+  - Telegram منتخب تا P10 از `TelegramIdentity` Legacy و Bale از `MessagingIdentity` فعال و تأییدشده خوانده می‌شود؛ مقصد دلخواه API پذیرفته نمی‌شود.
+  - متن ACTIVATION و PASSWORD_RESET حفظ و Keyboard کپی کد Telegram در مسیر منتخب حفظ شد.
+  - تولید کد، TTL پنج‌دقیقه‌ای، سقف پنج تلاش، Purpose isolation، Pending Token، JWT و Password Flow دست‌نخورده‌اند؛ `auth-service.ts` تغییر نکرد.
+  - Notification، Worker، UI، Schema، Migration و فایل‌های کسب‌وکار تغییر نکردند.
+- تست‌های انجام‌شده:
+  - PASS: Diff Commit از Base؛ دقیقاً پنج فایل P9 و بدون تغییر `auth-service.ts`، JWT، Password Flow، Notification، Schema، Migration، UI یا کسب‌وکار.
+  - PASS: Build/Deploy خودکار Railway برای API و Web روی Commit اجرا.
+  - ADDED / NOT RUN: `multi-channel-otp.test.ts` برای Telegram منتخب، Bale منتخب، Bootstrap Legacy، شرکت/عضویت غیرفعال، سیاست غیرفعال، مقصد ناموجود و ممنوع‌بودن fallback.
+  - NOT RUN: Vitest، تست PostgreSQL، Migrationهای پیش‌نیاز، Telegram/Bale Live، جریان کامل Auth و تمرین Rollback.
+- تست دستی مالک:
+  - ابتدا Migrationهای P3/P6/P7 و داده‌های سیاست/هویت روی کپی DB آماده شوند؛ Flag همچنان خاموش و جریان‌های Activation/Reset قدیمی تأیید شوند.
+  - سپس Flag در محیط آزمایشی روشن شود و ACTIVATION و PASSWORD_RESET برای Telegram و Bale، wrong/expired/reused، جداسازی Purpose و خطای Provider آزموده شوند.
+  - شرکت/عضویت پس از دریافت کد غیرفعال شود و Verify/Reset رد شود؛ ورود با رمز و System Admin بدون تغییر تأیید شوند.
+  - User بدون Preference باید فقط Provider Legacy را بگیرد؛ User با Preference نامعتبر نباید به کانال دیگری fallback شود.
+- روش Rollback دقیق:
+  - ابتدا `MULTI_CHANNEL_OTP_ENABLED=false` و سرویس API Restart شود؛ این کار مسیر Provider قدیمی را برمی‌گرداند.
+  - کد با `git revert 7f39a3be580bddd99ea56f99ed460af727513b7d` یا Deploy نسخه `2a3910627a15d79d5165c1c4655557b24bdcaa05` برمی‌گردد.
+  - P9 DB rollback ندارد؛ Preferences و Identityها حذف یا تغییر داده نشوند.
+  - Restart، OTP و Pending Token حافظه‌ای را پاک می‌کند؛ کاربران باید کد تازه درخواست کنند. کاربران Bale-only پیش از rollback باید مسیر بازیابی معتبر داشته باشند.
+- نتیجهٔ تمرین Rollback: اجرا نشده؛ نیازمند محیط آزمایشی و Providerهای واقعی است.
+- ریسک باقی‌مانده / مانع: Build موفق است اما Migration/Vitest/DB/Live و پذیرش مالک انجام نشده‌اند؛ Flag نباید پیش از این کنترل‌ها روشن شود.
+- پذیرش مالک برای اتمام این مرحله: ثبت نشده.
+- مجوز شروع مرحلهٔ بعد: ثبت نشده.
+- قدم بعدی دقیق: تست کامل P9 را روی کپی DB و Provider آزمایشی اجرا و Rollout Flag را کنترل‌شده تأیید کن. P10 بدون مجوز مستقل شروع نشود.
+
 ### Checkpoint توقف میان مرحله
 
 - آخرین کار تکمیل‌شده:
@@ -940,6 +991,9 @@ pnpm --filter @followa/api test
 | 2026-09-15 | P8: زمینه شرکت | فقط companyId داخلی یا CASE/REMINDER معتبر؛ مورد مبهم External Delivery ندارد | اجراشده |
 | 2026-09-15 | P8: مقصد کار | Delivery به Snapshot مقصد/Identity version مقید است و پیش از Send دوباره اعتبارسنجی می‌شود | اجراشده |
 | 2026-09-15 | P8: تضمین ارسال | Lease/Retry از رقابت جلوگیری می‌کند ولی exactly-once Provider در Timeout ادعا نمی‌شود | ثبت‌شده |
+| 2026-09-15 | P9: Rollout | مسیریابی OTP با Flag مستقل و پیش‌فرض خاموش؛ OTP_PROVIDER قدیمی در حالت خاموش بدون تغییر | اجراشده؛ فعال‌سازی نشده |
+| 2026-09-15 | P9: Bootstrap | نبود Preference از Provider قدیمی استفاده می‌کند؛ انتخاب صریح نامعتبر Fail-closed و بدون fallback است | اجراشده |
+| 2026-09-15 | P9: مقصد | Telegram تا P10 از Legacy و Bale فقط از Identity عمومی Active/verified؛ هر OTP دقیقاً یک مقصد | اجراشده |
 
 ## 10. تاریخچه، Commitها و اسناد مرتبط
 
@@ -958,7 +1012,8 @@ pnpm --filter @followa/api test
 | P6: سیاست‌ها و تنظیمات دریافت | کد/Migration در Repository تکمیل؛ اجرا و پذیرش DB/UI ثبت نشده | [0ce519a](https://github.com/Armanita/Followa/commit/0ce519a8117aeeb35d852c19f5f2bf5471d8d3f7) |
 | P7: ذخیره مستقل وضعیت تحویل | Schema/Repository در Git تکمیل؛ Migration و پذیرش DB ثبت نشده | [1976c05](https://github.com/Armanita/Followa/commit/1976c05603b4ba6a335d1ab14800adc7b9643d83) |
 | P8: Notification چندکاناله و Worker | کد opt-in تکمیل؛ Flagها خاموش و تست DB/Live ثبت نشده | [ef1b719](https://github.com/Armanita/Followa/commit/ef1b719d3d6979507e904e9b5a13ad0e72855271) |
-| P9 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
+| P9: کانال منتخب OTP | کد opt-in تکمیل؛ Flag خاموش و تست DB/Live ثبت نشده | [7f39a3b](https://github.com/Armanita/Followa/commit/7f39a3be580bddd99ea56f99ed460af727513b7d) |
+| P10 | شروع نشده | هیچ Commit اجرا ندارد |
 
 برای یافتن SHA دقیق P0، بدون مشکل خودارجاعی SHA داخل همان Commit:
 
@@ -977,4 +1032,4 @@ git log --diff-filter=A --format='%H %s' -- docs/multi-messaging-roadmap.md
 - [راهنمای تست دستی](manual-testing-guide-fa.md)
 - [استقرار](deployment.md)
 
-**وضعیت پایان این جلسه: P8 به‌صورت opt-in در Repository تکمیل و Checkpoint ثبت شد؛ هر دو Flag خاموش‌اند و Migrationهای P3/P6/P7، Backfill P4، Vitest، تست DB/Live، Rollback و پذیرش مالک ثبت نشده‌اند. P9 شروع نشده و تا مجوز مستقل STOP.**
+**وضعیت پایان این جلسه: P9 به‌صورت opt-in در Repository تکمیل و Checkpoint ثبت شد؛ Flagهای P8/P9 خاموش‌اند و Migrationهای P3/P6/P7، Backfill P4، Vitest، تست DB/Live، Rollback و پذیرش مالک ثبت نشده‌اند. P10 شروع نشده و تا مجوز مستقل STOP.**
