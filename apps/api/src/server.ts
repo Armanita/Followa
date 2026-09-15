@@ -19,6 +19,7 @@ import { fileRoutes } from './modules/files/file-routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard-routes.js';
 import { telegramRoutes } from './modules/telegram/telegram-routes.js';
 import { baleRoutes } from './modules/bale/bale-routes.js';
+import { messagingSettingsRoutes } from './modules/messaging/messaging-settings-routes.js';
 
 export async function buildServer() {
   const app = Fastify({
@@ -60,6 +61,7 @@ export async function buildServer() {
   await app.register(dashboardRoutes, { prefix: apiPrefix });
   await app.register(telegramRoutes, { prefix: apiPrefix });
   await app.register(baleRoutes, { prefix: apiPrefix });
+  await app.register(messagingSettingsRoutes, { prefix: apiPrefix });
 
   return app;
 }

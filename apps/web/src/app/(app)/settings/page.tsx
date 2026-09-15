@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { btnPrimary, Card, ErrorState, Field, inputClass, Spinner, Toast } from '@/components/ui';
 import { SettingsIcon } from '@/components/workspace/icons';
 import { PageHeader, PanelHeader } from '@/components/workspace/page';
+import { MessagingSettings } from '@/components/messaging-settings';
 
 interface CompanyInfo { id: string; name: string; caseTypes: { id: string; name: string; color: string | null }[]; }
 
@@ -76,6 +77,7 @@ export default function SettingsPage() {
           </div>
         </Card>
       </div>
+      <MessagingSettings mode="company-user" isManager={isManager} />
     </div>
   );
 }

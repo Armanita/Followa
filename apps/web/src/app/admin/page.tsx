@@ -21,6 +21,7 @@ import {
 } from '@/components/ui';
 import { DashboardIcon, EmployeesIcon, PlusIcon } from '@/components/workspace/icons';
 import { Avatar, PageHeader, PanelHeader } from '@/components/workspace/page';
+import { MessagingSettings } from '@/components/messaging-settings';
 import { ApiError, api, clearAdminAuth } from '@/lib/api';
 import { faDate, toFa } from '@/lib/jalali';
 
@@ -169,6 +170,8 @@ function AdminDashboard() {
         <StatCard label="تعداد کاربران" value={toFa(stats.userCount)} />
         <StatCard label="تعداد پرونده‌ها" value={toFa(stats.caseCount)} />
       </section>
+
+      <MessagingSettings mode="system" />
 
       <Card className="overflow-hidden">
         <PanelHeader

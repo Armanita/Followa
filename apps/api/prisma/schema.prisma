@@ -58,6 +58,7 @@ model User {
   telegramPendingConnections TelegramPendingConnection[]
   messagingIdentities MessagingIdentity[]
   messagingLinkChallenges MessagingLinkChallenge[]
+  messagingPreference UserMessagingPreference?
 
   @@map("users")
 }
@@ -85,6 +86,7 @@ model Company {
   cases             Case[]
   customers         Customer[]
   sensitiveAuditLog SensitiveAuditLog[]
+  messagingPolicies CompanyMessagingPolicy[]
 
   @@map("companies")
 }
@@ -102,6 +104,7 @@ model CompanyMembership {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messagingPreferences MembershipMessagingPreference[]
 
   @@unique([userId, companyId])
   @@index([companyId, isActive])
@@ -510,4 +513,58 @@ model MessagingLinkChallenge {
   @@index([channel, externalUserId])
   @@index([expiresAt])
   @@map("messaging_link_challenges")
+}
+
+// ---------------------------------------------------------------------------
+// Messaging policies/preferences (P6 storage only; delivery is not active)
+// ---------------------------------------------------------------------------
+
+model MessagingSystemPolicy {
+  channel             MessagingChannel @id
+  enabled             Boolean          @default(false)
+  notificationEnabled Boolean          @default(false)
+  otpEnabled          Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@map("messaging_system_policies")
+}
+
+model CompanyMessagingPolicy {
+  id                  String           @id @default(cuid())
+  companyId           String
+  channel             MessagingChannel
+  notificationEnabled Boolean
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, channel])
+  @@map("company_messaging_policies")
+}
+
+model MembershipMessagingPreference {
+  id                  String           @id @default(cuid())
+  membershipId        String
+  channel             MessagingChannel
+  notificationEnabled Boolean
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  membership CompanyMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, channel])
+  @@map("membership_messaging_preferences")
+}
+
+model UserMessagingPreference {
+  userId     String            @id
+  otpChannel MessagingChannel?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_messaging_preferences")
 }
