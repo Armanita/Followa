@@ -16,6 +16,11 @@ type ChannelView = {
   connected?: boolean;
   deliveryReady?: boolean;
   otpAvailable?: boolean;
+  displayName?: string;
+  botUsername?: string | null;
+  botToken?: string | null;
+  credentialConfigured?: boolean;
+  botTokenMasked?: string | null;
 };
 type Response = {
   enforcementStatus: 'NOT_ACTIVE_UNTIL_P8_P9';
@@ -104,26 +109,47 @@ export function MessagingSettings({ mode, isManager = false }: { mode: 'system' 
     <Card className="overflow-hidden">
       <PanelHeader title="تنظیمات پیام‌رسان‌ها" description="سیاست Telegram و Bale در سه سطح سیستم، شرکت و کاربر" />
       <div className="space-y-5 p-5">
-        <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-xs leading-6 text-amber-100">
-          این تنظیمات در Phase 6 فقط ذخیره می‌شوند و تا اجرای P8/P9 هیچ تغییری در ارسال اعلان یا OTP ایجاد نمی‌کنند.
-        </div>
+        {mode === 'system' && <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-xs leading-6 text-amber-100">
+          اعلان می‌تواند روی هر دو پیام‌رسان فعال باشد؛ برای OTP فقط یک پیام‌رسان یا حالت خاموش انتخاب کنید. توکن ذخیره‌شده هرگز دوباره نمایش داده نمی‌شود.
+        </div>}
         {message && <p className="rounded-xl border border-workspace-border bg-workspace-elevated px-3 py-2 text-xs text-workspace-muted">{message}</p>}
         {loading ? <Spinner label="در حال دریافت تنظیمات…" /> : mode === 'system' && system ? (
           <section className="space-y-3">
             {system.channels.map((row) => (
-              <div key={row.channel} className="grid gap-3 rounded-xl border border-workspace-border bg-workspace-elevated/45 p-4 sm:grid-cols-[1fr_repeat(3,auto)] sm:items-center">
-                <strong className="text-sm text-workspace-ink">{labels[row.channel]}</strong>
+              <div key={row.channel} className="space-y-4 rounded-xl border border-workspace-border bg-workspace-elevated/45 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <strong className="text-sm text-workspace-ink">{row.displayName || labels[row.channel]}</strong>
+                  <span className="text-[10px] text-workspace-soft">توکن: {row.botTokenMasked || (row.credentialConfigured ? 'تنظیم‌شده' : 'تنظیم نشده')}</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="text-xs text-workspace-muted">نام نمایشی
+                    <input className="mt-2 w-full rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-3 py-2 text-white" value={row.displayName || labels[row.channel]} onChange={(event) => update(system, setSystem, row.channel, { displayName: event.target.value })} />
+                  </label>
+                  <label className="text-xs text-workspace-muted">نام بات
+                    <input dir="ltr" className="mt-2 w-full rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-3 py-2 text-left text-white" placeholder="BotUsername" value={row.botUsername || ''} onChange={(event) => update(system, setSystem, row.channel, { botUsername: event.target.value || null })} />
+                  </label>
+                  <label className="text-xs text-workspace-muted">توکن جدید
+                    <input dir="ltr" type="password" autoComplete="new-password" className="mt-2 w-full rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-3 py-2 text-left text-white" placeholder={row.credentialConfigured ? 'برای حفظ توکن خالی بگذارید' : 'توکن را وارد کنید'} value={row.botToken || ''} onChange={(event) => update(system, setSystem, row.channel, { botToken: event.target.value || undefined })} />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-4">
                 {([
-                  ['enabled', 'فعال‌بودن Provider'],
-                  ['notificationEnabled', 'اعلان'],
-                  ['otpEnabled', 'OTP'],
+                  ['enabled', 'فعال بودن پیام‌رسان'],
+                  ['notificationEnabled', 'ارسال اعلان'],
                 ] as const).map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 text-xs text-workspace-muted">
                     <input type="checkbox" checked={Boolean(row[key])} onChange={(event) => update(system, setSystem, row.channel, { [key]: event.target.checked })} />{label}
                   </label>
                 ))}
+                </div>
               </div>
             ))}
+            <label className="block text-xs text-workspace-muted">پیام‌رسان OTP
+              <select className="mt-2 w-full rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-3 py-2 text-white" value={system.channels.find((row) => row.otpEnabled)?.channel ?? ''} onChange={(event) => setSystem({ ...system, channels: system.channels.map((row) => ({ ...row, otpEnabled: row.channel === event.target.value })) })}>
+                <option value="">خاموش</option>
+                {system.channels.filter((row) => row.enabled).map((row) => <option key={row.channel} value={row.channel}>{row.displayName || labels[row.channel]}</option>)}
+              </select>
+            </label>
             <button className={btnPrimary} disabled={saving === 'system'} onClick={() => void saveSystem()}>{saving ? 'در حال ذخیره…' : 'ذخیره سیاست سراسری'}</button>
           </section>
         ) : personal ? (

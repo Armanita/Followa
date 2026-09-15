@@ -3,8 +3,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { badRequest } from '../../lib/errors.js';
 import { prisma } from '../../lib/prisma.js';
+import { config } from '../../config.js';
 import { requireCompanyUser, requireManager, requireSystemAdmin } from '../../plugins/auth.js';
 import { MESSAGING_SETTINGS_CHANNELS, resolveNotificationPolicy } from './messaging-policy.js';
+import { decryptProviderCredentials, encryptProviderCredentials, maskSecret } from './provider-configuration.js';
 
 const channelSchema = z.enum(['TELEGRAM', 'BALE']);
 const systemBodySchema = z.object({
@@ -13,10 +15,21 @@ const systemBodySchema = z.object({
     enabled: z.boolean(),
     notificationEnabled: z.boolean(),
     otpEnabled: z.boolean(),
+    displayName: z.string().trim().min(2).max(50),
+    botUsername: z.string().trim().max(100).nullable(),
+    botToken: z.string().trim().min(8).max(500).nullable().optional(),
   })).length(MESSAGING_SETTINGS_CHANNELS.length),
 }).superRefine((body, ctx) => {
   if (new Set(body.channels.map((item) => item.channel)).size !== body.channels.length) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'هر پیام‌رسان فقط یک‌بار مجاز است' });
+  }
+  if (body.channels.filter((item) => item.otpEnabled).length > 1) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'برای OTP فقط یک پیام‌رسان قابل انتخاب است' });
+  }
+  for (const item of body.channels) {
+    if ((item.notificationEnabled || item.otpEnabled) && !item.enabled) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'کانال غیرفعال نمی‌تواند برای ارسال انتخاب شود' });
+    }
   }
 });
 const notificationBodySchema = z.object({
@@ -48,18 +61,44 @@ export async function messagingSettingsRoutes(app: FastifyInstance): Promise<voi
         enabled: policies.get(channel)?.enabled ?? false,
         notificationEnabled: policies.get(channel)?.notificationEnabled ?? false,
         otpEnabled: policies.get(channel)?.otpEnabled ?? false,
+        displayName: policies.get(channel)?.displayName ?? (channel === 'TELEGRAM' ? 'تلگرام' : 'بله'),
+        botUsername: policies.get(channel)?.botUsername ?? null,
+        credentialConfigured: Boolean(policies.get(channel)?.credentialsEncrypted),
+        botTokenMasked: (() => {
+          const encrypted = policies.get(channel)?.credentialsEncrypted;
+          if (!encrypted || !config.messagingCredentialsKey) return null;
+          try { return maskSecret(decryptProviderCredentials(encrypted, config.messagingCredentialsKey).botToken); }
+          catch { return '••••'; }
+        })(),
       })),
     };
   });
 
   app.patch('/admin/messaging-settings', { preHandler: requireSystemAdmin }, async (request) => {
     const body = systemBodySchema.parse(request.body);
-    await prisma.$transaction(body.channels.map((item) => prisma.messagingSystemPolicy.upsert({
-      where: { channel: item.channel as MessagingChannel },
-      create: { ...item, channel: item.channel as MessagingChannel },
-      update: item,
-    })));
-    return { message: 'سیاست‌های سراسری ذخیره شد؛ هنوز روی ارسال اثر ندارد.' };
+    const existing = await systemPolicies();
+    if (body.channels.some((item) => item.botToken !== undefined) && !config.messagingCredentialsKey) {
+      throw badRequest('کلید اصلی رمزنگاری تنظیمات پیام‌رسان روی سرور تنظیم نشده است');
+    }
+    for (const item of body.channels) {
+      const hasCredential = item.botToken === null
+        ? false
+        : Boolean(item.botToken || existing.get(item.channel as MessagingChannel)?.credentialsEncrypted);
+      if (item.enabled && !hasCredential) throw badRequest(`توکن ${item.displayName} تنظیم نشده است`);
+    }
+    await prisma.$transaction(body.channels.map(({ botToken, ...item }) => {
+      const credentialsEncrypted = botToken === undefined
+        ? undefined
+        : botToken === null
+          ? null
+          : encryptProviderCredentials({ botToken }, config.messagingCredentialsKey);
+      return prisma.messagingSystemPolicy.upsert({
+        where: { channel: item.channel as MessagingChannel },
+        create: { ...item, channel: item.channel as MessagingChannel, credentialsEncrypted: credentialsEncrypted ?? null },
+        update: { ...item, ...(credentialsEncrypted !== undefined ? { credentialsEncrypted } : {}) },
+      });
+    }));
+    return { message: 'تنظیمات پیام‌رسان‌ها با موفقیت ذخیره شد.' };
   });
 
   app.get('/messaging/settings/company', { preHandler: requireManager }, async (request) => {
