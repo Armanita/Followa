@@ -13,14 +13,22 @@ function keyFrom(secret: string): Buffer {
   return createHash('sha256').update(secret, 'utf8').digest();
 }
 
+function validateProviderCredentials(credentials: ProviderCredentials): ProviderCredentials {
+  if (!credentials.botToken || !credentials.botToken.trim()) {
+    throw new Error('provider_credentials_invalid');
+  }
+  return { botToken: credentials.botToken.trim() };
+}
+
 export function encryptProviderCredentials(
   credentials: ProviderCredentials,
   secret: string,
 ): string {
+  const normalized = validateProviderCredentials(credentials);
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', keyFrom(secret), iv);
   const ciphertext = Buffer.concat([
-    cipher.update(JSON.stringify(credentials), 'utf8'),
+    cipher.update(JSON.stringify(normalized), 'utf8'),
     cipher.final(),
   ]);
   const tag = cipher.getAuthTag();
