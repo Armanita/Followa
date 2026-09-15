@@ -53,7 +53,6 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
       '/api/v1/auth/forgot-password/verify',
       '/api/v1/auth/forgot-password/reset',
       '/api/v1/telegram/webhook',
-      '/api/v1/telegram/confirm',
       '/api/v1/health',
     ]);
     if (publicRoutes.has(request.routeOptions.url)) return;

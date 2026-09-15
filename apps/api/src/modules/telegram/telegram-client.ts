@@ -8,7 +8,7 @@ export type TelegramSendMessageResult = {
 
 export type TelegramReplyMarkup = {
   keyboard?: Array<Array<{ text: string; request_contact?: boolean }>>;
-  inline_keyboard?: Array<Array<{ text: string; copy_text?: { text: string } }>>;
+  inline_keyboard?: Array<Array<{ text: string; callback_data?: string; copy_text?: { text: string } }>>;
   resize_keyboard?: boolean;
   one_time_keyboard?: boolean;
   remove_keyboard?: boolean;
