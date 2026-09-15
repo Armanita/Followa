@@ -1,18 +1,15 @@
+import { NotificationType } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { config } from '../../config.js';
+import { createNotificationDispatcher } from '../messaging/notification-dispatcher.js';
 import type { MessagingProvider } from '../messaging/messaging-types.js';
 import { getTelegramProvider } from '../messaging/providers/telegram-provider.js';
 import { createTelegramRepository } from '../telegram/telegram-repository.js';
 
 export interface NotificationInput {
   userId: string;
-  type:
-    | 'CASE_ASSIGNED'
-    | 'CASE_ACCEPTED'
-    | 'CASE_REJECTED'
-    | 'REMINDER_DUE'
-    | 'CASE_COMPLETED'
-    | 'CASE_UPDATED';
+  companyId?: string;
+  type: NotificationType;
   title: string;
   body?: string;
   linkType?: string;
@@ -48,31 +45,19 @@ class MessengerNotificationAdapter implements PushAdapter {
 }
 
 type TelegramNotificationRepository = {
-  findIdentityByUserId(
-    userId: string,
-  ): Promise<{ telegramUserId: string; userId: string } | null>;
+  findIdentityByUserId(userId: string): Promise<{ telegramUserId: string; userId: string } | null>;
 };
 
 class TelegramNotificationAdapter implements PushAdapter {
   readonly name = 'telegram';
-
   constructor(
-    private readonly telegramRepository: TelegramNotificationRepository =
-      createTelegramRepository(prisma),
+    private readonly telegramRepository: TelegramNotificationRepository = createTelegramRepository(prisma),
     private readonly provider: MessagingProvider = getTelegramProvider(),
   ) {}
-
   async send(userId: string, title: string, body: string): Promise<void> {
-    const identity =
-      await this.telegramRepository.findIdentityByUserId(userId);
-    if (!identity) {
-      return; // The in-app row remains the delivery for an unlinked user.
-    }
-
-    await this.provider.send({
-      destination: identity.telegramUserId,
-      text: `${title}\n${body}`,
-    });
+    const identity = await this.telegramRepository.findIdentityByUserId(userId);
+    if (!identity) return;
+    await this.provider.send({ destination: identity.telegramUserId, text: `${title}\n${body}` });
   }
 }
 
@@ -85,23 +70,24 @@ export function createTelegramNotificationAdapterForTests(
 
 function createPushAdapter(): PushAdapter {
   switch (config.notificationProvider) {
-    case 'bale':
-      return new MessengerNotificationAdapter('bale', process.env.BALE_BOT_TOKEN);
-    case 'eitaa':
-      return new MessengerNotificationAdapter('eitaa', process.env.EITAA_BOT_TOKEN);
-    case 'telegram':
-      return new TelegramNotificationAdapter();
-    default:
-      return new MockPushAdapter();
+    case 'bale': return new MessengerNotificationAdapter('bale', process.env.BALE_BOT_TOKEN);
+    case 'eitaa': return new MessengerNotificationAdapter('eitaa', process.env.EITAA_BOT_TOKEN);
+    case 'telegram': return new TelegramNotificationAdapter();
+    default: return new MockPushAdapter();
   }
 }
 
 const pushAdapter = createPushAdapter();
+const dispatcher = createNotificationDispatcher(prisma);
 
 export const notificationService = {
   pushAdapter,
 
   async notify(input: NotificationInput): Promise<void> {
+    if (config.multiChannelNotificationsEnabled) {
+      await dispatcher.enqueue(input);
+      return;
+    }
     await prisma.notification.create({
       data: {
         userId: input.userId,
@@ -121,26 +107,19 @@ export const notificationService = {
 
   async notifyActiveCompanyManagers(input: ManagerNotificationInput): Promise<void> {
     const memberships = await prisma.companyMembership.findMany({
-      where: {
-        companyId: input.companyId,
-        role: 'COMPANY_MANAGER',
-        isActive: true,
-      },
+      where: { companyId: input.companyId, role: 'COMPANY_MANAGER', isActive: true },
       select: { userId: true },
     });
-
     const userIds = [...new Set(memberships.map((membership) => membership.userId))]
       .filter((userId) => userId !== input.excludeUserId);
-
-    await Promise.all(
-      userIds.map((userId) => notificationService.notify({
-        userId,
-        type: input.type,
-        title: input.title,
-        body: input.body,
-        linkType: input.linkType,
-        linkId: input.linkId,
-      })),
-    );
+    await Promise.all(userIds.map((userId) => notificationService.notify({
+      userId,
+      companyId: input.companyId,
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      linkType: input.linkType,
+      linkId: input.linkId,
+    })));
   },
 };

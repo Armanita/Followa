@@ -3,6 +3,7 @@ import {
   NotificationDeliveryAttemptOutcome,
   NotificationDeliveryStatus,
   Prisma,
+  type NotificationDelivery,
   type PrismaClient,
 } from '@prisma/client';
 
@@ -71,6 +72,29 @@ export function createDeliveryRepository(client: PrismaClient) {
       });
     },
 
+    /** Claims one due job without holding a database lock during network I/O. */
+    async claimNext(now: Date, leaseMs: number): Promise<NotificationDelivery | null> {
+      const leaseUntil = new Date(now.getTime() + leaseMs);
+      const rows = await client.$queryRaw<NotificationDelivery[]>`
+        UPDATE "notification_deliveries"
+        SET "availableAt" = ${leaseUntil}, "updatedAt" = ${now}
+        WHERE "id" = (
+          SELECT "id"
+          FROM "notification_deliveries"
+          WHERE "status" IN (
+            'PENDING'::"notification_delivery_status",
+            'FAILED'::"notification_delivery_status"
+          )
+            AND "availableAt" <= ${now}
+          ORDER BY "availableAt" ASC, "createdAt" ASC
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
+        )
+        RETURNING *
+      `;
+      return rows[0] ?? null;
+    },
+
     /** Records one immutable attempt and updates the delivery summary atomically. */
     recordAttempt(input: RecordAttemptInput) {
       return serializable(client, async (tx) => {
@@ -105,10 +129,14 @@ export function createDeliveryRepository(client: PrismaClient) {
       });
     },
 
-    cancel(deliveryId: string) {
+    cancel(deliveryId: string, reason?: string) {
       return client.notificationDelivery.updateMany({
         where: { id: deliveryId, status: { in: [NotificationDeliveryStatus.PENDING, NotificationDeliveryStatus.FAILED] } },
-        data: { status: NotificationDeliveryStatus.CANCELLED, cancelledAt: new Date() },
+        data: {
+          status: NotificationDeliveryStatus.CANCELLED,
+          cancelledAt: new Date(),
+          lastError: reason?.slice(0, 500),
+        },
       });
     },
   };

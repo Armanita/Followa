@@ -35,6 +35,20 @@ export const config = {
   messagingIdentityBackfillEnabled: enabled(
     'MESSAGING_IDENTITY_BACKFILL_ENABLED',
   ),
+  // P8 rollout is opt-in. The legacy immediate sender remains active when off.
+  multiChannelNotificationsEnabled: enabled(
+    'MULTI_CHANNEL_NOTIFICATIONS_ENABLED',
+  ),
+  notificationWorkerEnabled: enabled('NOTIFICATION_WORKER_ENABLED'),
+  notificationWorkerPollMs: Number(
+    process.env.NOTIFICATION_WORKER_POLL_MS ?? 2000,
+  ),
+  notificationWorkerLeaseMs: Number(
+    process.env.NOTIFICATION_WORKER_LEASE_MS ?? 30000,
+  ),
+  notificationMaxAttempts: Number(
+    process.env.NOTIFICATION_MAX_ATTEMPTS ?? 5,
+  ),
   storageDir: process.env.STORAGE_DIR ?? './storage/files',
   maxFileSizeMb: Number(process.env.MAX_FILE_SIZE_MB ?? 20),
   databaseUrl: required(
