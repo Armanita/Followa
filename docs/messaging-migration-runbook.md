@@ -141,3 +141,40 @@ Process را متوقف کن و آخرین `checkpoint` را نگه دار. اج
 - Dual-write آزمایشی اتمیک باشد.
 - Telegram OTP/Notification قدیمی بدون تغییر رفتار کار کنند.
 - نتیجه و SHA محیط در Roadmap ثبت و مالک آن را تأیید کند.
+
+
+## P10 — تغییر کنترل‌شده منبع خواندن Telegram
+
+متغیر `MESSAGING_IDENTITY_READ_ENABLED` پیش‌فرض `false` است. در حالت
+`false` تمام خواندن‌های عملیاتی Telegram از جدول Legacy انجام می‌شوند. در
+حالت `true` مدل عمومی منبع authoritative است و هیچ fallback به Legacy وجود
+ندارد؛ ردیف مفقود، `REVOKED` یا بدون `verifiedAt` متصل محسوب نمی‌شود.
+
+### پیش‌شرط فعال‌سازی
+
+1. Migrationهای P3/P6/P7، Backfill و تطبیق بدون تعارض تکمیل شده باشند.
+2. تمام هویت‌های Telegram موردنیاز، بازتأیید شده و `ACTIVE` با
+   `verifiedAt` معتبر باشند؛ ردیف‌های `LEGACY_IMPORT_UNVERIFIED` قابل ارسال نیستند.
+3. `MESSAGING_IDENTITY_DUAL_WRITE_ENABLED=true` در کل دوره rollout و rollback
+   باقی بماند تا اتصال جدید فقط در Legacy ثبت نشود.
+4. تعداد و نگاشت User/external ID و وضعیت revoke به‌صورت read-only تطبیق داده شود.
+5. OTP و Notification واقعی تا پیش از تأیید محیط آزمایشی خاموش بمانند.
+
+### Rollout
+
+1. ابتدا API/Worker آزمایشی را با dual-write روشن و read switch خاموش تست کن.
+2. `MESSAGING_IDENTITY_READ_ENABLED=true` و API/Worker را Restart کن.
+3. اتصال، Admin status، OTP و Notification Telegram را با User آزمایشی بررسی کن.
+4. یک Identity آزمایشی را revoke کن؛ وجود Legacy نباید آن را دوباره فعال نشان دهد.
+5. Deliveryهای قبل از switch که Snapshot Legacy دارند ممکن است به دلیل اختلاف
+   Snapshot لغو شوند؛ آن‌ها را خودکار replay نکن.
+
+### Rollback
+
+1. ارسال/Worker را کنترل‌شده متوقف کن.
+2. `MESSAGING_IDENTITY_READ_ENABLED=false` و API/Worker را Restart کن.
+3. dual-write را روشن نگه دار و قبل از بازگشت ترافیک، اختلاف‌های ایجادشده در
+   پنجره rollout را تطبیق بده.
+4. جدول یا داده عمومی/Legacy را حذف نکن. Revoke عمومی را قبل از fallback به
+   Legacy به‌صورت دستی در Legacy هم ایمن‌سازی کن تا هویت لغوشده احیا نشود.
+5. Restart کدهای OTP و Pending Token حافظه‌ای را پاک می‌کند و درخواست تازه لازم است.

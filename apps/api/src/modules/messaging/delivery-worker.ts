@@ -7,6 +7,7 @@ import { getTelegramProvider } from './providers/telegram-provider.js';
 import { createDeliveryRepository } from './delivery-repository.js';
 import { findActiveRecipientMembership } from './notification-context.js';
 import { resolveNotificationPolicy } from './messaging-policy.js';
+import { findOperationalTelegramIdentityByUserId } from './messaging-repository.js';
 
 type Providers = Partial<Record<MessagingChannel, MessagingProvider>>;
 
@@ -56,8 +57,16 @@ export function createDeliveryWorker(
     }).enabled) return 'notification_policy_disabled';
 
     if (row.channel === MessagingChannel.TELEGRAM) {
-      const identity = await client.telegramIdentity.findUnique({ where: { userId: notification.userId } });
-      return identity?.telegramUserId === row.destinationId ? null : 'identity_snapshot_changed';
+      const identity = await findOperationalTelegramIdentityByUserId(
+        client,
+        notification.userId,
+        config.messagingIdentityReadEnabled,
+      );
+      return identity?.telegramUserId === row.destinationId &&
+        identity.messagingIdentityId === row.messagingIdentityId &&
+        identity.identityVersion === row.identityVersion
+        ? null
+        : 'identity_snapshot_changed';
     }
     if (row.channel === MessagingChannel.BALE) {
       if (!row.messagingIdentityId || !row.identityVersion) return 'identity_snapshot_missing';

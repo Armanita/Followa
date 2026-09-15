@@ -484,3 +484,118 @@ export function createMessagingRepository(db: MessagingDatabase) {
     },
   };
 }
+
+
+export type OperationalTelegramIdentity = {
+  userId: string;
+  telegramUserId: string;
+  messagingIdentityId: string | null;
+  identityVersion: number | null;
+};
+
+type TelegramIdentityReadDatabase = Pick<
+  Prisma.TransactionClient,
+  'telegramIdentity' | 'messagingIdentity'
+>;
+
+function operationalGenericTelegramIdentity(identity: {
+  id: string;
+  userId: string;
+  externalUserId: string;
+  destinationId: string | null;
+  status: MessagingIdentityStatus;
+  verifiedAt: Date | null;
+  version: number;
+} | null): OperationalTelegramIdentity | null {
+  if (
+    !identity ||
+    identity.status !== MessagingIdentityStatus.ACTIVE ||
+    !identity.verifiedAt
+  ) {
+    return null;
+  }
+  return {
+    userId: identity.userId,
+    telegramUserId: identity.destinationId ?? identity.externalUserId,
+    messagingIdentityId: identity.id,
+    identityVersion: identity.version,
+  };
+}
+
+/**
+ * P10 read switch. Generic mode is authoritative and intentionally has no
+ * legacy fallback: a missing, unverified or revoked generic row must never be
+ * resurrected by an old TelegramIdentity record.
+ */
+export async function findOperationalTelegramIdentityByUserId(
+  db: TelegramIdentityReadDatabase,
+  userId: string,
+  readFromGeneric: boolean,
+): Promise<OperationalTelegramIdentity | null> {
+  if (!readFromGeneric) {
+    const legacy = await db.telegramIdentity.findUnique({
+      where: { userId },
+      select: { telegramUserId: true, userId: true },
+    });
+    return legacy
+      ? {
+          ...legacy,
+          messagingIdentityId: null,
+          identityVersion: null,
+        }
+      : null;
+  }
+  const identity = await db.messagingIdentity.findUnique({
+    where: {
+      userId_channel: { userId, channel: MessagingChannel.TELEGRAM },
+    },
+    select: {
+      id: true,
+      userId: true,
+      externalUserId: true,
+      destinationId: true,
+      status: true,
+      verifiedAt: true,
+      version: true,
+    },
+  });
+  return operationalGenericTelegramIdentity(identity);
+}
+
+export async function findOperationalTelegramIdentityByExternalId(
+  db: TelegramIdentityReadDatabase,
+  telegramUserId: string,
+  readFromGeneric: boolean,
+): Promise<OperationalTelegramIdentity | null> {
+  if (!readFromGeneric) {
+    const legacy = await db.telegramIdentity.findUnique({
+      where: { telegramUserId },
+      select: { telegramUserId: true, userId: true },
+    });
+    return legacy
+      ? {
+          ...legacy,
+          messagingIdentityId: null,
+          identityVersion: null,
+        }
+      : null;
+  }
+  const identity = await db.messagingIdentity.findUnique({
+    where: {
+      channel_externalUserId: {
+        channel: MessagingChannel.TELEGRAM,
+        externalUserId: telegramUserId,
+      },
+    },
+    select: {
+      id: true,
+      userId: true,
+      externalUserId: true,
+      destinationId: true,
+      status: true,
+      verifiedAt: true,
+      version: true,
+    },
+  });
+  return operationalGenericTelegramIdentity(identity);
+}

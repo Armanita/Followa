@@ -6,6 +6,10 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import { config } from '../../config.js';
+import {
+  findOperationalTelegramIdentityByExternalId,
+  findOperationalTelegramIdentityByUserId,
+} from '../messaging/messaging-repository.js';
 
 export type TelegramIdentityRecord = {
   telegramUserId: string;
@@ -91,22 +95,24 @@ export function createTelegramRepository(db: TelegramDatabase) {
       });
     },
 
-    findIdentityByUserId(
+    async findIdentityByUserId(
       userId: string,
     ): Promise<TelegramIdentityRecord | null> {
-      return db.telegramIdentity.findUnique({
-        where: { userId },
-        select: { telegramUserId: true, userId: true },
-      });
+      return findOperationalTelegramIdentityByUserId(
+        db,
+        userId,
+        config.messagingIdentityReadEnabled,
+      );
     },
 
-    findIdentityByTelegramUserId(
+    async findIdentityByTelegramUserId(
       telegramUserId: string,
     ): Promise<TelegramIdentityRecord | null> {
-      return db.telegramIdentity.findUnique({
-        where: { telegramUserId },
-        select: { telegramUserId: true, userId: true },
-      });
+      return findOperationalTelegramIdentityByExternalId(
+        db,
+        telegramUserId,
+        config.messagingIdentityReadEnabled,
+      );
     },
 
     async createPendingConnection(input: {

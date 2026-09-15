@@ -5,7 +5,11 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import { config } from '../src/config.js';
-import { createMessagingRepository } from '../src/modules/messaging/messaging-repository.js';
+import {
+  createMessagingRepository,
+  findOperationalTelegramIdentityByExternalId,
+  findOperationalTelegramIdentityByUserId,
+} from '../src/modules/messaging/messaging-repository.js';
 import { createTelegramRepository } from '../src/modules/telegram/telegram-repository.js';
 import { runMessagingIdentityBackfill } from '../scripts/backfill-messaging-identities.js';
 
@@ -505,5 +509,91 @@ describe('P4 Telegram compatibility and ownership safety', () => {
     expect(legacy).toHaveLength(0);
     expect(pending.has('100')).toBe(true);
     expect(generic).toHaveLength(1);
+  });
+});
+
+
+describe('P10 authoritative Telegram identity reads', () => {
+  it('keeps legacy reads while the P10 switch is disabled', async () => {
+    legacy.push({ telegramUserId: '100', userId: user.id });
+    const db = databaseFake() as unknown as PrismaClient;
+
+    expect(
+      await findOperationalTelegramIdentityByUserId(db, user.id, false),
+    ).toMatchObject({
+      userId: user.id,
+      telegramUserId: '100',
+      messagingIdentityId: null,
+      identityVersion: null,
+    });
+  });
+
+  it('reads a verified active Telegram identity from the generic model', async () => {
+    generic.push({
+      id: 'generic-verified',
+      userId: user.id,
+      channel: MessagingChannel.TELEGRAM,
+      externalUserId: '100',
+      destinationId: '100',
+      status: MessagingIdentityStatus.ACTIVE,
+      verifiedAt: new Date(),
+      verificationMethod: 'TELEGRAM_SIGNED_CALLBACK_V1',
+      legacySource: null,
+      revokedAt: null,
+      version: 3,
+    });
+    const db = databaseFake() as unknown as PrismaClient;
+
+    expect(
+      await findOperationalTelegramIdentityByUserId(db, user.id, true),
+    ).toMatchObject({
+      userId: user.id,
+      telegramUserId: '100',
+      messagingIdentityId: 'generic-verified',
+      identityVersion: 3,
+    });
+    expect(
+      await findOperationalTelegramIdentityByExternalId(db, '100', true),
+    ).toMatchObject({ userId: user.id, telegramUserId: '100' });
+  });
+
+  it.each([
+    ['revoked', MessagingIdentityStatus.REVOKED, new Date()],
+    ['unverified', MessagingIdentityStatus.ACTIVE, null],
+  ])('does not revive a %s generic identity through legacy fallback', async (
+    _label,
+    status,
+    verifiedAt,
+  ) => {
+    legacy.push({ telegramUserId: '100', userId: user.id });
+    generic.push({
+      id: 'generic-blocked',
+      userId: user.id,
+      channel: MessagingChannel.TELEGRAM,
+      externalUserId: '100',
+      destinationId: '100',
+      status,
+      verifiedAt,
+      verificationMethod: 'TEST',
+      legacySource: null,
+      revokedAt: status === MessagingIdentityStatus.REVOKED ? new Date() : null,
+      version: 2,
+    });
+    const db = databaseFake() as unknown as PrismaClient;
+
+    expect(
+      await findOperationalTelegramIdentityByUserId(db, user.id, true),
+    ).toBeNull();
+    expect(
+      await findOperationalTelegramIdentityByExternalId(db, '100', true),
+    ).toBeNull();
+  });
+
+  it('does not fall back when the authoritative generic row is missing', async () => {
+    legacy.push({ telegramUserId: '100', userId: user.id });
+    const db = databaseFake() as unknown as PrismaClient;
+    expect(
+      await findOperationalTelegramIdentityByUserId(db, user.id, true),
+    ).toBeNull();
   });
 });

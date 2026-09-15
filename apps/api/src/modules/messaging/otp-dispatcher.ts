@@ -1,5 +1,7 @@
 import { MessagingChannel, type PrismaClient } from '@prisma/client';
+import { config } from '../../config.js';
 import type { MessagingProvider } from './messaging-types.js';
+import { findOperationalTelegramIdentityByUserId } from './messaging-repository.js';
 import { resolveOtpPolicy } from './messaging-policy.js';
 
 export type OtpDispatchPurpose = 'ACTIVATION' | 'PASSWORD_RESET';
@@ -97,11 +99,11 @@ export class SelectedChannelOtpProvider implements LegacyOtpProvider {
 
     let destination: string | null = null;
     if (channel === MessagingChannel.TELEGRAM) {
-      // P10 will switch this read to MessagingIdentity.
-      const identity = await this.db.telegramIdentity.findUnique({
-        where: { userId: user.id },
-        select: { telegramUserId: true },
-      });
+      const identity = await findOperationalTelegramIdentityByUserId(
+        this.db,
+        user.id,
+        config.messagingIdentityReadEnabled,
+      );
       destination = identity?.telegramUserId ?? null;
     } else {
       const identity = await this.db.messagingIdentity.findUnique({
