@@ -56,6 +56,8 @@ model User {
   auditActions   SensitiveAuditLog[] @relation("SensitiveAuditActor")
   telegramIdentity TelegramIdentity?
   telegramPendingConnections TelegramPendingConnection[]
+  messagingIdentities MessagingIdentity[]
+  messagingLinkChallenges MessagingLinkChallenge[]
 
   @@map("users")
 }
@@ -441,4 +443,71 @@ model TelegramPendingConnection {
 
   @@index([expiresAt])
   @@map("telegram_pending_connections")
+}
+
+// ---------------------------------------------------------------------------
+// Messaging identities (generic, additive; operational reads remain legacy)
+// ---------------------------------------------------------------------------
+
+enum MessagingChannel {
+  TELEGRAM
+  BALE
+  EITAA
+  WHATSAPP
+  SMS
+
+  @@map("messaging_channel")
+}
+
+enum MessagingIdentityStatus {
+  ACTIVE
+  REVOKED
+
+  @@map("messaging_identity_status")
+}
+
+model MessagingIdentity {
+  id                 String                  @id @default(cuid())
+  userId             String
+  channel            MessagingChannel
+  externalUserId     String
+  destinationId      String?
+  status             MessagingIdentityStatus @default(ACTIVE)
+  verifiedAt         DateTime?
+  verificationMethod String?
+  legacySource       String?
+  version            Int                     @default(1)
+  revokedAt          DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One current row per user/channel. Relinking must update this row explicitly;
+  // create/upsert must never silently transfer an external identity.
+  @@unique([userId, channel])
+  // Provider identifiers are scoped by channel, so equal Telegram/Bale values
+  // remain independent while one provider account cannot belong to two users.
+  @@unique([channel, externalUserId])
+  @@index([userId, status])
+  @@map("messaging_identities")
+}
+
+model MessagingLinkChallenge {
+  id             String           @id @default(cuid())
+  userId         String
+  channel        MessagingChannel
+  externalUserId String
+  destinationId  String?
+  tokenHash      String           @unique
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, channel, consumedAt])
+  @@index([channel, externalUserId])
+  @@index([expiresAt])
+  @@map("messaging_link_challenges")
 }
