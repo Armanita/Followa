@@ -8,12 +8,12 @@
 - تاریخ آخرین به‌روزرسانی: 2026-09-15
 - Repository: [Armanita/Followa](https://github.com/Armanita/Followa)
 - شاخهٔ مبنا: `main`
-- آخرین Commit کد بررسی‌شده: `0ce519a8117aeeb35d852c19f5f2bf5471d8d3f7`
-- آخرین مرحلهٔ اجراشده در این مسیر: **P6 — سیاست‌ها و تنظیمات دریافت**؛ کد و Migration افزایشی در Repository تکمیل شده، اما Migration، تست DB/Build و پذیرش دستی اجرا نشده‌اند.
+- آخرین Commit کد بررسی‌شده: `1976c05603b4ba6a335d1ab14800adc7b9643d83`
+- آخرین مرحلهٔ اجراشده در این مسیر: **P7 — ذخیره مستقل وضعیت تحویل**؛ Schema، Migration و Repository در Git تکمیل شده‌اند، اما Migration، تست DB/Vitest و پذیرش دستی اجرا نشده‌اند.
 - مرحلهٔ در حال اجرای کد: هیچ‌کدام.
-- مرحلهٔ بعدی پیشنهادی: اجرای Migrationهای P3 و P6 و تست P4/P5/P6 روی کپی ایزوله؛ P7 فقط پس از تأیید مستقل شروع شود.
-- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P6؛ مجوز Deploy، Migration، Backfill یا فعال‌سازی مصرف سیاست‌ها داده نشده است.
-- P7 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
+- مرحلهٔ بعدی پیشنهادی: اجرای Migrationهای P3/P6/P7 و تست P4 تا P7 روی کپی ایزوله؛ P8 فقط پس از تأیید مستقل شروع شود.
+- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P7؛ مجوز Migration، Backfill یا فعال‌سازی Dispatcher/Worker داده نشده است.
+- P8 و تمام مراحل بعدی: نیازمند مجوز مستقل‌اند و شروع نشده‌اند.
 - وضعیت استقرار، تنظیمات واقعی ربات و تست زنده: تأیید نشده؛ وضعیت Repository معادل وضعیت سرور نیست.
 - Provider و اتصال امن Bale به‌صورت opt-in افزوده شده، اما Provider اعلان/OTP و ارسال چندکاناله فعال نشده است؛ خواندن عملیاتی Telegram همچنان Legacy است.
 
@@ -136,12 +136,12 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 | P4 | Backfill و همگام‌سازی آزمایشی Telegram | منتظر تست DB، Backfill مجاز و تأیید مالک — اجرای کد تکمیل | 2026-09-15؛ بدون مجوز Production | [f228ac8](https://github.com/Armanita/Followa/commit/f228ac88080b3e8d93cb6c39fd9dd39e03456dc4) | اجرا نشده | انتقال داده اجرا نشده؛ Schema جدید ندارد |
 | P5 | اتصال امن Bale و پیام آزمایشی | منتظر Migration، تست ربات/DB و تأیید مالک — اجرای کد تکمیل | 2026-09-15؛ بدون مجوز Deploy/Webhook | [8dc7a81](https://github.com/Armanita/Followa/commit/8dc7a814c78b357afbdb5abb7afd65a2680b1e78) | اجرا نشده | خیر؛ استفاده از P3 |
 | P6 | تنظیمات سیستم، شرکت و User | منتظر Migration، تست DB/Build و تأیید مالک — Repository تکمیل | 2026-09-15؛ بدون مجوز Production | [0ce519a](https://github.com/Armanita/Followa/commit/0ce519a8117aeeb35d852c19f5f2bf5471d8d3f7) | اجرا نشده | افزایشی؛ اجرا نشده |
-| P7 | ذخیرهٔ مستقل وضعیت تحویل | باقی‌مانده | لازم | — | — | افزایشی |
+| P7 | ذخیرهٔ مستقل وضعیت تحویل | منتظر Migration، تست DB/Vitest و تأیید مالک — Repository تکمیل | 2026-09-15؛ بدون مجوز Production | [1976c05](https://github.com/Armanita/Followa/commit/1976c05603b4ba6a335d1ab14800adc7b9643d83) | اجرا نشده | افزایشی؛ اجرا نشده |
 | P8 | Notification چندکاناله و Worker | باقی‌مانده | لازم | — | — | خیر؛ استفاده از P7 |
 | P9 | انتخاب کانال OTP | باقی‌مانده | لازم | — | — | خیر |
 | P10 | خواندن Telegram از مدل عمومی | باقی‌مانده | لازم | — | — | بدون Migration تخریبی |
 
-هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P6 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migrationهای P3/P6 و Backfill P4 اجرا نشده‌اند؛ سیاست‌های P6 توسط مسیرهای ارسال خوانده نمی‌شوند. P7 شروع نشده است.
+هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P7 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migrationهای P3/P6/P7 و Backfill P4 اجرا نشده‌اند؛ مسیر ارسال جاری هیچ Delivery جدیدی ایجاد یا مصرف نمی‌کند. P8 شروع نشده است.
 
 ## 5. قرارداد اجرای هر مرحله
 
@@ -780,6 +780,55 @@ pnpm --filter @followa/api test
 - مجوز شروع مرحلهٔ بعد: ثبت نشده.
 - قدم بعدی دقیق: ابتدا وضعیت CI و اثر Deploy خودکار بررسی، سپس روی کپی DB Migration/Build/Vitest و تست دستی P6 اجرا شود. P7 بدون مجوز مستقل شروع نشود.
 
+### رکورد مرحله: P7 — ذخیرهٔ مستقل وضعیت تحویل
+
+- وضعیت: اجرای Schema، Migration و Repository در Repository تکمیل؛ اجرای Migration، Vitest/DB و پذیرش مالک در انتظار.
+- تاریخ و مسئول اجرا: 2026-09-15، Codex با درخواست مالک Repository.
+- مجوز مالک: شروع و اجرای P7 و Checkpoint مستنداتی؛ هیچ مجوزی برای P8، Migration، Backfill، Worker یا تغییر مسیر عملیاتی ارسال ثبت نشد.
+- Branch / Base SHA: `main` / `d037547f200d41500597ca8249fde49b1439409d`.
+- فایل‌های واقعاً تغییرکرده:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/prisma/migrations/20260915143000_add_notification_delivery/migration.sql`
+  - `apps/api/src/modules/messaging/delivery-repository.ts`
+  - `apps/api/tests/notification-delivery.test.ts`
+  - `docs/multi-messaging-roadmap.md` فقط در Checkpoint مستنداتی بعد از Commit اجرا
+- Commit اجرا: [1976c05603b4ba6a335d1ab14800adc7b9643d83](https://github.com/Armanita/Followa/commit/1976c05603b4ba6a335d1ab14800adc7b9643d83).
+- Commit مستنداتی ثبت نتیجه: Commit بلافاصله بعد از `1976c05` در تاریخچه `main`؛ SHA خود این Checkpoint در Checkpoint بعدی ثبت شود.
+- Merge SHA: Commit مستقیم و fast-forward روی `main`؛ Merge جدا ندارد.
+- Database / Migration:
+  - `companyId` اختیاری به Notification افزوده شد تا اعلان‌های تاریخی بدون زمینه شرکت معتبر بمانند.
+  - `NotificationDelivery` برای وضعیت مستقل هر Channel و `NotificationDeliveryAttempt` برای تاریخچه تغییرناپذیر تلاش‌ها اضافه شد.
+  - دو Enum جدید برای وضعیت Delivery و نتیجه Attempt اضافه شدند؛ جدول/داده قدیمی حذف یا بازنویسی نشد.
+  - Migration ثبت شد ولی در این اجرا روی دیتابیس اعمال نشد؛ Migrationهای P3 و P6 پیش‌نیاز آن هستند.
+- خلاصه تغییرات:
+  - کلید یکتای `(notificationId, channel)` ایجاد تکراری یک کار تحویل برای همان کانال را متوقف می‌کند.
+  - مقصد، شناسه Identity و نسخه Identity هنگام ساخت Snapshot می‌شوند و فراخوانی تکراری اجازه Retarget کردن کار قبلی را ندارد.
+  - وضعیت، شمارنده تلاش، زمان‌های ارسال/لغو/تلاش و شناسه پیام Provider مستقل از Notification داخلی ذخیره می‌شوند.
+  - ثبت نتیجه Attempt و به‌روزرسانی خلاصه Delivery در تراکنش Serializable با Retry محدود انجام می‌شود.
+  - Delivery ارسال‌شده یا لغوشده Attempt تازه نمی‌پذیرد؛ فقط Pending/Failed قابل لغو است.
+  - `notification-service.ts` و تمام فراخوانی‌های کسب‌وکار دست‌نخورده‌اند؛ P7 هیچ Delivery تولید نمی‌کند، هیچ Worker ندارد و هیچ پیام خارجی نمی‌فرستد.
+- تست‌های انجام‌شده:
+  - PASS: Diff یک Commit از Base؛ دقیقاً ۴ فایل P7، بدون تغییر Notification Service، OTP، UI، Case، Assignment، File یا Reminder.
+  - PASS: Syntax check Repository و تست TypeScript با `node --experimental-strip-types --check`.
+  - ADDED / NOT RUN: `notification-delivery.test.ts` برای سازگاری اعلان قدیمی/readAt، استقلال Telegram/Bale، idempotency، جلوگیری از Retarget، تاریخچه Failed→Sent و لغو امن.
+  - NOT RUN: Prisma validate/generate، Vitest و تست PostgreSQL واقعی؛ checkout کامل، dependencyهای نصب‌شده و DB ایزوله در محیط Connector موجود نبود.
+  - NOT RUN: اجرای Migration، تست دستی، پیام خارجی یا Production.
+  - PASS: Build/Deploy خودکار Railway برای هر دو سرویس API و Web موفق شد؛ این موفقیت جایگزین Vitest، تست DB یا پذیرش مالک نیست.
+- تست دستی مالک:
+  - اجرا نشده؛ روی کپی ایزوله ابتدا Backup/Restore و Migrationهای P3/P6/P7 انجام شود.
+  - اعلان قدیمی و read/unread، دو Delivery مستقل، ثبت تکراری، Snapshot مقصد و تاریخچه Attempt بررسی شوند.
+  - باید تأیید شود ذخیره اعلان جاری مثل قبل کار می‌کند و تعداد پیام‌های خارجی در اثر P7 افزایش نیافته است.
+- روش Rollback دقیق:
+  - پیش از Migration، `git revert 1976c05603b4ba6a335d1ab14800adc7b9643d83` یا Deploy نسخه `d037547f200d41500597ca8249fde49b1439409d` کافی است.
+  - پس از Migration، کد/Repository P7 را revert کن ولی ستون nullable، جدول‌های Delivery/Attempt و داده‌ها را حذف نکن؛ نسخه قبلی آن‌ها را نمی‌خواند.
+  - Drop ستون/جدول و حذف تاریخچه تحویل توصیه نمی‌شود؛ پاک‌سازی احتمالی نیازمند Backup و Phase تخریبی مستقل است.
+  - چون مسیر عملیاتی ارسال و Worker تغییر نکرده‌اند، Rollback صف فعال یا پیام in-flight ندارد.
+- نتیجهٔ تمرین Rollback: اجرا نشده؛ نیازمند دیتابیس ایزوله است.
+- ریسک باقی‌مانده / مانع: Migrationهای P3/P6/P7، Vitest، تست DB و پذیرش مالک انجام نشده‌اند؛ Build خودکار موفق است ولی ثبت Delivery هنوز به هیچ مسیر عملیاتی متصل نیست.
+- پذیرش مالک برای اتمام این مرحله: ثبت نشده.
+- مجوز شروع مرحلهٔ بعد: ثبت نشده.
+- قدم بعدی دقیق: Migration/Vitest/تست دستی P7 را روی کپی DB انجام بده و نتیجه را ثبت کن. P8 بدون مجوز مستقل شروع نشود.
+
 ### Checkpoint توقف میان مرحله
 
 - آخرین کار تکمیل‌شده:
@@ -819,6 +868,9 @@ pnpm --filter @followa/api test
 | 2026-09-15 | P6: تقدم سیاست | System سقف مجاز؛ Company و Membership با نبود رکورد ارث می‌برند و false صریح none را حفظ می‌کند | اجراشده؛ مصرف در P8/P9 |
 | 2026-09-15 | P6: مالکیت تنظیم | شرکت از Actor مدیر و ترجیح شخصی از Actor User/عضویت گرفته می‌شود؛ ID دلخواه پذیرفته نمی‌شود | اجراشده |
 | 2026-09-15 | P6: مرز رفتار | تنظیمات فقط ذخیره/نمایش داده می‌شوند و ارسال Notification/OTP آن‌ها را نمی‌خواند | اجراشده |
+| 2026-09-15 | P7: یکتایی کار | هر Notification/Channel فقط یک Delivery دارد و Upsert تکراری Snapshot مقصد را تغییر نمی‌دهد | اجراشده |
+| 2026-09-15 | P7: تاریخچه تلاش | Attemptها ردیف مستقل و ترتیبی هستند؛ Delivery فقط خلاصه آخرین وضعیت را نگه می‌دارد | اجراشده |
+| 2026-09-15 | P7: مرز رفتار | Ledger فقط ذخیره‌سازی است؛ ساخت کار عملیاتی و Worker تا P8 ممنوع است | اجراشده |
 
 ## 10. تاریخچه، Commitها و اسناد مرتبط
 
@@ -835,7 +887,8 @@ pnpm --filter @followa/api test
 | P4: Backfill و همگام‌سازی آزمایشی | اجرای کد/Runbook تکمیل؛ Migration، Backfill و پذیرش DB ثبت نشده | [f228ac8](https://github.com/Armanita/Followa/commit/f228ac88080b3e8d93cb6c39fd9dd39e03456dc4) |
 | P5: اتصال امن Bale و پیام آزمایشی | اجرای کد opt-in تکمیل؛ تست ربات/DB و پذیرش ثبت نشده | [8dc7a81](https://github.com/Armanita/Followa/commit/8dc7a814c78b357afbdb5abb7afd65a2680b1e78) |
 | P6: سیاست‌ها و تنظیمات دریافت | کد/Migration در Repository تکمیل؛ اجرا و پذیرش DB/UI ثبت نشده | [0ce519a](https://github.com/Armanita/Followa/commit/0ce519a8117aeeb35d852c19f5f2bf5471d8d3f7) |
-| P7 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
+| P7: ذخیره مستقل وضعیت تحویل | Schema/Repository در Git تکمیل؛ Migration و پذیرش DB ثبت نشده | [1976c05](https://github.com/Armanita/Followa/commit/1976c05603b4ba6a335d1ab14800adc7b9643d83) |
+| P8 تا P10 | شروع نشده | هیچ Commit اجرا ندارد |
 
 برای یافتن SHA دقیق P0، بدون مشکل خودارجاعی SHA داخل همان Commit:
 
@@ -854,4 +907,4 @@ git log --diff-filter=A --format='%H %s' -- docs/multi-messaging-roadmap.md
 - [راهنمای تست دستی](manual-testing-guide-fa.md)
 - [استقرار](deployment.md)
 
-**وضعیت پایان این جلسه: P6 در Repository با Commit مستقل تکمیل و Checkpoint ثبت شد؛ Migrationهای P3/P6، Backfill P4، Build/Vitest، تست DB/UI/ربات، پذیرش مالک و وضعیت استقرار تأیید نشده‌اند. P7 شروع نشده و تا مجوز مستقل STOP.**
+**وضعیت پایان این جلسه: P7 در Repository با Commit مستقل تکمیل و Checkpoint ثبت شد؛ Migrationهای P3/P6/P7، Backfill P4، Vitest، تست DB/UI/ربات و پذیرش مالک ثبت نشده‌اند. هیچ Delivery عملیاتی یا ارسال جدید فعال نشده، P8 شروع نشده و تا مجوز مستقل STOP.**
