@@ -9,11 +9,11 @@
 - Repository: [Armanita/Followa](https://github.com/Armanita/Followa)
 - شاخهٔ مبنا: `main`
 - آخرین Commit کد بررسی‌شده: `5b9f464e28753d5240c5f6156d20acb167c0d151`
-- آخرین مرحلهٔ اجراشده در این مسیر: **P10 — خواندن Telegram از مدل عمومی**؛ کد opt-in در Git تکمیل و Build خودکار موفق است، اما Read Flag خاموش و تطبیق DB/Vitest/Live/Rollback/پذیرش مالک اجرا نشده‌اند.
-- مرحلهٔ در حال اجرای کد: هیچ‌کدام.
-- مرحلهٔ بعدی پیشنهادی: اجرای Migrationهای P3/P6/P7، Backfill/Reverification و تست یکپارچه P4 تا P10 روی کپی ایزوله؛ سپس Rollout کنترل‌شده و ثبت پذیرش مالک.
-- مجوز ثبت‌شده: اجرای کد و Checkpoint مستنداتی P10؛ مجوز Migration، Backfill، فعال‌سازی Flagها یا ارسال واقعی داده نشده است.
-- تمام Phaseهای کدنویسی P0 تا P10 در Repository اجرا شده‌اند؛ بسته‌شدن مسیر نیازمند تست DB/Live، تمرین Rollback و پذیرش مالک است.
+- آخرین مرحلهٔ اجراشده در این مسیر: **P10 — خواندن Telegram از مدل عمومی**؛ کد opt-in در Git تکمیل و Build خودکار موفق است، اما تطبیق DB/Vitest/Live/Rollback/پذیرش مالک اجرا نشده‌اند.
+- مرحلهٔ در حال اجرا: **P11 — مدیریت Providerها از داشبورد System Admin**.
+- مرحلهٔ بعدی پیشنهادی: تکمیل P11 در زیرمرحله‌های مستقل، سپس اجرای Migrationها و تست یکپارچه روی کپی ایزوله.
+- مجوز ثبت‌شده: 2026-09-15؛ ثبت و اجرای P11 طبق تصمیم‌های قطعی مالک.
+- P0 تا P10 در Repository اجرا شده‌اند؛ P11 شروع شده و هنوز تکمیل یا Deploy نشده است.
 - وضعیت استقرار، تنظیمات واقعی ربات و تست زنده: تأیید نشده؛ وضعیت Repository معادل وضعیت سرور نیست.
 - Provider و اتصال امن Bale به‌صورت opt-in افزوده شده، اما Provider اعلان/OTP و ارسال چندکاناله فعال نشده است؛ خواندن عملیاتی Telegram همچنان Legacy است.
 
@@ -140,8 +140,9 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 | P8 | Notification چندکاناله و Worker | منتظر Migration، تست DB/Live و تأیید مالک — اجرای کد opt-in تکمیل | 2026-09-15؛ Flagها خاموش | [ef1b719](https://github.com/Armanita/Followa/commit/ef1b719d3d6979507e904e9b5a13ad0e72855271) | اجرا نشده | خیر؛ استفاده از P7 |
 | P9 | انتخاب کانال OTP | منتظر Vitest/DB/Live و تأیید مالک — اجرای کد opt-in تکمیل | 2026-09-15؛ Flag خاموش | [7f39a3b](https://github.com/Armanita/Followa/commit/7f39a3be580bddd99ea56f99ed460af727513b7d) | اجرا نشده | خیر |
 | P10 | خواندن Telegram از مدل عمومی | منتظر تطبیق DB/Vitest/Live/Rollback و تأیید مالک — اجرای کد opt-in تکمیل | 2026-09-15؛ Read Flag خاموش | [5b9f464](https://github.com/Armanita/Followa/commit/5b9f464e28753d5240c5f6156d20acb167c0d151) | اجرا نشده | بدون Migration تخریبی |
+| P11 | مدیریت Provider از داشبورد System Admin | در حال انجام | 2026-09-15 | — | اجرا نشده | افزایشی؛ لازم |
 
-هیچ مرحله‌ای اکنون در حال اجرا نیست. اجرای Repository برای P1 تا P10 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migrationهای P3/P6/P7، Backfill/Reverification P4 و تست‌های DB/Live اجرا نشده‌اند؛ Flagهای P8/P9/P10 پیش‌فرض خاموش‌اند و منبع خواندن Telegram هنوز Legacy است.
+P11 اکنون در حال اجراست. اجرای Repository برای P1 تا P10 تکمیل شده، اما پذیرش دستی ثبت نشده است. Migrationهای P3/P6/P7، Backfill/Reverification P4 و تست‌های DB/Live اجرا نشده‌اند؛ Flagهای P8/P9/P10 پیش‌فرض خاموش‌اند و منبع خواندن Telegram هنوز Legacy است.
 
 ## 5. قرارداد اجرای هر مرحله
 
@@ -154,6 +155,26 @@ git log --oneline -- docs/multi-messaging-roadmap.md
 - پس از Commit: SHA و لینک آن را در Checkpoint مستنداتی ثبت کن. SHA خود Commit را نمی‌توان داخل همان Commit جاسازی کرد؛ از Commit مستنداتی بعدی یا Checkpoint بعدی استفاده کن، نه Amend صرفاً برای خودارجاعی.
 - ثبت نتیجهٔ تست دستی نباید پیش از دریافت گزارش مالک انجام شود.
 - پس از هر مرحله، سند باید وضعیت واقعی، محدودیت‌ها و قدم بعدی را نشان دهد؛ سپس برای شروع مرحلهٔ بعد توقف شود.
+
+### P11 — مدیریت Providerها از داشبورد System Admin
+
+**تصمیم قطعی مالک:** ظاهر، RTL و کامپوننت‌های فعلی داشبورد حفظ شوند. System Admin بتواند Telegram و Bale را با نام مشخص پیکربندی و روشن/خاموش کند؛ اعلان‌ها مستقل و هم‌زمان یا انتخابی باشند؛ OTP فقط یکی از Telegram/Bale یا «خاموش» باشد. تغییر این موارد نیازمند ویرایش فایل توسط برنامه‌نویس نباشد.
+
+**حذف مسیرهای قدیمی:** `NOTIFICATION_WORKER_ENABLED` و `MESSAGING_IDENTITY_READ_ENABLED` حذف می‌شوند؛ Worker براساس صف و سیاست DB کار می‌کند و خواندن عملیاتی هویت فقط از `MessagingIdentity` است. Flagهای rollout اعلان/OTP نیز با سیاست داشبورد جایگزین می‌شوند تا انتخاب Provider فایل‌محور نباشد.
+
+**امنیت تنظیمات:** Token/API key هرگز به UI یا Log برگردانده نمی‌شود، در DB رمز‌شده ذخیره می‌شود و UI فقط وضعیت «تنظیم‌شده» و مقدار Masked را می‌بیند. فقط کلید اصلی رمزنگاری در Secret محیط Deployment باقی می‌ماند؛ این کلید Provider نیست و قرار دادن آن در داشبورد چرخهٔ اعتماد را می‌شکند.
+
+**زیرمرحله‌ها و Commitهای مستقل:**
+1. P11-A: Schema/Migration افزایشی و سرویس رمزنگاری تنظیمات Provider.
+2. P11-B: API System Admin با اعتبارسنجی OTP تک‌انتخابی و اعلان چندانتخابی.
+3. P11-C: مصرف تنظیمات DB در Provider/OTP/Notification/Worker و حذف Flagهای منسوخ.
+4. P11-D: UI داخل کامپوننت و داشبورد فعلی، تست‌ها و Checkpoint نهایی.
+
+**محدودهٔ مجاز:** Schema و Migration جدید، ماژول messaging، client/routeهای Telegram و Bale در حد خواندن تنظیمات، OTP provider، Notification service، config/deployment examples، UI فعلی MessagingSettings/Admin و تست‌های مستقیم. Auth/JWT، تولید و اعتبار OTP، cases/assignments/files و Migrationهای قبلی ممنوع‌اند.
+
+**Rollback:** Commitهای P11 به ترتیب معکوس revert شوند. ابتدا ارسال/Worker متوقف، سپس کد به P10 برگردد. Migration افزایشی و دادهٔ رمز‌شده حذف نشوند؛ ستون‌ها بلااستفاده باقی بمانند. پیش از Rollout باید مقدارهای فعلی Provider به‌صورت امن در داشبورد ثبت و اتصال/ارسال آزمایشی تأیید شود.
+
+**تست خروج:** System Admin بتواند Providerها را تنظیم کند؛ Token در GET/Log افشا نشود؛ اعلان Telegram-only، Bale-only، هر دو و خاموش؛ OTP Telegram، Bale و خاموش و هرگز هر دو؛ Worker بدون Flag فنی؛ هویت فقط مدل عمومی؛ شرکت/عضویت غیرفعال همچنان هیچ ارسال یا دسترسی نسازد؛ Build API/Web و تست‌های مستقیم موفق باشند.
 
 ### P1 — امنیت اتصال فعلی Telegram
 
@@ -1090,4 +1111,4 @@ git log --diff-filter=A --format='%H %s' -- docs/multi-messaging-roadmap.md
 - [راهنمای تست دستی](manual-testing-guide-fa.md)
 - [استقرار](deployment.md)
 
-**وضعیت پایان این جلسه: P10 به‌صورت opt-in در Repository تکمیل و Checkpoint ثبت شد؛ Phaseهای کدنویسی Roadmap تا P10 اجرا شده‌اند، اما Flagهای P8/P9/P10 خاموش و Migrationهای P3/P6/P7، Backfill/Reverification P4، Vitest، تست DB/Live، تمرین Rollback و پذیرش مالک ثبت نشده‌اند. تا تأیید مرحلهٔ تست و Rollout، STOP.**
+**وضعیت جاری: P11 با مجوز مالک ثبت و به چهار زیرمرحلهٔ قابل Rollback تقسیم شد؛ اجرای کد هنوز تکمیل، Deploy یا تست زنده نشده است.**
