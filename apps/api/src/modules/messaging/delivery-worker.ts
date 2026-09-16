@@ -2,162 +2,16 @@ import { MessagingChannel, NotificationDeliveryAttemptOutcome, type Notification
 import { config } from '../../config.js';
 import { prisma } from '../../lib/prisma.js';
 import type { MessagingProvider } from './messaging-types.js';
-import { getBaleProvider } from './providers/bale-provider.js';
-import { getTelegramProvider } from './providers/telegram-provider.js';
+import { getDatabaseConfiguredProvider } from './db-backed-provider.js';
 import { createDeliveryRepository } from './delivery-repository.js';
 import { findActiveRecipientMembership } from './notification-context.js';
 import { resolveNotificationPolicy } from './messaging-policy.js';
 import { findOperationalTelegramIdentityByUserId } from './messaging-repository.js';
-
 type Providers = Partial<Record<MessagingChannel, MessagingProvider>>;
-
-function retryDelay(attempt: number): number {
-  return Math.min(60 * 60_000, 5_000 * 2 ** Math.max(0, attempt - 1));
-}
-
-function safeError(error: unknown): string {
-  const message = error instanceof Error ? `${error.name}: ${error.message}` : 'provider_error';
-  return message.slice(0, 500);
-}
-
-export function createDeliveryWorker(
-  client: PrismaClient,
-  providers: Providers = {
-    [MessagingChannel.TELEGRAM]: getTelegramProvider(),
-    [MessagingChannel.BALE]: getBaleProvider(),
-  },
-  options = {
-    leaseMs: config.notificationWorkerLeaseMs,
-    maxAttempts: config.notificationMaxAttempts,
-  },
-) {
-  const repository = createDeliveryRepository(client);
-
-  async function cancellationReason(delivery: NotificationDelivery): Promise<string | null> {
-    const row = await client.notificationDelivery.findUnique({
-      where: { id: delivery.id },
-      include: { notification: true },
-    });
-    if (!row) return 'delivery_missing';
-    const notification = row.notification;
-    if (!notification.companyId || notification.body === null) return 'notification_context_missing';
-    const membership = await findActiveRecipientMembership(client, notification.userId, notification.companyId);
-    if (!membership?.isActive || !membership.company.isActive) return 'recipient_access_inactive';
-
-    const [system, company, preference] = await Promise.all([
-      client.messagingSystemPolicy.findUnique({ where: { channel: row.channel } }),
-      client.companyMessagingPolicy.findUnique({ where: { companyId_channel: { companyId: notification.companyId, channel: row.channel } } }),
-      client.membershipMessagingPreference.findUnique({ where: { membershipId_channel: { membershipId: membership.id, channel: row.channel } } }),
-    ]);
-    if (!resolveNotificationPolicy({
-      systemEnabled: system?.enabled ?? false,
-      systemNotificationEnabled: system?.notificationEnabled ?? false,
-      companyPreference: company?.notificationEnabled ?? null,
-      membershipPreference: preference?.notificationEnabled ?? null,
-    }).enabled) return 'notification_policy_disabled';
-
-    if (row.channel === MessagingChannel.TELEGRAM) {
-      const identity = await findOperationalTelegramIdentityByUserId(
-        client,
-        notification.userId,
-        config.messagingIdentityReadEnabled,
-      );
-      return identity?.telegramUserId === row.destinationId &&
-        identity.messagingIdentityId === row.messagingIdentityId &&
-        identity.identityVersion === row.identityVersion
-        ? null
-        : 'identity_snapshot_changed';
-    }
-    if (row.channel === MessagingChannel.BALE) {
-      if (!row.messagingIdentityId || !row.identityVersion) return 'identity_snapshot_missing';
-      const identity = await client.messagingIdentity.findUnique({ where: { id: row.messagingIdentityId } });
-      const destination = identity?.destinationId ?? identity?.externalUserId;
-      return identity &&
-        identity.userId === notification.userId &&
-        identity.channel === row.channel &&
-        identity.status === 'ACTIVE' &&
-        identity.verifiedAt &&
-        identity.version === row.identityVersion &&
-        destination === row.destinationId
-        ? null
-        : 'identity_snapshot_changed';
-    }
-    return 'unsupported_channel';
-  }
-
-  return {
-    async runOnce(now = new Date()): Promise<boolean> {
-      const delivery = await repository.claimNext(now, options.leaseMs);
-      if (!delivery) return false;
-      const reason = await cancellationReason(delivery);
-      if (reason) {
-        await repository.cancel(delivery.id, reason);
-        return true;
-      }
-      const provider = providers[delivery.channel];
-      if (!provider) {
-        await repository.cancel(delivery.id, 'provider_not_registered');
-        return true;
-      }
-      const row = await client.notificationDelivery.findUniqueOrThrow({
-        where: { id: delivery.id },
-        include: { notification: true },
-      });
-      try {
-        await provider.send({
-          destination: row.destinationId,
-          text: `${row.notification.title}\n${row.notification.body!}`,
-        });
-        await repository.recordAttempt({
-          deliveryId: row.id,
-          outcome: NotificationDeliveryAttemptOutcome.SENT,
-        });
-      } catch (error) {
-        const nextAttempt = row.attemptCount + 1;
-        await repository.recordAttempt({
-          deliveryId: row.id,
-          outcome: NotificationDeliveryAttemptOutcome.FAILED,
-          errorMessage: safeError(error),
-          retryAt: new Date(now.getTime() + retryDelay(nextAttempt)),
-        });
-        if (nextAttempt >= options.maxAttempts) {
-          await repository.cancel(row.id, 'max_attempts_exceeded');
-        }
-      }
-      return true;
-    },
-  };
-}
-
+const retryDelay = (attempt: number) => Math.min(60 * 60_000, 5_000 * 2 ** Math.max(0, attempt - 1));
+const safeError = (error: unknown) => (error instanceof Error ? `${error.name}: ${error.message}` : 'provider_error').slice(0, 500);
+export function createDeliveryWorker(client: PrismaClient, providers: Providers = { [MessagingChannel.TELEGRAM]: getDatabaseConfiguredProvider(MessagingChannel.TELEGRAM), [MessagingChannel.BALE]: getDatabaseConfiguredProvider(MessagingChannel.BALE) }, options = { leaseMs: config.notificationWorkerLeaseMs, maxAttempts: config.notificationMaxAttempts }) { const repository = createDeliveryRepository(client); async function cancellationReason(delivery: NotificationDelivery): Promise<string | null> { const row = await client.notificationDelivery.findUnique({ where: { id: delivery.id }, include: { notification: true } }); if (!row) return 'delivery_missing'; const notification = row.notification; if (!notification.companyId || notification.body === null) return 'notification_context_missing'; const membership = await findActiveRecipientMembership(client, notification.userId, notification.companyId); if (!membership?.isActive || !membership.company.isActive) return 'recipient_access_inactive'; const [system, company, preference] = await Promise.all([client.messagingSystemPolicy.findUnique({ where: { channel: row.channel } }), client.companyMessagingPolicy.findUnique({ where: { companyId_channel: { companyId: notification.companyId, channel: row.channel } } }), client.membershipMessagingPreference.findUnique({ where: { membershipId_channel: { membershipId: membership.id, channel: row.channel } } })]); if (!system?.credentialsEncrypted || !resolveNotificationPolicy({ systemEnabled: system.enabled, systemNotificationEnabled: system.notificationEnabled, companyPreference: company?.notificationEnabled ?? null, membershipPreference: preference?.notificationEnabled ?? null }).enabled) return 'notification_policy_disabled'; if (row.channel === MessagingChannel.TELEGRAM) { const identity = await findOperationalTelegramIdentityByUserId(client, notification.userId, true); return identity?.telegramUserId === row.destinationId && identity.messagingIdentityId === row.messagingIdentityId && identity.identityVersion === row.identityVersion ? null : 'identity_snapshot_changed'; } if (row.channel === MessagingChannel.BALE) { if (!row.messagingIdentityId || !row.identityVersion) return 'identity_snapshot_missing'; const identity = await client.messagingIdentity.findUnique({ where: { id: row.messagingIdentityId } }); const destination = identity?.destinationId ?? identity?.externalUserId; return identity?.userId === notification.userId && identity.channel === row.channel && identity.status === 'ACTIVE' && Boolean(identity.verifiedAt) && identity.version === row.identityVersion && destination === row.destinationId ? null : 'identity_snapshot_changed'; } return 'unsupported_channel'; } return { async runOnce(now = new Date()): Promise<boolean> { const delivery = await repository.claimNext(now, options.leaseMs); if (!delivery) return false; const reason = await cancellationReason(delivery); if (reason) { await repository.cancel(delivery.id, reason); return true; } const provider = providers[delivery.channel]; if (!provider) { await repository.cancel(delivery.id, 'provider_not_registered'); return true; } const row = await client.notificationDelivery.findUniqueOrThrow({ where: { id: delivery.id }, include: { notification: true } }); try { await provider.send({ destination: row.destinationId, text: `${row.notification.title}\n${row.notification.body!}` }); await repository.recordAttempt({ deliveryId: row.id, outcome: NotificationDeliveryAttemptOutcome.SENT }); } catch (error) { const nextAttempt = row.attemptCount + 1; await repository.recordAttempt({ deliveryId: row.id, outcome: NotificationDeliveryAttemptOutcome.FAILED, errorMessage: safeError(error), retryAt: new Date(now.getTime() + retryDelay(nextAttempt)) }); if (nextAttempt >= options.maxAttempts) await repository.cancel(row.id, 'max_attempts_exceeded'); } return true; } }; }
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-export async function runNotificationWorker(): Promise<void> {
-  const worker = createDeliveryWorker(prisma);
-  let stopping = false;
-  process.once('SIGTERM', () => { stopping = true; });
-  process.once('SIGINT', () => { stopping = true; });
-  while (!stopping) {
-    if (!config.multiChannelNotificationsEnabled || !config.notificationWorkerEnabled) {
-      await delay(30_000);
-      continue;
-    }
-    try {
-      const worked = await worker.runOnce();
-      if (!worked) await delay(config.notificationWorkerPollMs);
-    } catch (error) {
-      console.error('[notification-worker] iteration failed', safeError(error));
-      await delay(config.notificationWorkerPollMs);
-    }
-  }
-}
-
+export async function runNotificationWorker(): Promise<void> { const worker = createDeliveryWorker(prisma); let stopping = false; process.once('SIGTERM', () => { stopping = true; }); process.once('SIGINT', () => { stopping = true; }); while (!stopping) { try { const worked = await worker.runOnce(); if (!worked) await delay(config.notificationWorkerPollMs); } catch (error) { console.error('[notification-worker] iteration failed', safeError(error)); await delay(config.notificationWorkerPollMs); } } }
 const isDirectRun = process.argv[1]?.endsWith('delivery-worker.js');
-if (isDirectRun) {
-  runNotificationWorker()
-    .then(() => prisma.$disconnect())
-    .catch(async (error) => {
-      console.error('[notification-worker] fatal', safeError(error));
-      await prisma.$disconnect();
-      process.exit(1);
-    });
-}
+if (isDirectRun) runNotificationWorker().then(() => prisma.$disconnect()).catch(async (error) => { console.error('[notification-worker] fatal', safeError(error)); await prisma.$disconnect(); process.exit(1); });
