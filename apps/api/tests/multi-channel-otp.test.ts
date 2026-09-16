@@ -25,33 +25,26 @@ function fixture(options: {
     messagingSystemPolicy: {
       count: vi.fn(async () => channel === null ? 0 : 1),
       findMany: vi.fn(async () => channel === null ? [] : [{ channel, enabled: options.systemEnabled ?? true, otpEnabled: options.otpEnabled ?? true, credentialsEncrypted: 'encrypted' }]),
-      findUnique: vi.fn(async () => ({
-        enabled: options.systemEnabled ?? true,
-        otpEnabled: options.otpEnabled ?? true,
-        credentialsEncrypted: 'encrypted',
-      })),
+      findUnique: vi.fn(async () => ({ enabled: options.systemEnabled ?? true, otpEnabled: options.otpEnabled ?? true, credentialsEncrypted: 'encrypted' })),
     },
-    telegramIdentity: {
-      findUnique: vi.fn(async () => options.telegramDestination === null
-        ? null
-        : { telegramUserId: options.telegramDestination ?? 'telegram-1' }),
-    },
+    telegramIdentity: { findUnique: vi.fn(async () => null) },
     messagingIdentity: {
-      findUnique: vi.fn(async () => options.baleDestination === null ? null : {
-        externalUserId: 'bale-user-1',
-        destinationId: options.baleDestination ?? 'bale-chat-1',
-        status: 'ACTIVE',
-        verifiedAt: new Date(),
+      findUnique: vi.fn(async (query: { where?: { userId_channel?: { channel?: MessagingChannel } } }) => {
+        const requested = query.where?.userId_channel?.channel;
+        if (requested === MessagingChannel.TELEGRAM) {
+          return options.telegramDestination === null ? null : { id: 'telegram-identity-1', userId: 'user-1', externalUserId: 'telegram-user-1', destinationId: options.telegramDestination ?? 'telegram-1', status: 'ACTIVE', verifiedAt: new Date(), version: 1 };
+        }
+        if (requested === MessagingChannel.BALE) {
+          return options.baleDestination === null ? null : { externalUserId: 'bale-user-1', destinationId: options.baleDestination ?? 'bale-chat-1', status: 'ACTIVE', verifiedAt: new Date() };
+        }
+        return null;
       }),
     },
   };
   const provider = createSelectedChannelOtpProvider(
     db as never,
     { name: 'legacy', sendOtp: legacySend },
-    {
-      telegram: { name: 'telegram', send: telegramSend },
-      bale: { name: 'bale', send: baleSend },
-    },
+    { telegram: { name: 'telegram', send: telegramSend }, bale: { name: 'bale', send: baleSend } },
   );
   return { provider, telegramSend, baleSend, legacySend, db };
 }
