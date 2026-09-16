@@ -3,10 +3,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { badRequest } from '../../lib/errors.js';
 import { prisma } from '../../lib/prisma.js';
-import { config } from '../../config.js';
 import { requireCompanyUser, requireManager, requireSystemAdmin } from '../../plugins/auth.js';
 import { MESSAGING_SETTINGS_CHANNELS, resolveNotificationPolicy } from './messaging-policy.js';
-import { decryptProviderCredentials, encryptProviderCredentials, maskSecret } from './provider-configuration.js';
+import { findAllProviderConfigs } from './provider-config-repository.js';
+import {
+  getProviderSummaries,
+  isMasterKeyConfigured,
+  saveProviderConfigs,
+} from './provider-config-service.js';
 
 const channelSchema = z.enum(['TELEGRAM', 'BALE']);
 const systemBodySchema = z.object({
@@ -21,14 +25,14 @@ const systemBodySchema = z.object({
   })).length(MESSAGING_SETTINGS_CHANNELS.length),
 }).superRefine((body, ctx) => {
   if (new Set(body.channels.map((item) => item.channel)).size !== body.channels.length) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'هر پیام‌رسان فقط یک‌بار مجاز است' });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '\u0647\u0631 \u067e\u06cc\u0627\u0645\u200c\u0631\u0633\u0627\u0646 \u0641\u0642\u0637 \u06cc\u06a9\u200c\u0628\u0627\u0631 \u0645\u062c\u0627\u0632 \u0627\u0633\u062a' });
   }
   if (body.channels.filter((item) => item.otpEnabled).length > 1) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'برای OTP فقط یک پیام‌رسان قابل انتخاب است' });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '\u0628\u0631\u0627\u06cc OTP \u0641\u0642\u0637 \u06cc\u06a9 \u067e\u06cc\u0627\u0645\u200c\u0631\u0633\u0627\u0646 \u0642\u0627\u0628\u0644 \u0627\u0646\u062a\u062e\u0627\u0628 \u0627\u0633\u062a' });
   }
   for (const item of body.channels) {
     if ((item.notificationEnabled || item.otpEnabled) && !item.enabled) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'کانال غیرفعال نمی‌تواند برای ارسال انتخاب شود' });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: '\u06a9\u0627\u0646\u0627\u0644 \u063a\u06cc\u0631\u0641\u0639\u0627\u0644 \u0646\u0645\u06cc\u200c\u062a\u0648\u0627\u0646\u062f \u0628\u0631\u0627\u06cc \u0627\u0631\u0633\u0627\u0644 \u0627\u0646\u062a\u062e\u0627\u0628 \u0634\u0648\u062f' });
     }
   }
 });
@@ -37,73 +41,57 @@ const notificationBodySchema = z.object({
     .length(MESSAGING_SETTINGS_CHANNELS.length),
 }).superRefine((body, ctx) => {
   if (new Set(body.channels.map((item) => item.channel)).size !== body.channels.length) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'هر پیام‌رسان فقط یک‌بار مجاز است' });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '\u0647\u0631 \u067e\u06cc\u0627\u0645\u200c\u0631\u0633\u0627\u0646 \u0641\u0642\u0637 \u06cc\u06a9\u200c\u0628\u0627\u0631 \u0645\u062c\u0627\u0632 \u0627\u0633\u062a' });
   }
 });
 const meBodySchema = notificationBodySchema.and(z.object({ otpChannel: channelSchema.nullable() }));
 
 const enforcementStatus = 'NOT_ACTIVE_UNTIL_P8_P9' as const;
 
-async function systemPolicies() {
-  const rows = await prisma.messagingSystemPolicy.findMany({
-    where: { channel: { in: [...MESSAGING_SETTINGS_CHANNELS] } },
-  });
-  return new Map(rows.map((row) => [row.channel, row]));
-}
-
 export async function messagingSettingsRoutes(app: FastifyInstance): Promise<void> {
+  // -----------------------------------------------------------------------
+  // System Admin — provider configuration (P11-A service layer)
+  // -----------------------------------------------------------------------
+
   app.get('/admin/messaging-settings', { preHandler: requireSystemAdmin }, async () => {
-    const policies = await systemPolicies();
     return {
       enforcementStatus,
-      channels: MESSAGING_SETTINGS_CHANNELS.map((channel) => ({
-        channel,
-        enabled: policies.get(channel)?.enabled ?? false,
-        notificationEnabled: policies.get(channel)?.notificationEnabled ?? false,
-        otpEnabled: policies.get(channel)?.otpEnabled ?? false,
-        displayName: policies.get(channel)?.displayName ?? (channel === 'TELEGRAM' ? 'تلگرام' : 'بله'),
-        botUsername: policies.get(channel)?.botUsername ?? null,
-        credentialConfigured: Boolean(policies.get(channel)?.credentialsEncrypted),
-        botTokenMasked: (() => {
-          const encrypted = policies.get(channel)?.credentialsEncrypted;
-          if (!encrypted || !config.messagingCredentialsKey) return null;
-          try { return maskSecret(decryptProviderCredentials(encrypted, config.messagingCredentialsKey).botToken); }
-          catch { return '••••'; }
-        })(),
-      })),
+      channels: await getProviderSummaries(MESSAGING_SETTINGS_CHANNELS),
     };
   });
 
   app.patch('/admin/messaging-settings', { preHandler: requireSystemAdmin }, async (request) => {
     const body = systemBodySchema.parse(request.body);
-    const existing = await systemPolicies();
-    if (body.channels.some((item) => item.botToken !== undefined) && !config.messagingCredentialsKey) {
-      throw badRequest('کلید اصلی رمزنگاری تنظیمات پیام‌رسان روی سرور تنظیم نشده است');
+    const existing = await findAllProviderConfigs(MESSAGING_SETTINGS_CHANNELS);
+
+    if (body.channels.some((item) => item.botToken !== undefined) && !isMasterKeyConfigured()) {
+      throw badRequest('\u06a9\u0644\u06cc\u062f \u0627\u0635\u0644\u06cc \u0631\u0645\u0632\u0646\u06af\u0627\u0631\u06cc \u062a\u0646\u0638\u06cc\u0645\u0627\u062a \u067e\u06cc\u0627\u0645\u200c\u0631\u0633\u0627\u0646 \u0631\u0648\u06cc \u0633\u0631\u0648\u0631 \u062a\u0646\u0638\u06cc\u0645 \u0646\u0634\u062f\u0647 \u0627\u0633\u062a');
     }
     for (const item of body.channels) {
       const hasCredential = item.botToken === null
         ? false
         : Boolean(item.botToken || existing.get(item.channel as MessagingChannel)?.credentialsEncrypted);
-      if (item.enabled && !hasCredential) throw badRequest(`توکن ${item.displayName} تنظیم نشده است`);
+      if (item.enabled && !hasCredential) throw badRequest(`\u062a\u0648\u06a9\u0646 ${item.displayName} \u062a\u0646\u0638\u06cc\u0645 \u0646\u0634\u062f\u0647 \u0627\u0633\u062a`);
     }
-    await prisma.$transaction(body.channels.map(({ botToken, ...item }) => {
-      const credentialsEncrypted = botToken === undefined
-        ? undefined
-        : botToken === null
-          ? null
-          : encryptProviderCredentials({ botToken }, config.messagingCredentialsKey);
-      return prisma.messagingSystemPolicy.upsert({
-        where: { channel: item.channel as MessagingChannel },
-        create: { ...item, channel: item.channel as MessagingChannel, credentialsEncrypted: credentialsEncrypted ?? null },
-        update: { ...item, ...(credentialsEncrypted !== undefined ? { credentialsEncrypted } : {}) },
-      });
-    }));
-    return { message: 'تنظیمات پیام‌رسان‌ها با موفقیت ذخیره شد.' };
+
+    await saveProviderConfigs(
+      body.channels.map(({ botToken, ...rest }) => ({
+        ...rest,
+        channel: rest.channel as MessagingChannel,
+        botToken,
+      })),
+    );
+
+    return { message: '\u062a\u0646\u0638\u06cc\u0645\u0627\u062a \u067e\u06cc\u0627\u0645\u200c\u0631\u0633\u0627\u0646\u200c\u0647\u0627 \u0628\u0627 \u0645\u0648\u0641\u0642\u06cc\u062a \u0630\u062e\u06cc\u0631\u0647 \u0634\u062f.' };
   });
+
+  // -----------------------------------------------------------------------
+  // Company Manager — notification channel preferences
+  // -----------------------------------------------------------------------
 
   app.get('/messaging/settings/company', { preHandler: requireManager }, async (request) => {
     const [systems, rows] = await Promise.all([
-      systemPolicies(),
+      findAllProviderConfigs(MESSAGING_SETTINGS_CHANNELS),
       prisma.companyMessagingPolicy.findMany({ where: { companyId: request.actor.companyId! } }),
     ]);
     const company = new Map(rows.map((row) => [row.channel, row.notificationEnabled]));
@@ -128,11 +116,11 @@ export async function messagingSettingsRoutes(app: FastifyInstance): Promise<voi
 
   app.patch('/messaging/settings/company', { preHandler: requireManager }, async (request) => {
     const body = notificationBodySchema.parse(request.body);
-    const systems = await systemPolicies();
+    const systems = await findAllProviderConfigs(MESSAGING_SETTINGS_CHANNELS);
     for (const item of body.channels) {
       const policy = systems.get(item.channel as MessagingChannel);
       if (item.notificationEnabled === true && !(policy?.enabled && policy.notificationEnabled)) {
-        throw badRequest('این کانال در سطح سیستم برای اعلان فعال نیست');
+        throw badRequest('\u0627\u06cc\u0646 \u06a9\u0627\u0646\u0627\u0644 \u062f\u0631 \u0633\u0637\u062d \u0633\u06cc\u0633\u062a\u0645 \u0628\u0631\u0627\u06cc \u0627\u0639\u0644\u0627\u0646 \u0641\u0639\u0627\u0644 \u0646\u06cc\u0633\u062a');
       }
     }
     await prisma.$transaction(body.channels.map((item) => item.notificationEnabled === null
@@ -142,12 +130,16 @@ export async function messagingSettingsRoutes(app: FastifyInstance): Promise<voi
         create: { companyId: request.actor.companyId!, channel: item.channel as MessagingChannel, notificationEnabled: item.notificationEnabled },
         update: { notificationEnabled: item.notificationEnabled },
       })));
-    return { message: 'سیاست شرکت ذخیره شد؛ هنوز روی ارسال اثر ندارد.' };
+    return { message: '\u0633\u06cc\u0627\u0633\u062a \u0634\u0631\u06a9\u062a \u0630\u062e\u06cc\u0631\u0647 \u0634\u062f\u061b \u0647\u0646\u0648\u0632 \u0631\u0648\u06cc \u0627\u0631\u0633\u0627\u0644 \u0627\u062b\u0631 \u0646\u062f\u0627\u0631\u062f.' };
   });
+
+  // -----------------------------------------------------------------------
+  // Company User — personal notification & OTP preferences
+  // -----------------------------------------------------------------------
 
   app.get('/messaging/settings/me', { preHandler: requireCompanyUser }, async (request) => {
     const [systems, companyRows, memberRows, userPreference, identities] = await Promise.all([
-      systemPolicies(),
+      findAllProviderConfigs(MESSAGING_SETTINGS_CHANNELS),
       prisma.companyMessagingPolicy.findMany({ where: { companyId: request.actor.companyId! } }),
       prisma.membershipMessagingPreference.findMany({ where: { membershipId: request.actor.membershipId! } }),
       prisma.userMessagingPreference.findUnique({ where: { userId: request.actor.id } }),
@@ -183,16 +175,17 @@ export async function messagingSettingsRoutes(app: FastifyInstance): Promise<voi
 
   app.patch('/messaging/settings/me', { preHandler: requireCompanyUser }, async (request) => {
     const body = meBodySchema.parse(request.body);
-    const systems = await systemPolicies();
+    const systems = await findAllProviderConfigs(MESSAGING_SETTINGS_CHANNELS);
     for (const item of body.channels) {
       if (item.notificationEnabled === true) {
         const policy = systems.get(item.channel as MessagingChannel);
-        if (!(policy?.enabled && policy.notificationEnabled)) throw badRequest('این کانال در سطح سیستم برای اعلان فعال نیست');
+        if (!(policy?.enabled && policy.notificationEnabled)) throw badRequest('\u0627\u06cc\u0646 \u06a9\u0627\u0646\u0627\u0644 \u062f\u0631 \u0633\u0637\u062d \u0633\u06cc\u0633\u062a\u0645 \u0628\u0631\u0627\u06cc \u0627\u0639\u0644\u0627\u0646 \u0641\u0639\u0627\u0644 \u0646\u06cc\u0633\u062a');
       }
     }
     if (body.otpChannel) {
       const otpPolicy = systems.get(body.otpChannel as MessagingChannel);
-      if (!(otpPolicy?.enabled && otpPolicy.otpEnabled)) throw badRequest('این کانال در سطح سیستم برای OTP فعال نیست');
+      if (!(otpPolicy?.enabled && otpPolicy.otpEnabled)) throw badRequest('\u0627\u06cc\u0646 \u06a9\u0627\u0646\u0627\u0644 \u062f\u0631 \u0633\u0637\u062d \u0633\u06cc\u0633\u062a\u0645 \u0628\u0631\u0627\u06cc OTP \u0641\u0639\u0627\u0644 \u0646\u06cc\u0633\u062a');
+      }
     }
     await prisma.$transaction([
       ...body.channels.map((item) => item.notificationEnabled === null
@@ -208,6 +201,6 @@ export async function messagingSettingsRoutes(app: FastifyInstance): Promise<voi
         update: { otpChannel: body.otpChannel as MessagingChannel | null },
       }),
     ]);
-    return { message: 'ترجیحات شما ذخیره شد؛ هنوز روی ارسال اثر ندارد.' };
+    return { message: '\u062a\u0631\u062c\u06cc\u062d\u0627\u062a \u0634\u0645\u0627 \u0630\u062e\u06cc\u0631\u0647 \u0634\u062f\u061b \u0647\u0646\u0648\u0632 \u0631\u0648\u06cc \u0627\u0631\u0633\u0627\u0644 \u0627\u062b\u0631 \u0646\u062f\u0627\u0631\u062f.' };
   });
 }

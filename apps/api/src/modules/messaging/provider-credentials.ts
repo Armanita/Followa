@@ -1,12 +1,20 @@
-import crypto from 'node:crypto';
-import { config } from '../../config';
-
 /**
- * P11-A helper for storing provider secrets safely.
+ * @deprecated — Superseded by provider-configuration.ts (P11-A).
  *
- * Provider tokens must never be stored as plain text. The database layer can
- * use this helper when provider management from System Admin is enabled.
+ * provider-configuration.ts provides:
+ *  - Typed ProviderCredentials validation before encryption
+ *  - Minimum master key length enforcement (32+ characters)
+ *  - Versioned and authenticated ciphertext format (v1.iv.tag.data)
+ *  - Token normalization (trim + empty rejection)
+ *  - Secret masking helper
+ *
+ * This file is retained for backward compatibility only.
+ * No code currently imports from it. It will be removed in a
+ * future cleanup pass.
  */
+
+import crypto from 'node:crypto';
+import { config } from '../../config.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -23,6 +31,7 @@ function getKey(): Buffer {
     .digest();
 }
 
+/** @deprecated Use encryptProviderCredentials from provider-configuration.ts */
 export function encryptProviderCredential(value: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
@@ -35,6 +44,7 @@ export function encryptProviderCredential(value: string): string {
   return Buffer.concat([iv, tag, encrypted]).toString('base64');
 }
 
+/** @deprecated Use decryptProviderCredentials from provider-configuration.ts */
 export function decryptProviderCredential(payload: string): string {
   const data = Buffer.from(payload, 'base64');
   const iv = data.subarray(0, IV_LENGTH);
