@@ -1,5 +1,3 @@
-# Followa production/test deployment — Oracle Cloud Always Free VM
-# Usage: docker compose -f docker-compose.prod.yml up -d --build
 services:
   postgres:
     image: postgres:16-alpine
@@ -9,48 +7,25 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-followa}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-followa}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U followa -d followa"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    # NOT published to the host — DB reachable only inside the compose network
-
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U followa -d followa"], interval: 5s, timeout: 5s, retries: 10 }
   migrate:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    build: { context: ., dockerfile: apps/api/Dockerfile }
     restart: "no"
-    # direct invocation of the prisma CLI shipped in the image — no npx, no
-    # registry access at runtime; explicit schema path because workdir is /app
     command: ["node", "apps/api/node_modules/prisma/build/index.js", "migrate", "deploy", "--schema", "apps/api/prisma/schema.prisma"]
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-followa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-followa}?schema=public
-    depends_on:
-      postgres:
-        condition: service_healthy
-
+    environment: { DATABASE_URL: postgresql://${POSTGRES_USER:-followa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-followa}?schema=public }
+    depends_on: { postgres: { condition: service_healthy } }
   seed:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    build: { context: ., dockerfile: apps/api/Dockerfile }
     restart: "no"
-    # direct invocation of tsx shipped in the image — no npx, no registry access
     command: ["node", "apps/api/node_modules/tsx/dist/cli.mjs", "apps/api/prisma/seed.ts"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-followa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-followa}?schema=public
       SYSTEM_ADMIN_USERNAME: ${SYSTEM_ADMIN_USERNAME:-admin}
       SYSTEM_ADMIN_PASSWORD: ${SYSTEM_ADMIN_PASSWORD:?set in .env}
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-
+    depends_on: { migrate: { condition: service_completed_successfully } }
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    build: { context: ., dockerfile: apps/api/Dockerfile }
     container_name: followa-api
     restart: unless-stopped
     environment:
@@ -63,7 +38,9 @@ services:
       MESSAGING_CREDENTIALS_KEY: ${MESSAGING_CREDENTIALS_KEY:?set in .env}
       OTP_PROVIDER: ${OTP_PROVIDER:-mock}
       NOTIFICATION_PROVIDER: ${NOTIFICATION_PROVIDER:-mock}
-      MULTI_CHANNEL_NOTIFICATIONS_ENABLED: ${MULTI_CHANNEL_NOTIFICATIONS_ENABLED:-false}
+      NOTIFICATION_WORKER_POLL_MS: ${NOTIFICATION_WORKER_POLL_MS:-2000}
+      NOTIFICATION_WORKER_LEASE_MS: ${NOTIFICATION_WORKER_LEASE_MS:-30000}
+      NOTIFICATION_MAX_ATTEMPTS: ${NOTIFICATION_MAX_ATTEMPTS:-5}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
@@ -73,16 +50,10 @@ services:
       BALE_WEBHOOK_SECRET: ${BALE_WEBHOOK_SECRET:-}
       STORAGE_DIR: /data/files
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-20}
-    volumes:
-      - files:/data/files
-    depends_on:
-      postgres:
-        condition: service_healthy
-
+    volumes: [files:/data/files]
+    depends_on: { migrate: { condition: service_completed_successfully } }
   notification-worker:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    build: { context: ., dockerfile: apps/api/Dockerfile }
     container_name: followa-notification-worker
     restart: unless-stopped
     command: ["node", "apps/api/dist/modules/messaging/delivery-worker.js"]
@@ -91,52 +62,28 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-followa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-followa}?schema=public
       JWT_SECRET: ${JWT_SECRET:?set in .env}
       MESSAGING_CREDENTIALS_KEY: ${MESSAGING_CREDENTIALS_KEY:?set in .env}
-      MULTI_CHANNEL_NOTIFICATIONS_ENABLED: ${MULTI_CHANNEL_NOTIFICATIONS_ENABLED:-false}
-      NOTIFICATION_WORKER_ENABLED: ${NOTIFICATION_WORKER_ENABLED:-false}
       NOTIFICATION_WORKER_POLL_MS: ${NOTIFICATION_WORKER_POLL_MS:-2000}
       NOTIFICATION_WORKER_LEASE_MS: ${NOTIFICATION_WORKER_LEASE_MS:-30000}
       NOTIFICATION_MAX_ATTEMPTS: ${NOTIFICATION_MAX_ATTEMPTS:-5}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      BALE_BOT_TOKEN: ${BALE_BOT_TOKEN:-}
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-
+    depends_on: { migrate: { condition: service_completed_successfully } }
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      args:
-        # same-origin: browser calls https://HOST/api/* which Caddy proxies to api:3001
-        NEXT_PUBLIC_API_BASE: /api/v1
+      args: { NEXT_PUBLIC_API_BASE: /api/v1 }
     container_name: followa-web
     restart: unless-stopped
-    # next start resolves .next relative to cwd — must run inside apps/web
     working_dir: /app/apps/web
-    environment:
-      NODE_ENV: production
-      API_PROXY_URL: http://api:3001
-    depends_on:
-      - api
-
+    environment: { NODE_ENV: production, API_PROXY_URL: http://api:3001 }
+    depends_on: [api]
   caddy:
     image: caddy:2-alpine
     container_name: followa-caddy
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      WEB_DOMAIN: ${WEB_DOMAIN:-:80}
-      API_DOMAIN: ${API_DOMAIN:-:80}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - web
-      - api
-
+    ports: ["80:80", "443:443"]
+    environment: { WEB_DOMAIN: ${WEB_DOMAIN:-:80}, API_DOMAIN: ${API_DOMAIN:-:80} }
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", caddy_data:/data, caddy_config:/config]
+    depends_on: [web, api]
 volumes:
   pgdata:
   files:
