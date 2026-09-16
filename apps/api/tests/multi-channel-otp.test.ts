@@ -23,9 +23,12 @@ function fixture(options: {
       findUnique: vi.fn(async () => channel === null ? null : { otpChannel: channel }),
     },
     messagingSystemPolicy: {
+      count: vi.fn(async () => channel === null ? 0 : 1),
+      findMany: vi.fn(async () => channel === null ? [] : [{ channel, enabled: options.systemEnabled ?? true, otpEnabled: options.otpEnabled ?? true, credentialsEncrypted: 'encrypted' }]),
       findUnique: vi.fn(async () => ({
         enabled: options.systemEnabled ?? true,
         otpEnabled: options.otpEnabled ?? true,
+        credentialsEncrypted: 'encrypted',
       })),
     },
     telegramIdentity: {
@@ -58,14 +61,10 @@ describe('selected OTP channel', () => {
     const { provider, telegramSend, baleSend, legacySend } = fixture();
     await provider.sendOtp('09120000001', '123456', 'ACTIVATION');
     expect(telegramSend).toHaveBeenCalledTimes(1);
-    expect(telegramSend).toHaveBeenCalledWith(expect.objectContaining({
-      destination: 'telegram-1',
-      text: expect.stringContaining('123456'),
-    }));
+    expect(telegramSend).toHaveBeenCalledWith(expect.objectContaining({ destination: 'telegram-1', text: expect.stringContaining('123456') }));
     expect(baleSend).not.toHaveBeenCalled();
     expect(legacySend).not.toHaveBeenCalled();
   });
-
   it('sends password-reset OTP only to a verified active Bale identity', async () => {
     const { provider, telegramSend, baleSend } = fixture({ channel: MessagingChannel.BALE });
     await provider.sendOtp('09120000001', '654321', 'PASSWORD_RESET');
@@ -73,15 +72,13 @@ describe('selected OTP channel', () => {
     expect(baleSend).toHaveBeenCalledWith(expect.objectContaining({ destination: 'bale-chat-1' }));
     expect(telegramSend).not.toHaveBeenCalled();
   });
-
-  it('uses the legacy provider only when no preference exists (bootstrap)', async () => {
+  it('uses the legacy provider only when no preference exists and no DB policy exists', async () => {
     const { provider, legacySend, telegramSend, baleSend } = fixture({ channel: null });
     await provider.sendOtp('09120000001', '112233', 'ACTIVATION');
     expect(legacySend).toHaveBeenCalledWith('09120000001', '112233', 'ACTIVATION');
     expect(telegramSend).not.toHaveBeenCalled();
     expect(baleSend).not.toHaveBeenCalled();
   });
-
   it.each([
     ['inactive company or membership', { active: false }],
     ['disabled system channel', { systemEnabled: false }],
@@ -89,14 +86,11 @@ describe('selected OTP channel', () => {
     ['missing selected identity', { telegramDestination: null }],
   ])('fails closed for %s without another-channel fallback', async (_label, options) => {
     const { provider, legacySend, telegramSend, baleSend } = fixture(options);
-    await expect(provider.sendOtp('09120000001', '998877', 'ACTIVATION')).rejects.toThrow(
-      /otp_(recipient|channel)_unavailable/,
-    );
+    await expect(provider.sendOtp('09120000001', '998877', 'ACTIVATION')).rejects.toThrow(/otp_(recipient|channel)_unavailable/);
     expect(legacySend).not.toHaveBeenCalled();
     expect(telegramSend).not.toHaveBeenCalled();
     expect(baleSend).not.toHaveBeenCalled();
   });
-
   it('does not fall back after the selected provider fails', async () => {
     const { provider, telegramSend, baleSend, legacySend } = fixture();
     telegramSend.mockRejectedValueOnce(new Error('provider_down'));
