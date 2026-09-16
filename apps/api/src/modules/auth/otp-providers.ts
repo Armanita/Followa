@@ -3,11 +3,10 @@ import { prisma } from '../../lib/prisma.js';
 import { MessagingChannel } from '@prisma/client';
 import type { TelegramReplyMarkup } from '../telegram/telegram-client.js';
 import type { MessagingProvider } from '../messaging/messaging-types.js';
-import { createSelectedChannelOtpProvider, SystemPolicyOtpProvider } from '../messaging/otp-dispatcher.js';
+import { createSelectedChannelOtpProvider } from '../messaging/otp-dispatcher.js';
 import { getDatabaseConfiguredProvider } from '../messaging/db-backed-provider.js';
 import { TelegramProvider } from '../messaging/providers/telegram-provider.js';
 import { createTelegramRepository } from '../telegram/telegram-repository.js';
-
 export type OtpDeliveryPurpose = 'ACTIVATION' | 'PASSWORD_RESET';
 export interface OtpProvider { readonly name: string; sendOtp(mobile: string, code: string, ...context: [purpose?: OtpDeliveryPurpose]): Promise<void>; }
 class MockOtpProvider implements OtpProvider { readonly name = 'mock'; async sendOtp(mobile: string, code: string): Promise<void> { console.log(`[otp:mock] code for ${mobile}: ${code}`); } }
@@ -17,5 +16,5 @@ type TelegramOtpRepository = { findUserByMobile(mobile: string): Promise<{ id: s
 type TelegramOtpClient = { sendMessage(chatId: number | string, text: string, replyMarkup?: TelegramReplyMarkup): Promise<unknown> };
 export class TelegramOtpProvider implements OtpProvider { readonly name = 'telegram'; constructor(private readonly repository: TelegramOtpRepository = createTelegramRepository(prisma), private readonly provider: MessagingProvider = getDatabaseConfiguredProvider(MessagingChannel.TELEGRAM)) {} async sendOtp(mobile: string, code: string, ...context: [purpose?: OtpDeliveryPurpose]): Promise<void> { const [purpose] = context; const user = await this.repository.findUserByMobile(mobile); if (!user) throw new Error('telegram_otp_user_not_found'); const identity = await this.repository.findIdentityByUserId(user.id); if (!identity) throw new Error('telegram_otp_identity_not_linked'); const text = purpose === 'ACTIVATION' ? `🔐 کد فعال‌سازی فالوآ\n\nکد یکبارمصرف شما:\n\n${code}\n\n⏱ اعتبار کد: ۵ دقیقه\n🔒 این کد را در اختیار دیگران قرار ندهید.` : purpose === 'PASSWORD_RESET' ? `🔑 بازیابی رمز عبور فالوآ\n\nکد تأیید شما:\n\n${code}\n\n⏱ اعتبار کد: ۵ دقیقه\n🔒 این کد را در اختیار دیگران قرار ندهید.` : `کد یکبارمصرف فالوآ: ${code}\nمدت اعتبار: ۵ دقیقه`; await this.provider.send({ destination: identity.telegramUserId, text, ...(purpose ? { metadata: { replyMarkup: { inline_keyboard: [[{ text: '📋 کپی کد', copy_text: { text: code } }]] } } } : {}) }); } }
 function createLegacyOtpProvider(): OtpProvider { switch (config.otpProvider) { case 'sms': return new SmsOtpProvider(process.env.SMS_API_KEY, process.env.SMS_SENDER); case 'bale': return new MessengerOtpProvider('bale', process.env.BALE_BOT_TOKEN); case 'eitaa': return new MessengerOtpProvider('eitaa', process.env.EITAA_BOT_TOKEN); case 'telegram': return new TelegramOtpProvider(); default: return new MockOtpProvider(); } }
-export function createOtpProvider(): OtpProvider { const providers = { telegram: getDatabaseConfiguredProvider(MessagingChannel.TELEGRAM), bale: getDatabaseConfiguredProvider(MessagingChannel.BALE) }; const legacyProvider = createLegacyOtpProvider(); return createSelectedChannelOtpProvider(prisma, legacyProvider, providers); }
+export function createOtpProvider(): OtpProvider { const providers = { telegram: getDatabaseConfiguredProvider(MessagingChannel.TELEGRAM), bale: getDatabaseConfiguredProvider(MessagingChannel.BALE) }; return createSelectedChannelOtpProvider(prisma, createLegacyOtpProvider(), providers); }
 export function createTelegramOtpProviderForTests(repository: TelegramOtpRepository, client: TelegramOtpClient): OtpProvider { return new TelegramOtpProvider(repository, new TelegramProvider(client)); }
