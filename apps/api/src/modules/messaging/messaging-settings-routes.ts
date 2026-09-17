@@ -50,12 +50,12 @@ const enforcementStatus = 'NOT_ACTIVE_UNTIL_P8_P9' as const;
 
 export async function messagingSettingsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/admin/messaging-settings', { preHandler: requireSystemAdmin }, async (request) => {
-    app.log.info({ route: request.routeOptions.url, actorKind: request.actor?.kind }, 'temporary messaging settings handler entered');
-    app.log.info({ route: request.routeOptions.url }, 'temporary before getProviderSummaries');
+    app.log.warn({ route: request.routeOptions.url, actorKind: request.actor?.kind }, 'temporary messaging settings handler entered');
+    app.log.warn({ route: request.routeOptions.url }, 'temporary before getProviderSummaries');
     const channels = await getProviderSummaries(MESSAGING_SETTINGS_CHANNELS);
-    app.log.info({ route: request.routeOptions.url, channelCount: channels.length }, 'temporary after getProviderSummaries before response');
+    app.log.warn({ route: request.routeOptions.url, channelCount: channels.length }, 'temporary after getProviderSummaries before response');
     const response = { enforcementStatus, channels };
-    app.log.info({ route: request.routeOptions.url }, 'temporary response ready');
+    app.log.warn({ route: request.routeOptions.url }, 'temporary response ready');
     return response;
   });
 
