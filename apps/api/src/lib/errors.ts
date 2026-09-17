@@ -20,7 +20,7 @@ export const conflict = (message: string) => new AppError(409, 'CONFLICT', messa
 type HttpError = Error & { statusCode?: number; validation?: unknown };
 
 export function registerErrorHandler(app: FastifyInstance): void {
-  app.setErrorHandler((rawError, _request, reply) => {
+  app.setErrorHandler((rawError, request, reply) => {
     const error = rawError as HttpError;
     if (error instanceof AppError) {
       return reply.status(error.statusCode).send({
@@ -46,7 +46,13 @@ export function registerErrorHandler(app: FastifyInstance): void {
       });
     }
 
-    app.log.error(error);
+    app.log.error({
+      err: error,
+      route: request.routeOptions.url,
+      method: request.method,
+      message: error.message,
+      stack: error.stack,
+    }, 'temporary internal error debug trace');
     return reply.status(500).send({
       statusCode: 500,
       code: 'INTERNAL',
