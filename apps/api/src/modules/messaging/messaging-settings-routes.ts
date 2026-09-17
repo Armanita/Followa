@@ -50,10 +50,12 @@ const enforcementStatus = 'NOT_ACTIVE_UNTIL_P8_P9' as const;
 
 export async function messagingSettingsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/admin/messaging-settings', { preHandler: requireSystemAdmin }, async () => {
-    return {
-      enforcementStatus,
-      channels: await getProviderSummaries(MESSAGING_SETTINGS_CHANNELS),
-    };
+    console.log('[DEBUG] messaging-settings handler START');
+    const channels = await getProviderSummaries(MESSAGING_SETTINGS_CHANNELS);
+    console.log('[DEBUG] messaging-settings provider DONE', { count: channels.length });
+    const response = { enforcementStatus, channels };
+    console.log('[DEBUG] messaging-settings response READY');
+    return response;
   });
 
   app.patch('/admin/messaging-settings', { preHandler: requireSystemAdmin }, async (request) => {
