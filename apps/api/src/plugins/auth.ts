@@ -94,14 +94,14 @@ type Reply = FastifyReply;
 type Req = FastifyRequest;
 
 /** Guard: system admin only. */
-export function requireSystemAdmin(req: Req, _reply: Reply): void {
+export async function requireSystemAdmin(req: Req, _reply: Reply): Promise<void> {
   if (req.actor?.kind !== 'SYSTEM_ADMIN') {
     throw forbidden('این عملیات مخصوص مدیر سیستم است');
   }
 }
 
 /** Guard: any active company user. */
-export function requireCompanyUser(req: Req, _reply: Reply): void {
+export async function requireCompanyUser(req: Req, _reply: Reply): Promise<void> {
   if (req.actor?.kind !== 'COMPANY_USER') {
     throw forbidden('دسترسی فقط برای کاربران شرکت مجاز است');
   }
@@ -111,7 +111,7 @@ export function requireCompanyUser(req: Req, _reply: Reply): void {
 }
 
 /** Guard: manager only. */
-export function requireManager(req: Req, _reply: Reply): void {
+export async function requireManager(req: Req, _reply: Reply): Promise<void> {
   requireCompanyUser(req, _reply);
   if (req.actor.role !== 'COMPANY_MANAGER') {
     throw forbidden('این عملیات مخصوص مدیر شرکت است');
