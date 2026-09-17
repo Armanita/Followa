@@ -1,9 +1,6 @@
-import { MessagingChannel } from '@prisma/client';
+import type { MessagingChannel } from '@prisma/client';
 
-export const MESSAGING_SETTINGS_CHANNELS = [
-  MessagingChannel.TELEGRAM,
-  MessagingChannel.BALE,
-] as const;
+export const MESSAGING_SETTINGS_CHANNELS = ['TELEGRAM', 'BALE'] as const satisfies readonly MessagingChannel[];
 
 export type MessagingSettingsChannel = (typeof MESSAGING_SETTINGS_CHANNELS)[number];
 export type OptionalPreference = boolean | null;
