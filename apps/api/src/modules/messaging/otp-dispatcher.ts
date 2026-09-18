@@ -4,7 +4,7 @@ import { findOperationalTelegramIdentityByUserId } from './messaging-repository.
 import { resolveOtpPolicy } from './messaging-policy.js';
 export type OtpDispatchPurpose = 'ACTIVATION' | 'PASSWORD_RESET';
 export type LegacyOtpProvider = { readonly name: string; sendOtp(mobile: string, code: string, purpose?: OtpDispatchPurpose): Promise<void> };
-type OtpDatabase = Pick<PrismaClient, 'user' | 'companyMembership' | 'userMessagingPreference' | 'messagingSystemPolicy' | 'telegramIdentity' | 'messagingIdentity'>;
+type OtpDatabase = Pick<PrismaClient, 'user' | 'companyMembership' | 'userMessagingPreference' | 'messagingSystemPolicy' | 'messagingIdentity'>;
 type OtpProviders = Readonly<{ telegram: MessagingProvider; bale: MessagingProvider }>;
 const otpText = (code: string, purpose?: OtpDispatchPurpose) => purpose === 'ACTIVATION' ? `🔐 کد فعال‌سازی فالوآ\n\nکد یکبارمصرف شما:\n\n${code}\n\n⏱ اعتبار کد: ۵ دقیقه\n🔒 این کد را در اختیار دیگران قرار ندهید.` : purpose === 'PASSWORD_RESET' ? `🔑 بازیابی رمز عبور فالوآ\n\nکد تأیید شما:\n\n${code}\n\n⏱ اعتبار کد: ۵ دقیقه\n🔒 این کد را در اختیار دیگران قرار ندهید.` : `کد یکبارمصرف فالوآ: ${code}\nمدت اعتبار: ۵ دقیقه`;
 async function destination(db: OtpDatabase, userId: string, channel: MessagingChannel): Promise<string | null> { if (channel === MessagingChannel.TELEGRAM) { const identity = await findOperationalTelegramIdentityByUserId(db, userId, true); return identity?.telegramUserId ?? null; } const identity = await db.messagingIdentity.findUnique({ where: { userId_channel: { userId, channel } }, select: { externalUserId: true, destinationId: true, status: true, verifiedAt: true } }); return identity?.status === 'ACTIVE' && identity.verifiedAt ? identity.destinationId ?? identity.externalUserId : null; }

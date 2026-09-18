@@ -48,8 +48,6 @@ const user = {
 };
 
 const originalWebhookSecret = config.telegramWebhookSecret;
-const originalDualWriteEnabled = config.messagingIdentityDualWriteEnabled;
-
 let generic: GenericIdentity[];
 let legacy: LegacyIdentity[];
 let pending: Map<string, Pending>;
@@ -130,38 +128,6 @@ function databaseFake() {
     ),
   };
 
-  const telegramIdentity = {
-    findFirst: vi.fn(async ({ where }: { where: { OR: Record<string, string>[] } }) =>
-      legacy.find((row) =>
-        where.OR.some((clause) =>
-          Object.entries(clause).every(
-            ([key, value]) => row[key as keyof LegacyIdentity] === value,
-          ),
-        ),
-      ) ?? null,
-    ),
-    findUnique: vi.fn(async ({ where }: { where: Record<string, string> }) =>
-      legacy.find((row) =>
-        Object.entries(where).every(
-          ([key, value]) => row[key as keyof LegacyIdentity] === value,
-        ),
-      ) ?? null,
-    ),
-    create: vi.fn(async ({ data }: { data: LegacyIdentity }) => {
-      if (
-        legacy.some(
-          (row) =>
-            row.userId === data.userId ||
-            row.telegramUserId === data.telegramUserId,
-        )
-      ) {
-        throw Object.assign(new Error('unique conflict'), { code: 'P2002' });
-      }
-      legacy.push(data);
-      return data;
-    }),
-  };
-
   const telegramPendingConnection = {
     findUnique: vi.fn(
       async ({ where }: { where: { telegramUserId: string } }) =>
@@ -216,7 +182,6 @@ function databaseFake() {
 
   const transactionClient = {
     user: userModel,
-    telegramIdentity,
     telegramPendingConnection,
     messagingIdentity,
   };
@@ -254,12 +219,10 @@ beforeEach(() => {
   user.memberActive = true;
   user.companyActive = true;
   config.telegramWebhookSecret = 'p4-test-webhook-secret';
-  config.messagingIdentityDualWriteEnabled = false;
 });
 
 afterAll(() => {
   config.telegramWebhookSecret = originalWebhookSecret;
-  config.messagingIdentityDualWriteEnabled = originalDualWriteEnabled;
 });
 
 describe('P4 backfill runner', () => {
@@ -456,7 +419,6 @@ describe('P4 Telegram compatibility and ownership safety', () => {
   });
 
   it('atomically dual-writes a securely confirmed new connection', async () => {
-    config.messagingIdentityDualWriteEnabled = true;
     const repository = createTelegramRepository(
       databaseFake() as unknown as PrismaClient,
     );
@@ -485,7 +447,6 @@ describe('P4 Telegram compatibility and ownership safety', () => {
   });
 
   it('does not consume pending or write legacy data on a late generic conflict', async () => {
-    config.messagingIdentityDualWriteEnabled = true;
     const repository = createTelegramRepository(
       databaseFake() as unknown as PrismaClient,
     );
@@ -529,10 +490,10 @@ describe('P10 authoritative Telegram identity reads', () => {
     const db = databaseFake() as unknown as PrismaClient;
 
     expect(
-      await findOperationalTelegramIdentityByUserId(db, user.id, false),
+      await findOperationalTelegramIdentityByUserId(db, user.id),
     ).toBeNull();
     expect(
-      await findOperationalTelegramIdentityByExternalId(db, '100', false),
+      await findOperationalTelegramIdentityByExternalId(db, '100'),
     ).toBeNull();
   });
 
@@ -553,7 +514,7 @@ describe('P10 authoritative Telegram identity reads', () => {
     const db = databaseFake() as unknown as PrismaClient;
 
     expect(
-      await findOperationalTelegramIdentityByUserId(db, user.id, true),
+      await findOperationalTelegramIdentityByUserId(db, user.id),
     ).toMatchObject({
       userId: user.id,
       telegramUserId: '100',
@@ -561,7 +522,7 @@ describe('P10 authoritative Telegram identity reads', () => {
       identityVersion: 3,
     });
     expect(
-      await findOperationalTelegramIdentityByExternalId(db, '100', true),
+      await findOperationalTelegramIdentityByExternalId(db, '100'),
     ).toMatchObject({ userId: user.id, telegramUserId: '100' });
   });
 
@@ -590,10 +551,10 @@ describe('P10 authoritative Telegram identity reads', () => {
     const db = databaseFake() as unknown as PrismaClient;
 
     expect(
-      await findOperationalTelegramIdentityByUserId(db, user.id, true),
+      await findOperationalTelegramIdentityByUserId(db, user.id),
     ).toBeNull();
     expect(
-      await findOperationalTelegramIdentityByExternalId(db, '100', true),
+      await findOperationalTelegramIdentityByExternalId(db, '100'),
     ).toBeNull();
   });
 
@@ -601,7 +562,7 @@ describe('P10 authoritative Telegram identity reads', () => {
     legacy.push({ telegramUserId: '100', userId: user.id });
     const db = databaseFake() as unknown as PrismaClient;
     expect(
-      await findOperationalTelegramIdentityByUserId(db, user.id, true),
+      await findOperationalTelegramIdentityByUserId(db, user.id),
     ).toBeNull();
   });
 });

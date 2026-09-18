@@ -523,14 +523,13 @@ function operationalGenericTelegramIdentity(identity: {
 }
 
 /**
- * Phase 2: MessagingIdentity is the only runtime source.
- * The readFromGeneric flag is kept for signature compatibility but ignored.
- * Legacy TelegramIdentity is no longer read.
+ * Phase 2.5: MessagingIdentity is the only runtime source.
+ * Legacy read compatibility parameter kept as optional no-op for caller compatibility.
  */
 export async function findOperationalTelegramIdentityByUserId(
   db: TelegramIdentityReadDatabase,
   userId: string,
-  _readFromGeneric: boolean,
+  _readFromGeneric?: boolean,
 ): Promise<OperationalTelegramIdentity | null> {
   const identity = await db.messagingIdentity.findUnique({
     where: {
@@ -552,7 +551,7 @@ export async function findOperationalTelegramIdentityByUserId(
 export async function findOperationalTelegramIdentityByExternalId(
   db: TelegramIdentityReadDatabase,
   telegramUserId: string,
-  _readFromGeneric: boolean,
+  _readFromGeneric?: boolean,
 ): Promise<OperationalTelegramIdentity | null> {
   const identity = await db.messagingIdentity.findUnique({
     where: {

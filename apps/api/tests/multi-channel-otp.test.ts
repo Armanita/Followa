@@ -27,7 +27,6 @@ function fixture(options: {
       findMany: vi.fn(async () => channel === null ? [] : [{ channel, enabled: options.systemEnabled ?? true, otpEnabled: options.otpEnabled ?? true, credentialsEncrypted: 'encrypted' }]),
       findUnique: vi.fn(async () => ({ enabled: options.systemEnabled ?? true, otpEnabled: options.otpEnabled ?? true, credentialsEncrypted: 'encrypted' })),
     },
-    telegramIdentity: { findUnique: vi.fn(async () => null) },
     messagingIdentity: {
       findUnique: vi.fn(async (query: { where?: { userId_channel?: { channel?: MessagingChannel } } }) => {
         const requested = query.where?.userId_channel?.channel;

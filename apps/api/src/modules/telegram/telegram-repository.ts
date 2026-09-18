@@ -97,21 +97,13 @@ export function createTelegramRepository(db: TelegramDatabase) {
     async findIdentityByUserId(
       userId: string,
     ): Promise<TelegramIdentityRecord | null> {
-      return findOperationalTelegramIdentityByUserId(
-        db,
-        userId,
-        config.messagingIdentityReadEnabled,
-      );
+      return findOperationalTelegramIdentityByUserId(db, userId);
     },
 
     async findIdentityByTelegramUserId(
       telegramUserId: string,
     ): Promise<TelegramIdentityRecord | null> {
-      return findOperationalTelegramIdentityByExternalId(
-        db,
-        telegramUserId,
-        config.messagingIdentityReadEnabled,
-      );
+      return findOperationalTelegramIdentityByExternalId(db, telegramUserId);
     },
 
     async createPendingConnection(input: {

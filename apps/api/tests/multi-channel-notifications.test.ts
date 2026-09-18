@@ -33,7 +33,7 @@ describe('P8 multi-channel notifications', () => {
       { channel: MessagingChannel.BALE, enabled: true, notificationEnabled: true, otpEnabled: false },
     ] });
     const userId = fixture.employees[0]!.id;
-    await prisma.telegramIdentity.create({ data: { userId, telegramUserId: `tg-${userId}` } });
+    await prisma.messagingIdentity.create({ data: { userId, channel: MessagingChannel.TELEGRAM, externalUserId: `tg-${userId}`, destinationId: `tg-${userId}`, verifiedAt: new Date(), status: 'ACTIVE', verificationMethod: 'TEST' } });
     await prisma.messagingIdentity.create({ data: {
       userId,
       channel: MessagingChannel.BALE,

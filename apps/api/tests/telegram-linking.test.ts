@@ -21,11 +21,6 @@ type Pending = {
   createdAt: Date;
   expiresAt: Date;
 };
-type Identity = {
-  telegramUserId: string;
-  userId: string;
-  phoneNumber?: string;
-};
 type TestUser = {
   id: string;
   mobile: string;
@@ -47,7 +42,6 @@ type GenericIdentity = {
 
 let users: TestUser[];
 let pending: Map<string, Pending>;
-let identities: Identity[];
 let messagingIdentities: GenericIdentity[];
 let failIdentityCreate: boolean;
 let serializationConflicts: number;
@@ -84,36 +78,6 @@ function databaseFake() {
         );
       },
     ),
-  };
-
-  const telegramIdentity = {
-    findUnique: vi.fn(
-      async ({ where }: { where: Partial<Identity> }) =>
-        identities.find((identity) =>
-          Object.entries(where).every(
-            ([key, value]) =>
-              identity[key as keyof Identity] === value,
-          ),
-        ) ?? null,
-    ),
-    findFirst: vi.fn(
-      async ({ where }: { where: { OR: Partial<Identity>[] } }) =>
-        identities.find((identity) =>
-          where.OR.some((entry) =>
-            Object.entries(entry).every(
-              ([key, value]) =>
-                identity[key as keyof Identity] === value,
-            ),
-          ),
-        ) ?? null,
-    ),
-    create: vi.fn(async ({ data }: { data: Identity }) => {
-      if (failIdentityCreate) {
-        throw Object.assign(new Error('unique conflict'), { code: 'P2002' });
-      }
-      identities.push(data);
-      return data;
-    }),
   };
 
   const messagingIdentity = {
@@ -238,7 +202,6 @@ function databaseFake() {
 
   const transactionClient = {
     user,
-    telegramIdentity,
     messagingIdentity,
     telegramPendingConnection,
   };
@@ -260,13 +223,11 @@ function databaseFake() {
         }
 
         const pendingSnapshot = new Map(pending);
-        const identitySnapshot = [...identities];
         const genericSnapshot = [...messagingIdentities];
         try {
           return await work(transactionClient);
         } catch (error) {
           pending = pendingSnapshot;
-          identities = identitySnapshot;
           messagingIdentities = genericSnapshot;
           throw error;
         }
@@ -286,7 +247,6 @@ beforeEach(async () => {
     },
   ];
   pending = new Map();
-  identities = [];
   messagingIdentities = [];
   failIdentityCreate = false;
   serializationConflicts = 0;
@@ -364,7 +324,6 @@ describe('Telegram linking perimeter and ownership', () => {
       (await post(callbackUpdate(callbackData))).body.status,
     ).toBe('connected');
     // Phase 2: Only MessagingIdentity is written - TelegramIdentity is no longer created
-    expect(identities).toHaveLength(0);
     expect(messagingIdentities).toHaveLength(1);
     expect(messagingIdentities[0]).toMatchObject({
       userId: 'user-1',
@@ -414,7 +373,6 @@ describe('Telegram linking perimeter and ownership', () => {
       payload: { telegramUserId: 100, phoneNumber: mobile },
     });
     expect(response.statusCode).toBe(404);
-    expect(identities).toHaveLength(0);
   });
 
   it('rejects another person or missing contact owner', async () => {
@@ -511,8 +469,7 @@ describe('Telegram challenge eligibility and lifecycle', () => {
       expect(
         (await post(callbackUpdate(callbackData))).body.reason,
       ).toBe('user_not_eligible');
-      expect(identities).toHaveLength(0);
-      expect(messagingIdentities).toHaveLength(0);
+        expect(messagingIdentities).toHaveLength(0);
       expect(mocks.sendMessage).not.toHaveBeenCalled();
 
       users[0]![field] = true;
@@ -541,7 +498,6 @@ describe('Telegram challenge eligibility and lifecycle', () => {
         (await post(callbackUpdate(data))).body.status,
       ).toBe('rejected');
     }
-    expect(identities).toHaveLength(0);
   });
 
   it('binds the proof to the Telegram sender', async () => {
@@ -549,7 +505,6 @@ describe('Telegram challenge eligibility and lifecycle', () => {
     expect(
       (await post(callbackUpdate(callbackData, 200))).body.status,
     ).toBe('rejected');
-    expect(identities).toHaveLength(0);
   });
 
   it('invalidates an earlier button when pending is renewed', async () => {
@@ -574,7 +529,6 @@ describe('Telegram challenge eligibility and lifecycle', () => {
     expect(
       (await post(callbackUpdate(callbackData))).body.status,
     ).toBe('rejected');
-    expect(identities).toHaveLength(0);
   });
 
   it('invalidates pending after the Followa mobile changes', async () => {
@@ -584,7 +538,6 @@ describe('Telegram challenge eligibility and lifecycle', () => {
     expect(
       (await post(callbackUpdate(callbackData))).body.reason,
     ).toBe('invalid_confirmation');
-    expect(identities).toHaveLength(0);
   });
 
   it('invalidates pending after webhook-secret rotation', async () => {
@@ -667,7 +620,6 @@ describe('Telegram challenge eligibility and lifecycle', () => {
       (await post(callbackUpdate(callbackData))).body.reason,
     ).toBe('identity_already_linked');
     expect(pending.has('100')).toBe(true);
-    expect(identities).toHaveLength(0);
     expect(messagingIdentities).toHaveLength(0);
   });
 
@@ -718,7 +670,6 @@ describe('Telegram linking — MessagingIdentity primary', () => {
     expect(created.verifiedAt).toBeInstanceOf(Date);
     expect(created.version).toBe(1);
     // Phase 2: TelegramIdentity is no longer written
-    expect(identities).toHaveLength(0);
   });
 
   it('OTP resolver can find newly linked Telegram identity via generic read', async () => {
