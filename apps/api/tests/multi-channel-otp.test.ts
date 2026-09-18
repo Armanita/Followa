@@ -64,10 +64,17 @@ describe('selected OTP channel', () => {
     expect(baleSend).toHaveBeenCalledWith(expect.objectContaining({ destination: 'bale-chat-1' }));
     expect(telegramSend).not.toHaveBeenCalled();
   });
-  it('uses the legacy provider only when no preference exists and no DB policy exists', async () => {
+  it('no policy does not fallback to legacy provider', async () => {
     const { provider, legacySend, telegramSend, baleSend } = fixture({ channel: null });
-    await provider.sendOtp('09120000001', '112233', 'ACTIVATION');
-    expect(legacySend).toHaveBeenCalledWith('09120000001', '112233', 'ACTIVATION');
+    await expect(provider.sendOtp('09120000001', '112233', 'ACTIVATION')).rejects.toThrow(/otp_channel_unavailable/);
+    expect(legacySend).not.toHaveBeenCalled();
+    expect(telegramSend).not.toHaveBeenCalled();
+    expect(baleSend).not.toHaveBeenCalled();
+  });
+  it('OTP fails closed without selected channel', async () => {
+    const { provider, legacySend, telegramSend, baleSend } = fixture({ channel: null, telegramDestination: null });
+    await expect(provider.sendOtp('09120000001', '334455', 'ACTIVATION')).rejects.toThrow(/otp_channel_unavailable/);
+    expect(legacySend).not.toHaveBeenCalled();
     expect(telegramSend).not.toHaveBeenCalled();
     expect(baleSend).not.toHaveBeenCalled();
   });
