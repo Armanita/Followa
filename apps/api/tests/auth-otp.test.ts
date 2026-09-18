@@ -1,15 +1,30 @@
-﻿import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest';
+﻿import { describe, it, expect, beforeAll, afterAll, vi, afterEach, beforeEach } from 'vitest';
 import { getTestApp, closeTestApp, seedFixture } from './helpers.js';
 import { prisma } from '../src/lib/prisma.js';
-import type { TelegramReplyMarkup } from '../src/modules/telegram/telegram-client.js';
-import {
-  createTelegramOtpProviderForTests,
-  createOtpProvider,
-} from '../src/modules/auth/otp-providers.js';
+import { MessagingChannel } from '@prisma/client';
+import { encryptProviderCredentials } from '../src/modules/messaging/provider-configuration.js';
+import { config } from '../src/config.js';
+
+const mocks = vi.hoisted(() => ({
+  telegramSend: vi.fn(async () => undefined),
+  baleSend: vi.fn(async () => undefined),
+  capturedByDestination: new Map<string, string>(),
+}));
+
+vi.mock('../src/modules/messaging/db-backed-provider.js', () => ({
+  getDatabaseConfiguredProvider: (channel: string) => ({
+    name: channel.toLowerCase(),
+    send: vi.fn(async ({ destination, text }: { destination: string; text: string }) => {
+      const match = text.match(/(\d{6})/);
+      if (match) mocks.capturedByDestination.set(destination, match[1]);
+      if (channel === 'TELEGRAM') await mocks.telegramSend({ destination, text });
+      else await mocks.baleSend({ destination, text });
+    }),
+  }),
+}));
 
 let fixture: Awaited<ReturnType<typeof seedFixture>>;
 
-// seedFixture does not expose mobiles — resolve them from the DB by user id.
 async function mobileOf(userId: string): Promise<string> {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
@@ -20,38 +35,88 @@ async function mobileOf(userId: string): Promise<string> {
 
 let managerMobile = '';
 
-// Run-unique mobiles so repeated test runs never collide with leftover users.
-// Format: 09 + 9 digits (11 total, the exact shape normalizeMobile requires).
-// Seed = milliseconds timestamp + monotonic counter, sliced to 9 digits.
 let mobileCounter = 0;
 const createdMobiles: string[] = [];
 function uniqueMobile(): string {
   mobileCounter += 1;
-  const seed = `${Date.now()}`.slice(-6); // 6 digits, changes every run
-  const suffix = String(mobileCounter * 7 + 11).padStart(3, '0').slice(-3); // 3 digits
-  const mobile = `09${seed}${suffix}`; // 09 + 6 + 3 = 11 chars
+  const seed = `${Date.now()}`.slice(-6);
+  const suffix = String(mobileCounter * 7 + 11).padStart(3, '0').slice(-3);
+  const mobile = `09${seed}${suffix}`;
   if (!/^09\d{9}$/.test(mobile)) throw new Error(`bad test mobile: ${mobile}`);
   createdMobiles.push(mobile);
   return mobile;
 }
 
+const testKey = 'test-only-master-key-with-at-least-32-characters';
+const originalKey = config.messagingCredentialsKey;
+const originalEnvKey = process.env.MESSAGING_CREDENTIALS_KEY;
+
+async function prepareOtpChannel(mobile: string, channel: MessagingChannel = MessagingChannel.TELEGRAM) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { mobile }, select: { id: true } });
+  const credentialsEncrypted = encryptProviderCredentials({ botToken: `test-token-${channel}` }, testKey);
+  await prisma.messagingSystemPolicy.upsert({
+    where: { channel },
+    update: { enabled: true, otpEnabled: true, credentialsEncrypted, displayName: channel, botUsername: `test_${channel.toLowerCase()}` },
+    create: { channel, enabled: true, otpEnabled: true, credentialsEncrypted, displayName: channel, botUsername: `test_${channel.toLowerCase()}` },
+  });
+  const externalUserId = `otp-${channel.toLowerCase()}-${user.id}`;
+  await prisma.messagingIdentity.upsert({
+    where: { userId_channel: { userId: user.id, channel } },
+    update: { externalUserId, destinationId: externalUserId, status: 'ACTIVE', verifiedAt: new Date(), verificationMethod: 'TEST_OTP' },
+    create: { userId: user.id, channel, externalUserId, destinationId: externalUserId, status: 'ACTIVE', verifiedAt: new Date(), verificationMethod: 'TEST_OTP' },
+  });
+  await prisma.userMessagingPreference.upsert({
+    where: { userId: user.id },
+    update: { otpChannel: channel },
+    create: { userId: user.id, otpChannel: channel },
+  });
+  mocks.capturedByDestination.clear();
+  mocks.telegramSend.mockClear();
+  mocks.baleSend.mockClear();
+  return { externalUserId };
+}
+
+async function capturedOtpForMobile(mobile: string): Promise<string | undefined> {
+  const user = await prisma.user.findUnique({ where: { mobile }, select: { id: true } });
+  if (!user) return undefined;
+  const pref = await prisma.userMessagingPreference.findUnique({ where: { userId: user.id }, select: { otpChannel: true } });
+  const channel = pref?.otpChannel ?? MessagingChannel.TELEGRAM;
+  const identity = await prisma.messagingIdentity.findUnique({ where: { userId_channel: { userId: user.id, channel } }, select: { externalUserId: true, destinationId: true } });
+  const dest = identity?.destinationId ?? identity?.externalUserId;
+  if (!dest) return undefined;
+  return mocks.capturedByDestination.get(dest);
+}
+
 beforeAll(async () => {
+  config.messagingCredentialsKey = testKey;
+  process.env.MESSAGING_CREDENTIALS_KEY = testKey;
   await getTestApp();
   fixture = await seedFixture(1);
   managerMobile = await mobileOf(fixture.manager.id);
+  // Ensure clean state for OTP channel tests
+  await prisma.messagingSystemPolicy.deleteMany({ where: { channel: { in: [MessagingChannel.TELEGRAM, MessagingChannel.BALE] } } });
 });
 
 afterAll(async () => {
-  // remove ad-hoc users created by this suite (fixture cleanup only removes its own)
   if (createdMobiles.length > 0) {
-    await prisma.user.deleteMany({ where: { mobile: { in: createdMobiles } } });
+    const users = await prisma.user.findMany({ where: { mobile: { in: createdMobiles } }, select: { id: true } });
+    const ids = users.map((u) => u.id);
+    if (ids.length) {
+      await prisma.messagingIdentity.deleteMany({ where: { userId: { in: ids } } });
+      await prisma.userMessagingPreference.deleteMany({ where: { userId: { in: ids } } });
+      await prisma.user.deleteMany({ where: { mobile: { in: createdMobiles } } });
+    }
   }
+  await prisma.messagingSystemPolicy.deleteMany({ where: { channel: { in: [MessagingChannel.TELEGRAM, MessagingChannel.BALE] } } });
+  config.messagingCredentialsKey = originalKey;
+  process.env.MESSAGING_CREDENTIALS_KEY = originalEnvKey;
   await fixture?.cleanup();
   await closeTestApp();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  mocks.capturedByDestination.clear();
 });
 
 async function post(url: string, payload?: unknown, token?: string) {
@@ -64,18 +129,6 @@ async function post(url: string, payload?: unknown, token?: string) {
   });
 }
 
-/** Captures the 6-digit code the mock provider logs, keyed by mobile. */
-function captureOtpLogs() {
-  const codes = new Map<string, string>();
-  const spy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
-    const first = String(args[0] ?? '');
-    const match = first.match(/\[otp:mock\] code for (\S+): (\d{6})/);
-    if (match) codes.set(match[1], match[2]);
-  });
-  return { codes, spy };
-}
-
-/** Creates a passwordless employee (requires OTP activation). */
 async function createPasswordlessEmployee(mobile: string) {
   const res = await post(
     '/members',
@@ -87,7 +140,6 @@ async function createPasswordlessEmployee(mobile: string) {
   return res.json().userId as string;
 }
 
-/** Creates an employee with an initial password (eligible for password reset). */
 async function createPasswordedEmployee(mobile: string) {
   const res = await post(
     '/members',
@@ -108,12 +160,11 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
   it('activation flow still works end-to-end (request → verify → password → login)', async () => {
     const mobile = uniqueMobile();
     await createPasswordlessEmployee(mobile);
+    await prepareOtpChannel(mobile, MessagingChannel.TELEGRAM);
 
-    const cap = captureOtpLogs();
     const req = await post('/auth/otp/request', { mobile });
     expect(req.statusCode).toBe(200);
-    cap.spy.mockRestore();
-    const code = cap.codes.get(mobile);
+    const code = await capturedOtpForMobile(mobile);
     expect(code).toMatch(/^\d{6}$/);
 
     const verify = await post('/auth/otp/verify', { mobile, code });
@@ -136,24 +187,20 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
   it('wrong OTP increments attempts and 5 failures invalidate the code', async () => {
     const mobile = uniqueMobile();
     await createPasswordlessEmployee(mobile);
+    await prepareOtpChannel(mobile);
 
-    const cap = captureOtpLogs();
     await post('/auth/otp/request', { mobile });
-    cap.spy.mockRestore();
-    const code = cap.codes.get(mobile)!;
+    const code = (await capturedOtpForMobile(mobile))!;
     const wrongCode = '000000' === code ? '111111' : '000000';
 
-    // five wrong attempts: each still "incorrect code" (threshold checked before compare)
     for (let i = 0; i < 5; i++) {
       const wrong = await post('/auth/otp/verify', { mobile, code: wrongCode });
       expect(wrong.statusCode).toBe(400);
       expect(wrong.json().message).toContain('کد تأیید نادرست');
     }
-    // the next verify — even with the CORRECT code — hits the threshold and deletes the entry
     const sixth = await post('/auth/otp/verify', { mobile, code });
     expect(sixth.statusCode).toBe(400);
     expect(sixth.json().message).toContain('بیش از حد');
-    // the entry is gone: nothing more to verify
     const after = await post('/auth/otp/verify', { mobile, code });
     expect(after.statusCode).toBe(400);
     expect(after.json().message).toContain('منقضی');
@@ -162,17 +209,14 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
   it('activation OTP cannot be used for password reset (purpose isolation)', async () => {
     const mobile = uniqueMobile();
     await createPasswordlessEmployee(mobile);
+    await prepareOtpChannel(mobile);
 
-    const cap = captureOtpLogs();
-    await post('/auth/otp/request', { mobile }); // ACTIVATION code
-    cap.spy.mockRestore();
-    const activationCode = cap.codes.get(mobile)!;
+    await post('/auth/otp/request', { mobile });
+    const activationCode = (await capturedOtpForMobile(mobile))!;
 
-    // try to spend it on the PASSWORD_RESET verify endpoint
     const resetVerify = await post('/auth/forgot-password/verify', { mobile, code: activationCode });
     expect(resetVerify.statusCode).toBe(400);
 
-    // the activation code still works on its own endpoint (not consumed)
     const activationVerify = await post('/auth/otp/verify', { mobile, code: activationCode });
     expect(activationVerify.statusCode).toBe(200);
     const { resetToken, purpose } = activationVerify.json();
@@ -183,19 +227,16 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
   it('password-reset OTP cannot be used for activation', async () => {
     const mobile = uniqueMobile();
     await createPasswordedEmployee(mobile);
+    await prepareOtpChannel(mobile, MessagingChannel.BALE);
 
-    const cap = captureOtpLogs();
     const req = await post('/auth/forgot-password/request', { mobile });
     expect(req.statusCode).toBe(200);
-    cap.spy.mockRestore();
-    const resetCode = cap.codes.get(mobile);
+    const resetCode = await capturedOtpForMobile(mobile);
     expect(resetCode).toMatch(/^\d{6}$/);
 
-    // try to spend the reset code on the ACTIVATION verify endpoint
     const activationVerify = await post('/auth/otp/verify', { mobile, code: resetCode });
     expect(activationVerify.statusCode).toBe(400);
 
-    // it still works on its own endpoint
     const resetVerify = await post('/auth/forgot-password/verify', { mobile, code: resetCode });
     expect(resetVerify.statusCode).toBe(200);
     expect(resetVerify.json().purpose).toBe('PASSWORD_RESET');
@@ -204,11 +245,10 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
   it('OTP is one-time: cannot be reused after successful verification', async () => {
     const mobile = uniqueMobile();
     await createPasswordlessEmployee(mobile);
+    await prepareOtpChannel(mobile);
 
-    const cap = captureOtpLogs();
     await post('/auth/otp/request', { mobile });
-    cap.spy.mockRestore();
-    const code = cap.codes.get(mobile)!;
+    const code = (await capturedOtpForMobile(mobile))!;
 
     const first = await post('/auth/otp/verify', { mobile, code });
     expect(first.statusCode).toBe(200);
@@ -220,6 +260,7 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
   it('one outstanding activation OTP per mobile: second request is 409', async () => {
     const mobile = uniqueMobile();
     await createPasswordlessEmployee(mobile);
+    await prepareOtpChannel(mobile);
 
     const first = await post('/auth/otp/request', { mobile });
     expect(first.statusCode).toBe(200);
@@ -231,16 +272,14 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
   it('activation token cannot be used for password reset (token purpose binding)', async () => {
     const mobile = uniqueMobile();
     await createPasswordlessEmployee(mobile);
+    await prepareOtpChannel(mobile);
 
-    const cap = captureOtpLogs();
     await post('/auth/otp/request', { mobile });
-    cap.spy.mockRestore();
-    const code = cap.codes.get(mobile)!;
+    const code = (await capturedOtpForMobile(mobile))!;
 
     const verify = await post('/auth/otp/verify', { mobile, code });
     const { resetToken } = verify.json();
 
-    // try to spend the ACTIVATION token on the reset endpoint → purpose mismatch
     const resetAttempt = await post('/auth/forgot-password/reset', {
       mobile,
       resetToken,
@@ -248,7 +287,6 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
     });
     expect(resetAttempt.statusCode).toBe(401);
 
-    // it still completes its own operation
     const setPassword = await post('/auth/password', {
       mobile,
       resetToken,
@@ -260,18 +298,15 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
   it('reset token cannot be used for activation (endpoint refuses passwordless-only op)', async () => {
     const mobile = uniqueMobile();
     await createPasswordedEmployee(mobile);
+    await prepareOtpChannel(mobile);
 
-    const cap = captureOtpLogs();
     await post('/auth/forgot-password/request', { mobile });
-    cap.spy.mockRestore();
-    const code = cap.codes.get(mobile)!;
+    const code = (await capturedOtpForMobile(mobile))!;
 
     const verify = await post('/auth/forgot-password/verify', { mobile, code });
     expect(verify.statusCode).toBe(200);
     const { resetToken } = verify.json();
 
-    // /auth/password is activation-only: a password-bearing account is rejected (409)
-    // and the reset token is NOT consumed by the activation endpoint
     const activationAttempt = await post('/auth/password', {
       mobile,
       resetToken,
@@ -283,9 +318,9 @@ describe('OTP purpose isolation & security (ACTIVATION vs PASSWORD_RESET)', () =
 
 describe('Forgot password', () => {
   it('request endpoint does not reveal account existence (unknown vs known identical)', async () => {
-    // dedicated user so the one-outstanding rule doesn't leak into later tests
     const knownMobile = uniqueMobile();
     await createPasswordedEmployee(knownMobile);
+    await prepareOtpChannel(knownMobile);
 
     const unknown = await post('/auth/forgot-password/request', { mobile: '09999999999' });
     const known = await post('/auth/forgot-password/request', { mobile: knownMobile });
@@ -297,11 +332,11 @@ describe('Forgot password', () => {
   it('passwordless account cannot use password reset', async () => {
     const mobile = uniqueMobile();
     await createPasswordlessEmployee(mobile);
+    await prepareOtpChannel(mobile);
 
     const req = await post('/auth/forgot-password/request', { mobile });
     expect(req.statusCode).toBe(200);
 
-    // no code was ever generated (generic 200, nothing in the store) → verify fails
     const verify = await post('/auth/forgot-password/verify', { mobile, code: '123456' });
     expect(verify.statusCode).toBe(400);
   });
@@ -309,12 +344,11 @@ describe('Forgot password', () => {
   it('full reset flow: verify issues one-time token, reset changes password, old password stops working', async () => {
     const mobile = uniqueMobile();
     await createPasswordedEmployee(mobile);
+    await prepareOtpChannel(mobile, MessagingChannel.BALE);
     const oldPassword = 'Seed!23456';
 
-    const cap = captureOtpLogs();
     await post('/auth/forgot-password/request', { mobile });
-    cap.spy.mockRestore();
-    const code = cap.codes.get(mobile)!;
+    const code = (await capturedOtpForMobile(mobile))!;
 
     const verify = await post('/auth/forgot-password/verify', { mobile, code });
     expect(verify.statusCode).toBe(200);
@@ -328,13 +362,11 @@ describe('Forgot password', () => {
     });
     expect(reset.statusCode).toBe(200);
 
-    // old password rejected, new password works
     const oldLogin = await post('/auth/login', { mobile, password: oldPassword });
     expect(oldLogin.statusCode).toBe(401);
     const newLogin = await post('/auth/login', { mobile, password: 'Reset!23445' });
     expect(newLogin.statusCode).toBe(200);
 
-    // token is one-time: a second reset with the same token fails
     const replay = await post('/auth/forgot-password/reset', {
       mobile,
       resetToken,
@@ -348,7 +380,7 @@ describe('Forgot password', () => {
       mobile: managerMobile,
       password: 'Some!23456',
     });
-    expect(noToken.statusCode).toBe(400); // zod: resetToken missing
+    expect(noToken.statusCode).toBe(400);
 
     const badToken = await post('/auth/forgot-password/reset', {
       mobile: managerMobile,
@@ -359,16 +391,15 @@ describe('Forgot password', () => {
   });
 
   it('a reset token bound to another user cannot reset someone else’s password', async () => {
-    // dedicated users so the one-outstanding rule doesn't leak between tests
     const requestorMobile = uniqueMobile();
     const victimMobile = uniqueMobile();
     await createPasswordedEmployee(requestorMobile);
     await createPasswordedEmployee(victimMobile);
+    await prepareOtpChannel(requestorMobile, MessagingChannel.BALE);
+    await prepareOtpChannel(victimMobile, MessagingChannel.BALE);
 
-    const cap = captureOtpLogs();
     await post('/auth/forgot-password/request', { mobile: requestorMobile });
-    cap.spy.mockRestore();
-    const code = cap.codes.get(requestorMobile)!;
+    const code = (await capturedOtpForMobile(requestorMobile))!;
     const verify = await post('/auth/forgot-password/verify', {
       mobile: requestorMobile,
       code,
@@ -383,7 +414,6 @@ describe('Forgot password', () => {
     });
     expect(crossUser.statusCode).toBe(401);
 
-    // the victim's password is untouched
     const victimLogin = await post('/auth/login', { mobile: victimMobile, password: 'Seed!23456' });
     expect(victimLogin.statusCode).toBe(200);
   });
@@ -417,15 +447,14 @@ describe('Change password (logged-in)', () => {
 
     const user = await prisma.user.findUnique({ where: { mobile: managerMobile } });
     expect(user?.passwordHash).toBeTruthy();
-    expect(user?.passwordHash).not.toBe('Manager!New1'); // hashed, not plaintext
-    expect(user?.passwordHash?.startsWith('$2')).toBe(true); // bcrypt format
+    expect(user?.passwordHash).not.toBe('Manager!New1');
+    expect(user?.passwordHash?.startsWith('$2')).toBe(true);
 
     const oldLogin = await post('/auth/login', { mobile: managerMobile, password: 'Passw0rd!' });
     expect(oldLogin.statusCode).toBe(401);
     const newLogin = await post('/auth/login', { mobile: managerMobile, password: 'Manager!New1' });
     expect(newLogin.statusCode).toBe(200);
 
-    // restore for other suites that reuse the fixture password
     await post(
       '/auth/change-password',
       { currentPassword: 'Manager!New1', newPassword: 'Passw0rd!' },
@@ -450,170 +479,10 @@ describe('Change password (logged-in)', () => {
     );
     expect(res.statusCode).toBe(200);
     expect(JSON.stringify(res.json())).not.toContain('$2');
-    // restore
     await post(
       '/auth/change-password',
       { currentPassword: 'Manager!New2', newPassword: 'Passw0rd!' },
       fixture.manager.token,
     );
-  });
-});
-
-describe('Telegram OTP provider (delivery destination only)', () => {
-  it('linked Telegram user receives the OTP through the client', async () => {
-    const sent: Array<{ chatId: number | string; text: string }> = [];
-    const repo = {
-      findUserByMobile: async (mobile: string) =>
-        mobile === '09120000001' ? { id: 'user-1', mobile } : null,
-      findIdentityByUserId: async (userId: string) =>
-        userId === 'user-1' ? { telegramUserId: '555000111', userId } : null,
-    };
-    const client = {
-      sendMessage: async (chatId: number | string, text: string) => {
-        sent.push({ chatId, text });
-      },
-    };
-    const provider = createTelegramOtpProviderForTests(repo, client);
-
-    await provider.sendOtp('09120000001', '123456');
-    expect(sent).toHaveLength(1);
-    expect(String(sent[0].chatId)).toBe('555000111'); // identity used ONLY as destination
-    expect(sent[0].text).toContain('123456');
-  });
-
-  it('unlinked user does not attempt Telegram delivery', async () => {
-    let sendAttempts = 0;
-    const repo = {
-      findUserByMobile: async (mobile: string) => ({ id: 'user-2', mobile }),
-      findIdentityByUserId: async () => null,
-    };
-    const client = {
-      sendMessage: async () => {
-        sendAttempts++;
-      },
-    };
-    const provider = createTelegramOtpProviderForTests(repo, client);
-
-    await expect(provider.sendOtp('09120000002', '654321')).rejects.toThrow(
-      'telegram_otp_identity_not_linked',
-    );
-    expect(sendAttempts).toBe(0);
-  });
-
-  it('unknown user fails safely without touching the client', async () => {
-    let sendAttempts = 0;
-    const repo = {
-      findUserByMobile: async () => null,
-      findIdentityByUserId: async () => null,
-    };
-    const client = {
-      sendMessage: async () => {
-        sendAttempts++;
-      },
-    };
-    const provider = createTelegramOtpProviderForTests(repo, client);
-
-    await expect(provider.sendOtp('09999999999', '111222')).rejects.toThrow(
-      'telegram_otp_user_not_found',
-    );
-    expect(sendAttempts).toBe(0);
-  });
-
-  it('Telegram delivery failure throws (so OTP state is rolled back) and does not corrupt state', async () => {
-    const repo = {
-      findUserByMobile: async (mobile: string) => ({ id: 'user-3', mobile }),
-      findIdentityByUserId: async (userId: string) => ({ telegramUserId: '777', userId }),
-    };
-    const failingClient = {
-      sendMessage: async () => {
-        throw new Error('network_down');
-      },
-    };
-    const provider = createTelegramOtpProviderForTests(repo, failingClient);
-
-    await expect(provider.sendOtp('09120000003', '222333')).rejects.toThrow('network_down');
-    // provider is stateless — a retry with a working client succeeds
-    const okClient = { sendMessage: async () => undefined };
-    const retry = createTelegramOtpProviderForTests(repo, okClient);
-    await expect(retry.sendOtp('09120000003', '444555')).resolves.toBeUndefined();
-  });
-
-  it('provider interface exposes only (mobile, code) — no identity-shaped credential input', async () => {
-    const provider = createTelegramOtpProviderForTests(
-      {
-        findUserByMobile: async (m: string) => ({ id: 'u', mobile: m }),
-        findIdentityByUserId: async (id: string) => ({ telegramUserId: '1', userId: id }),
-      },
-      { sendMessage: async () => undefined },
-    );
-    expect(provider.name).toBe('telegram');
-    expect(provider.sendOtp.length).toBe(2); // (mobile, code)
-  });
-});
-
-describe('Provider selection', () => {
-  it('default (mock) provider still works', async () => {
-    const provider = createOtpProvider();
-    expect(provider.name).toBe('mock');
-    const cap = captureOtpLogs();
-    await provider.sendOtp('09120000009', '999888');
-    cap.spy.mockRestore();
-    expect(cap.codes.get('09120000009')).toBe('999888');
-  });
-
-  it('telegram provider can be constructed through the test factory (factory branch: OTP_PROVIDER=telegram)', async () => {
-    const provider = createTelegramOtpProviderForTests(
-      { findUserByMobile: async () => null, findIdentityByUserId: async () => null },
-      { sendMessage: async () => undefined },
-    );
-    expect(provider.name).toBe('telegram');
-    // Runtime selection in createOtpProvider() is env-driven (OTP_PROVIDER=telegram);
-    // both branches exist and are type-checked; no network access is needed here.
-  });
-});
-
-
-describe('Telegram OTP messaging contract compatibility', () => {
-  it('preserves activation text and the copy-code keyboard', async () => {
-    const calls: Array<{
-      destination: number | string;
-      text: string;
-      replyMarkup?: TelegramReplyMarkup;
-    }> = [];
-    const provider = createTelegramOtpProviderForTests(
-      {
-        findUserByMobile: async (mobile: string) => ({
-          id: 'contract-user',
-          mobile,
-        }),
-        findIdentityByUserId: async (userId: string) => ({
-          telegramUserId: '888000111',
-          userId,
-        }),
-      },
-      {
-        sendMessage: async (destination, text, replyMarkup) => {
-          calls.push({ destination, text, replyMarkup });
-          return { ok: true };
-        },
-      },
-    );
-
-    await provider.sendOtp('09120000010', '314159', 'ACTIVATION');
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0]!.destination).toBe('888000111');
-    expect(calls[0]!.text).toContain('کد فعال‌سازی فالوآ');
-    expect(calls[0]!.text).toContain('314159');
-    expect(calls[0]!.replyMarkup).toEqual({
-      inline_keyboard: [
-        [
-          {
-            text: '📋 کپی کد',
-            copy_text: { text: '314159' },
-          },
-        ],
-      ],
-    });
   });
 });

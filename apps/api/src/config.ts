@@ -5,7 +5,6 @@ export const config = {
   port: Number(process.env.PORT ?? 3001), host: process.env.HOST ?? '0.0.0.0', nodeEnv: process.env.NODE_ENV ?? 'development',
   jwtSecret: required('JWT_SECRET', 'dev-only-secret-change-me'), jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '12h',
   messagingCredentialsKey: process.env.MESSAGING_CREDENTIALS_KEY ?? '',
-  otpProvider: process.env.OTP_PROVIDER ?? 'mock', notificationProvider: process.env.NOTIFICATION_PROVIDER ?? 'mock',
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '', telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME ?? '', telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? '',
   baleBotToken: process.env.BALE_BOT_TOKEN ?? '', baleBotUsername: process.env.BALE_BOT_USERNAME ?? '', baleWebhookSecret: process.env.BALE_WEBHOOK_SECRET ?? '',
   baleLinkingEnabled: enabled('BALE_LINKING_ENABLED'),

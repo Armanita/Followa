@@ -20,8 +20,8 @@ Required variables:
 - `DATABASE_URL` — PostgreSQL connection string (host port is **5433** in the bundled compose file)
 - `JWT_SECRET` — **replace** with `openssl rand -hex 32` output
 - `SYSTEM_ADMIN_USERNAME` / `SYSTEM_ADMIN_PASSWORD` — seed credentials for the platform admin
-- `OTP_PROVIDER` — `mock` (dev) | `sms` | `bale` | `eitaa`
-- `NOTIFICATION_PROVIDER` — `mock` | `bale` | `eitaa`
+- `MESSAGING_CREDENTIALS_KEY` — AES-GCM master key (≥32 chars) for `MessagingSystemPolicy` provider tokens
+- `MessagingSystemPolicy` — provider tokens and `enabled`/`otpEnabled`/`notificationEnabled` are configured via System Admin UI (`/admin/messaging-settings`), not ENV
 - `STORAGE_DIR`, `MAX_FILE_SIZE_MB` — file storage
 - Web: set `NEXT_PUBLIC_API_BASE=https://api.example.com/api/v1` when the API is not same-origin behind one domain
 

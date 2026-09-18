@@ -57,10 +57,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return {
       message: 'کد تأیید ارسال شد',
       isNewUser: result.isNewUser,
-      // mock provider surfaces the code so the flow is testable without an SMS gateway
-      ...(process.env.OTP_PROVIDER === 'mock' || !process.env.OTP_PROVIDER
-        ? {}
-        : {}),
     };
   });
 

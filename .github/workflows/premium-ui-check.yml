@@ -24,8 +24,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/followa_ci?schema=public
       JWT_SECRET: followa-ci-test-secret
       NODE_ENV: test
-      OTP_PROVIDER: mock
-      NOTIFICATION_PROVIDER: mock
+      MESSAGING_CREDENTIALS_KEY: test-only-master-key-with-at-least-32-characters
     services:
       postgres:
         image: postgres:16-alpine
