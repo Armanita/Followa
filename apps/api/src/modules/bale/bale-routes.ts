@@ -37,8 +37,16 @@ function privateSenderId(id: unknown, chat?: BaleChat): string | null {
   return String(id);
 }
 
-function validWebhookSecret(supplied: string): boolean {
-  const expected = config.baleWebhookSecret;
+// ENV fallback exists only for initial bootstrap. Runtime credentials are loaded from MessagingSystemPolicy.
+async function getWebhookSecretForValidation(): Promise<string | null> {
+  const { getBaleWebhookSecret } = await import('../messaging/provider-config-service.js');
+  const dbSecret = await getBaleWebhookSecret();
+  if (dbSecret?.trim()) return dbSecret.trim();
+  if (config.baleWebhookSecret.trim()) return config.baleWebhookSecret.trim();
+  return null;
+}
+
+function validWebhookSecret(supplied: string, expected: string): boolean {
   return (
     expected.length >= 32 &&
     Buffer.byteLength(supplied) === Buffer.byteLength(expected) &&
@@ -59,10 +67,16 @@ export async function baleRoutes(app: FastifyInstance) {
     // no documented secret header. Suppress application request logging.
     { logLevel: 'silent' },
     async (request, reply) => {
+      const { getBaleRuntimeConfig, isBaleLinkingEnabled } = await import('../messaging/provider-config-service.js');
+      // Database first: MessagingSystemPolicy.credentialsEncrypted. ENV only when no DB configuration exists.
+      const runtime = await getBaleRuntimeConfig();
+      const botToken = runtime?.botToken ?? config.baleBotToken;
+      const expectedSecret = runtime?.webhookSecret ?? config.baleWebhookSecret;
+      const linkingEnabled = await isBaleLinkingEnabled();
       if (
-        !config.baleLinkingEnabled ||
-        !config.baleBotToken.trim() ||
-        !config.baleWebhookSecret.trim()
+        !linkingEnabled ||
+        !botToken?.trim() ||
+        !expectedSecret?.trim()
       ) {
         return reply.code(503).send({
           status: 'rejected',
@@ -73,7 +87,8 @@ export async function baleRoutes(app: FastifyInstance) {
       const { webhookSecret } = request.params as {
         webhookSecret: string;
       };
-      if (!validWebhookSecret(webhookSecret)) {
+      const validationSecret = await getWebhookSecretForValidation();
+      if (!validationSecret || !validWebhookSecret(webhookSecret, validationSecret)) {
         return reply.code(403).send({
           status: 'rejected',
           reason: 'invalid_webhook_secret',

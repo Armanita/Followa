@@ -1,6 +1,20 @@
-import { config } from '../../config.js';
+import { getBaleBotToken } from '../messaging/provider-config-service.js';
 const BALE_API_BASE_URL = 'https://tapi.bale.ai';
 const REQUEST_TIMEOUT_MS = 10_000;
 export type BaleReplyMarkup = { keyboard?: Array<Array<{ text: string; request_contact?: boolean }>>; inline_keyboard?: Array<Array<{ text: string; callback_data?: string }>>; resize_keyboard?: boolean; one_time_keyboard?: boolean; remove_keyboard?: boolean };
 type BaleApiResponse = { ok: boolean; result?: unknown; description?: string };
-export function createBaleClient(botToken = config.baleBotToken) { async function request(method: string, body: Record<string, unknown>) { if (!botToken.trim()) throw new Error('bale_bot_token_missing'); const response = await fetch(`${BALE_API_BASE_URL}/bot${botToken}/${method}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }); const data = (await response.json()) as BaleApiResponse; if (!response.ok || !data.ok) throw new Error(data.description ?? `bale_${method}_failed`); } return { async sendMessage(chatId: number | string, text: string, replyMarkup?: BaleReplyMarkup): Promise<void> { await request('sendMessage', { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }); }, async answerCallbackQuery(callbackQueryId: string): Promise<void> { await request('answerCallbackQuery', { callback_query_id: callbackQueryId }); } }; }
+export function createBaleClient(botToken?: string) {
+  async function request(method: string, body: Record<string, unknown>) {
+    const token = botToken ?? (await getBaleBotToken());
+    if (!token || !token.trim()) throw new Error('bale_bot_token_missing');
+    const response = await fetch(`${BALE_API_BASE_URL}/bot${token}/${method}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    const data = (await response.json()) as BaleApiResponse;
+    if (!response.ok || !data.ok) throw new Error(data.description ?? `bale_${method}_failed`);
+  }
+  return { async sendMessage(chatId: number | string, text: string, replyMarkup?: BaleReplyMarkup): Promise<void> { await request('sendMessage', { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }); }, async answerCallbackQuery(callbackQueryId: string): Promise<void> { await request('answerCallbackQuery', { callback_query_id: callbackQueryId }); } };
+}
+export async function createBaleClientFromDb(): Promise<ReturnType<typeof createBaleClient>> {
+  const token = await getBaleBotToken();
+  if (!token) throw new Error('bale_bot_token_missing');
+  return createBaleClient(token);
+}

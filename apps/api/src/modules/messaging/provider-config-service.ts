@@ -37,6 +37,38 @@ export async function getTelegramBotToken(): Promise<string | null> {
   const cfg = await getTelegramRuntimeConfig();
   return cfg?.botToken ?? null;
 }
+export async function getBaleRuntimeConfig(): Promise<RuntimeProviderConfig | null> {
+  const dbConfig = await getRuntimeProviderConfig('BALE' as MessagingChannel);
+  if (dbConfig) return dbConfig;
+  // Bootstrap fallback: use ENV if DB not yet configured (admin has not saved)
+  if (config.baleBotToken.trim() && config.baleWebhookSecret.trim()) {
+    return {
+      channel: 'BALE' as MessagingChannel,
+      displayName: 'بله',
+      botUsername: config.baleBotUsername || null,
+      botToken: config.baleBotToken.trim(),
+      webhookSecret: config.baleWebhookSecret.trim(),
+      enabled: true,
+      notificationEnabled: true,
+      otpEnabled: true,
+    };
+  }
+  return null;
+}
+export async function getBaleWebhookSecret(): Promise<string | null> {
+  const cfg = await getBaleRuntimeConfig();
+  return cfg?.webhookSecret ?? null;
+}
+export async function getBaleBotToken(): Promise<string | null> {
+  const cfg = await getBaleRuntimeConfig();
+  return cfg?.botToken ?? null;
+}
+// Database first: MessagingSystemPolicy.enabled. ENV fallback exists only for initial bootstrap when no DB row exists.
+export async function isBaleLinkingEnabled(): Promise<boolean> {
+  const row = await findProviderConfig('BALE' as MessagingChannel);
+  if (row) return row.enabled;
+  return config.baleLinkingEnabled;
+}
 export function isMasterKeyConfigured(): boolean { return config.messagingCredentialsKey.trim().length >= 32; }
 export interface SaveProviderConfigInput { channel: MessagingChannel; displayName: string; botUsername: string | null; enabled: boolean; notificationEnabled: boolean; otpEnabled: boolean; botToken?: string | null; webhookSecret?: string | null; }
 export async function saveProviderConfigs(inputs: SaveProviderConfigInput[]): Promise<void> {

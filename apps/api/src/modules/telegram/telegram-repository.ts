@@ -48,6 +48,7 @@ const eligibleMembership = {
   },
 };
 
+// ENV fallback exists only for initial bootstrap. Runtime credentials are loaded from MessagingSystemPolicy.
 async function getWebhookSecretForHmac(): Promise<string | null> {
   const dbSecret = await getTelegramWebhookSecret();
   if (dbSecret?.trim()) return dbSecret.trim();

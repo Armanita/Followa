@@ -9,6 +9,7 @@
     "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "worker:notifications": "node dist/modules/messaging/delivery-worker.js",
+    "start:notification-worker": "node dist/modules/messaging/delivery-worker.js",
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
