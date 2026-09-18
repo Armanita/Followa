@@ -32,10 +32,23 @@ type TestUser = {
   memberActive: boolean;
   companyActive: boolean;
 };
+type GenericIdentity = {
+  id: string;
+  userId: string;
+  channel: string;
+  externalUserId: string;
+  destinationId: string | null;
+  status: string;
+  verifiedAt: Date | null;
+  verificationMethod: string | null;
+  legacySource: string | null;
+  version: number;
+};
 
 let users: TestUser[];
 let pending: Map<string, Pending>;
 let identities: Identity[];
+let messagingIdentities: GenericIdentity[];
 let failIdentityCreate: boolean;
 let serializationConflicts: number;
 let transactionCalls: number;
@@ -103,6 +116,77 @@ function databaseFake() {
     }),
   };
 
+  const messagingIdentity = {
+    findUnique: vi.fn(
+      async ({ where }: { where: Record<string, unknown> }) => {
+        if (where.userId_channel) {
+          const key = where.userId_channel as { userId: string; channel: string };
+          return (
+            messagingIdentities.find(
+              (i) => i.userId === key.userId && i.channel === key.channel,
+            ) ?? null
+          );
+        }
+        if (where.channel_externalUserId) {
+          const key = where.channel_externalUserId as { channel: string; externalUserId: string };
+          return (
+            messagingIdentities.find(
+              (i) => i.channel === key.channel && i.externalUserId === key.externalUserId,
+            ) ?? null
+          );
+        }
+        if (where.id) {
+          return messagingIdentities.find((i) => i.id === where.id) ?? null;
+        }
+        return null;
+      },
+    ),
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+      if (failIdentityCreate) {
+        throw Object.assign(new Error('unique conflict'), { code: 'P2002' });
+      }
+      // enforce unique constraints for test realism
+      const existsByUser = messagingIdentities.find(
+        (i) => i.userId === data.userId && i.channel === data.channel,
+      );
+      const existsByExternal = messagingIdentities.find(
+        (i) => i.channel === data.channel && i.externalUserId === data.externalUserId,
+      );
+      if (existsByUser || existsByExternal) {
+        throw Object.assign(new Error('unique conflict'), { code: 'P2002' });
+      }
+      const id = (data.id as string) ?? `mid_${messagingIdentities.length + 1}_${Date.now()}`;
+      const record: GenericIdentity = {
+        id,
+        userId: data.userId as string,
+        channel: data.channel as string,
+        externalUserId: data.externalUserId as string,
+        destinationId: (data.destinationId as string | null) ?? (data.externalUserId as string),
+        status: (data.status as string) ?? 'ACTIVE',
+        verifiedAt: (data.verifiedAt as Date | null) ?? null,
+        verificationMethod: (data.verificationMethod as string | null) ?? null,
+        legacySource: (data.legacySource as string | null) ?? null,
+        version: (data.version as number) ?? 1,
+      };
+      messagingIdentities.push(record);
+      return record;
+    }),
+    update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const rec = messagingIdentities.find((i) => i.id === where.id);
+      if (!rec) throw new Error('messaging identity not found');
+      if (data.destinationId !== undefined) rec.destinationId = data.destinationId as string | null;
+      if (data.status !== undefined) rec.status = data.status as string;
+      if (data.verifiedAt !== undefined) rec.verifiedAt = data.verifiedAt as Date | null;
+      if (data.verificationMethod !== undefined) rec.verificationMethod = data.verificationMethod as string | null;
+      if (data.legacySource !== undefined) rec.legacySource = data.legacySource as string | null;
+      if (data.revokedAt !== undefined) (rec as unknown as Record<string, unknown>).revokedAt = data.revokedAt;
+      if ((data.version as { increment?: number })?.increment) {
+        rec.version += (data.version as { increment: number }).increment;
+      }
+      return rec;
+    }),
+  };
+
   const telegramPendingConnection = {
     findUnique: vi.fn(
       async ({ where }: { where: { telegramUserId: string } }) =>
@@ -155,6 +239,7 @@ function databaseFake() {
   const transactionClient = {
     user,
     telegramIdentity,
+    messagingIdentity,
     telegramPendingConnection,
   };
 
@@ -176,11 +261,13 @@ function databaseFake() {
 
         const pendingSnapshot = new Map(pending);
         const identitySnapshot = [...identities];
+        const genericSnapshot = [...messagingIdentities];
         try {
           return await work(transactionClient);
         } catch (error) {
           pending = pendingSnapshot;
           identities = identitySnapshot;
+          messagingIdentities = genericSnapshot;
           throw error;
         }
       },
@@ -200,6 +287,7 @@ beforeEach(async () => {
   ];
   pending = new Map();
   identities = [];
+  messagingIdentities = [];
   failIdentityCreate = false;
   serializationConflicts = 0;
   transactionCalls = 0;
@@ -282,6 +370,17 @@ describe('Telegram linking perimeter and ownership', () => {
         phoneNumber: mobile,
       },
     ]);
+    // MessagingIdentity is now primary - must also be created as ACTIVE verified
+    expect(messagingIdentities).toHaveLength(1);
+    expect(messagingIdentities[0]).toMatchObject({
+      userId: 'user-1',
+      channel: 'TELEGRAM',
+      externalUserId: '100',
+      destinationId: '100',
+      status: 'ACTIVE',
+      verificationMethod: 'TELEGRAM_SIGNED_CALLBACK_V1',
+    });
+    expect(messagingIdentities[0]!.verifiedAt).toBeInstanceOf(Date);
     expect(pending.size).toBe(0);
 
     mocks.sendMessage.mockClear();
@@ -328,8 +427,17 @@ describe('Telegram linking perimeter and ownership', () => {
     expect(
       (await post(contactUpdate(200))).body.reason,
     ).toBe('contact_owner_mismatch');
+    // Missing user_id should also be rejected (no default)
     expect(
-      (await post(contactUpdate(undefined))).body.reason,
+      (
+        await post({
+          message: {
+            from: { id: 100 },
+            chat: { id: 100, type: 'private' },
+            contact: { phone_number: '+989123456789' },
+          },
+        })
+      ).body.reason,
     ).toBe('contact_owner_mismatch');
     expect(pending.size).toBe(0);
   });
@@ -410,6 +518,7 @@ describe('Telegram challenge eligibility and lifecycle', () => {
         (await post(callbackUpdate(callbackData))).body.reason,
       ).toBe('user_not_eligible');
       expect(identities).toHaveLength(0);
+      expect(messagingIdentities).toHaveLength(0);
       expect(mocks.sendMessage).not.toHaveBeenCalled();
 
       users[0]![field] = true;
@@ -504,6 +613,19 @@ describe('Telegram challenge eligibility and lifecycle', () => {
   ])('never reassigns an existing identity: %j', async (identity) => {
     const callbackData = await beginLinking();
     identities.push(identity);
+    // Also mirror into generic for primary check
+    messagingIdentities.push({
+      id: `mid_${identity.telegramUserId}`,
+      userId: identity.userId,
+      channel: 'TELEGRAM',
+      externalUserId: identity.telegramUserId,
+      destinationId: identity.telegramUserId,
+      status: 'ACTIVE',
+      verifiedAt: new Date(),
+      verificationMethod: 'TELEGRAM_SIGNED_CALLBACK_V1',
+      legacySource: null,
+      version: 1,
+    });
     mocks.sendMessage.mockClear();
 
     expect(
@@ -529,6 +651,18 @@ describe('Telegram challenge eligibility and lifecycle', () => {
     ).toBe('rejected');
 
     identities.push({ telegramUserId: '100', userId: 'user-1' });
+    messagingIdentities.push({
+      id: 'mid_100',
+      userId: 'user-1',
+      channel: 'TELEGRAM',
+      externalUserId: '100',
+      destinationId: '100',
+      status: 'ACTIVE',
+      verifiedAt: new Date(),
+      verificationMethod: 'TELEGRAM_SIGNED_CALLBACK_V1',
+      legacySource: null,
+      version: 1,
+    });
     expect((await post(contactUpdate())).body.status).toBe('rejected');
     expect(identities[0]!.userId).toBe('user-1');
   });
@@ -542,6 +676,7 @@ describe('Telegram challenge eligibility and lifecycle', () => {
     ).toBe('identity_already_linked');
     expect(pending.has('100')).toBe(true);
     expect(identities).toHaveLength(0);
+    expect(messagingIdentities).toHaveLength(0);
   });
 
   it('retries serializable conflicts up to success', async () => {
@@ -551,6 +686,19 @@ describe('Telegram challenge eligibility and lifecycle', () => {
   });
 
   it('preserves existing identity reads when linking is disabled', async () => {
+    // Generic is now primary - push generic identity
+    messagingIdentities.push({
+      id: 'mid_generic_100',
+      userId: 'user-1',
+      channel: 'TELEGRAM',
+      externalUserId: '100',
+      destinationId: '100',
+      status: 'ACTIVE',
+      verifiedAt: new Date(),
+      verificationMethod: 'TELEGRAM_SIGNED_CALLBACK_V1',
+      legacySource: null,
+      version: 1,
+    });
     identities.push({ telegramUserId: '100', userId: 'user-1' });
     config.telegramWebhookSecret = '';
 
@@ -558,5 +706,70 @@ describe('Telegram challenge eligibility and lifecycle', () => {
     expect(
       (await repository.findIdentityByUserId('user-1'))!.telegramUserId,
     ).toBe('100');
+  });
+});
+
+describe('Telegram linking — MessagingIdentity primary', () => {
+  it('new Telegram link creates MessagingIdentity with verifiedAt', async () => {
+    const callbackData = await beginLinking();
+    expect(messagingIdentities).toHaveLength(0);
+    expect((await post(callbackUpdate(callbackData))).body.status).toBe('connected');
+    expect(messagingIdentities).toHaveLength(1);
+    const created = messagingIdentities[0]!;
+    expect(created).toMatchObject({
+      userId: 'user-1',
+      channel: 'TELEGRAM',
+      externalUserId: '100',
+      destinationId: '100',
+      status: 'ACTIVE',
+      verificationMethod: 'TELEGRAM_SIGNED_CALLBACK_V1',
+    });
+    expect(created.verifiedAt).toBeInstanceOf(Date);
+    expect(created.version).toBe(1);
+    // Legacy still written for backward compat
+    expect(identities).toHaveLength(1);
+  });
+
+  it('OTP resolver can find newly linked Telegram identity via generic read', async () => {
+    const callbackData = await beginLinking();
+    await post(callbackUpdate(callbackData));
+    const byUser = await repository.findIdentityByUserId('user-1');
+    const byTelegram = await repository.findIdentityByTelegramUserId('100');
+    expect(byUser).toMatchObject({ telegramUserId: '100', userId: 'user-1' });
+    expect(byTelegram).toMatchObject({ telegramUserId: '100', userId: 'user-1' });
+    // MessagingIdentity is the source - ensures destination lookup works
+    expect(messagingIdentities[0]!.verifiedAt).not.toBeNull();
+    // Generic read includes provenance fields
+    expect(byUser).toHaveProperty('messagingIdentityId');
+  });
+
+  it('duplicate Telegram external id rejected for second user', async () => {
+    // First user links 100
+    const first = await beginLinking();
+    await post(callbackUpdate(first));
+    expect(messagingIdentities).toHaveLength(1);
+
+    // Second user with different mobile tries to link same telegram id
+    users.push({
+      id: 'user-2',
+      mobile: '09123456780',
+      memberActive: true,
+      companyActive: true,
+    });
+    // Directly test repository guard: createPendingConnection with same telegramUserId but user-2
+    const secondAttempt = await repository.createPendingConnection({
+      telegramUserId: '100',
+      userId: 'user-2',
+      mobile: '09123456780',
+    });
+    expect(secondAttempt).toBeNull();
+    expect(messagingIdentities).toHaveLength(1);
+    expect(pending.size).toBe(0);
+
+    // Via webhook, existing identity blocks new pending creation
+    const response = await post(contactUpdate());
+    expect(response.body.status).toBe('rejected');
+    // createPendingConnection returns null for existing identity -> handleContact maps to connection_not_allowed
+    expect(response.body.reason).toBe('connection_not_allowed');
   });
 });

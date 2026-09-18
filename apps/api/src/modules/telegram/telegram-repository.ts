@@ -148,39 +148,40 @@ export function createTelegramRepository(db: TelegramDatabase) {
         });
 
         // Linking never replaces an existing identity, including legacy rows.
+        // Kept for backward compatibility until TelegramIdentity table is dropped.
         if (existing) {
           return null;
         }
 
-        if (config.messagingIdentityDualWriteEnabled) {
-          const [byUser, byExternal] = await Promise.all([
-            tx.messagingIdentity.findUnique({
-              where: {
-                userId_channel: {
-                  userId: user.id,
-                  channel: MessagingChannel.TELEGRAM,
-                },
+        // MessagingIdentity is now the primary source of truth for Telegram linking.
+        // This check is unconditional - no longer gated by MESSAGING_IDENTITY_DUAL_WRITE_ENABLED.
+        const [byUser, byExternal] = await Promise.all([
+          tx.messagingIdentity.findUnique({
+            where: {
+              userId_channel: {
+                userId: user.id,
+                channel: MessagingChannel.TELEGRAM,
               },
-            }),
-            tx.messagingIdentity.findUnique({
-              where: {
-                channel_externalUserId: {
-                  channel: MessagingChannel.TELEGRAM,
-                  externalUserId: input.telegramUserId,
-                },
+            },
+          }),
+          tx.messagingIdentity.findUnique({
+            where: {
+              channel_externalUserId: {
+                channel: MessagingChannel.TELEGRAM,
+                externalUserId: input.telegramUserId,
               },
-            }),
-          ]);
-          const sameIdentity =
-            byUser &&
-            byExternal &&
-            byUser.id === byExternal.id &&
-            byUser.userId === user.id &&
-            byUser.externalUserId === input.telegramUserId;
+            },
+          }),
+        ]);
+        const sameIdentity =
+          byUser &&
+          byExternal &&
+          byUser.id === byExternal.id &&
+          byUser.userId === user.id &&
+          byUser.externalUserId === input.telegramUserId;
 
-          if ((byUser || byExternal) && !sameIdentity) {
-            return null;
-          }
+        if ((byUser || byExternal) && !sameIdentity) {
+          return null;
         }
 
         const previous = await tx.telegramPendingConnection.findUnique({
@@ -261,6 +262,7 @@ export function createTelegramRepository(db: TelegramDatabase) {
               OR: [{ telegramUserId }, { userId: pending.userId }],
             },
           });
+          // Kept for backward compatibility - primary check is now MessagingIdentity.
           if (existing) {
             return {
               status: 'rejected',
@@ -268,41 +270,39 @@ export function createTelegramRepository(db: TelegramDatabase) {
             };
           }
 
-          let genericIdentity: { id: string } | null = null;
-          if (config.messagingIdentityDualWriteEnabled) {
-            const [byUser, byExternal] = await Promise.all([
-              tx.messagingIdentity.findUnique({
-                where: {
-                  userId_channel: {
-                    userId: user.id,
-                    channel: MessagingChannel.TELEGRAM,
-                  },
+          // MessagingIdentity is the primary source of truth - unconditional check.
+          const [byUser, byExternal] = await Promise.all([
+            tx.messagingIdentity.findUnique({
+              where: {
+                userId_channel: {
+                  userId: user.id,
+                  channel: MessagingChannel.TELEGRAM,
                 },
-              }),
-              tx.messagingIdentity.findUnique({
-                where: {
-                  channel_externalUserId: {
-                    channel: MessagingChannel.TELEGRAM,
-                    externalUserId: telegramUserId,
-                  },
+              },
+            }),
+            tx.messagingIdentity.findUnique({
+              where: {
+                channel_externalUserId: {
+                  channel: MessagingChannel.TELEGRAM,
+                  externalUserId: telegramUserId,
                 },
-              }),
-            ]);
-            const sameIdentity =
-              byUser &&
-              byExternal &&
-              byUser.id === byExternal.id &&
-              byUser.userId === user.id &&
-              byUser.externalUserId === telegramUserId;
+              },
+            }),
+          ]);
+          const sameIdentity =
+            byUser &&
+            byExternal &&
+            byUser.id === byExternal.id &&
+            byUser.userId === user.id &&
+            byUser.externalUserId === telegramUserId;
 
-            if ((byUser || byExternal) && !sameIdentity) {
-              return {
-                status: 'rejected',
-                reason: 'messaging_identity_conflict',
-              };
-            }
-            genericIdentity = sameIdentity ? { id: byUser.id } : null;
+          if ((byUser || byExternal) && !sameIdentity) {
+            return {
+              status: 'rejected',
+              reason: 'messaging_identity_conflict',
+            };
           }
+          const genericIdentity: { id: string } | null = sameIdentity ? { id: byUser.id } : null;
 
           const consumed = await tx.telegramPendingConnection.deleteMany({
             where: {
@@ -322,6 +322,7 @@ export function createTelegramRepository(db: TelegramDatabase) {
             };
           }
 
+          // TelegramIdentity kept for backward compatibility until table is dropped.
           await tx.telegramIdentity.create({
             data: {
               telegramUserId,
@@ -330,7 +331,8 @@ export function createTelegramRepository(db: TelegramDatabase) {
             },
           });
 
-          if (config.messagingIdentityDualWriteEnabled) {
+          // MessagingIdentity is now the primary storage - unconditional write.
+          {
             const verifiedAt = new Date();
             if (genericIdentity) {
               await tx.messagingIdentity.update({

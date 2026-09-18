@@ -441,7 +441,15 @@ describe('P4 Telegram compatibility and ownership safety', () => {
       await repository.confirmPendingConnection('100', challenge!.token),
     ).toEqual({ status: 'connected' });
     expect(legacy).toHaveLength(1);
-    expect(generic).toHaveLength(0);
+    // Phase 1: MessagingIdentity is now primary even when dual-write flag is false.
+    expect(generic).toHaveLength(1);
+    expect(generic[0]).toMatchObject({
+      userId: user.id,
+      channel: MessagingChannel.TELEGRAM,
+      externalUserId: '100',
+      status: MessagingIdentityStatus.ACTIVE,
+      verificationMethod: 'TELEGRAM_SIGNED_CALLBACK_V1',
+    });
     expect(
       (await repository.findIdentityByUserId(user.id))!.telegramUserId,
     ).toBe('100');
