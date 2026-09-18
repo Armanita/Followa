@@ -440,8 +440,8 @@ describe('P4 Telegram compatibility and ownership safety', () => {
     expect(
       await repository.confirmPendingConnection('100', challenge!.token),
     ).toEqual({ status: 'connected' });
-    expect(legacy).toHaveLength(1);
-    // Phase 1: MessagingIdentity is now primary even when dual-write flag is false.
+    // Phase 2: TelegramIdentity is no longer written - only MessagingIdentity.
+    expect(legacy).toHaveLength(0);
     expect(generic).toHaveLength(1);
     expect(generic[0]).toMatchObject({
       userId: user.id,
@@ -469,7 +469,8 @@ describe('P4 Telegram compatibility and ownership safety', () => {
     expect(
       await repository.confirmPendingConnection('100', challenge!.token),
     ).toEqual({ status: 'connected' });
-    expect(legacy).toHaveLength(1);
+    // Phase 2: Only MessagingIdentity is written even when dual-write flag is true.
+    expect(legacy).toHaveLength(0);
     expect(generic).toMatchObject([
       {
         userId: user.id,
@@ -523,17 +524,16 @@ describe('P4 Telegram compatibility and ownership safety', () => {
 
 describe('P10 authoritative Telegram identity reads', () => {
   it('keeps legacy reads while the P10 switch is disabled', async () => {
+    // Phase 2: Legacy reads are removed - even with readFromGeneric=false, only MessagingIdentity is read.
     legacy.push({ telegramUserId: '100', userId: user.id });
     const db = databaseFake() as unknown as PrismaClient;
 
     expect(
       await findOperationalTelegramIdentityByUserId(db, user.id, false),
-    ).toMatchObject({
-      userId: user.id,
-      telegramUserId: '100',
-      messagingIdentityId: null,
-      identityVersion: null,
-    });
+    ).toBeNull();
+    expect(
+      await findOperationalTelegramIdentityByExternalId(db, '100', false),
+    ).toBeNull();
   });
 
   it('reads a verified active Telegram identity from the generic model', async () => {

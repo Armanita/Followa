@@ -35,7 +35,6 @@ const SECURE_VERIFICATION_METHOD = 'TELEGRAM_SIGNED_CALLBACK_V1';
 type TelegramDatabase = Pick<
   PrismaClient,
   | 'user'
-  | 'telegramIdentity'
   | 'telegramPendingConnection'
   | 'messagingIdentity'
   | '$transaction'
@@ -138,23 +137,8 @@ export function createTelegramRepository(db: TelegramDatabase) {
           return null;
         }
 
-        const existing = await tx.telegramIdentity.findFirst({
-          where: {
-            OR: [
-              { telegramUserId: input.telegramUserId },
-              { userId: user.id },
-            ],
-          },
-        });
-
-        // Linking never replaces an existing identity, including legacy rows.
-        // Kept for backward compatibility until TelegramIdentity table is dropped.
-        if (existing) {
-          return null;
-        }
-
-        // MessagingIdentity is now the primary source of truth for Telegram linking.
-        // This check is unconditional - no longer gated by MESSAGING_IDENTITY_DUAL_WRITE_ENABLED.
+        // MessagingIdentity is the only runtime source of truth (Phase 2).
+        // TelegramIdentity table is kept in DB but no longer read or written for new links.
         const [byUser, byExternal] = await Promise.all([
           tx.messagingIdentity.findUnique({
             where: {
@@ -257,20 +241,7 @@ export function createTelegramRepository(db: TelegramDatabase) {
             return { status: 'rejected', reason: 'invalid_confirmation' };
           }
 
-          const existing = await tx.telegramIdentity.findFirst({
-            where: {
-              OR: [{ telegramUserId }, { userId: pending.userId }],
-            },
-          });
-          // Kept for backward compatibility - primary check is now MessagingIdentity.
-          if (existing) {
-            return {
-              status: 'rejected',
-              reason: 'identity_already_linked',
-            };
-          }
-
-          // MessagingIdentity is the primary source of truth - unconditional check.
+          // MessagingIdentity is the only source of truth - TelegramIdentity is no longer checked.
           const [byUser, byExternal] = await Promise.all([
             tx.messagingIdentity.findUnique({
               where: {
@@ -322,16 +293,7 @@ export function createTelegramRepository(db: TelegramDatabase) {
             };
           }
 
-          // TelegramIdentity kept for backward compatibility until table is dropped.
-          await tx.telegramIdentity.create({
-            data: {
-              telegramUserId,
-              userId: user.id,
-              phoneNumber: user.mobile,
-            },
-          });
-
-          // MessagingIdentity is now the primary storage - unconditional write.
+          // MessagingIdentity is the only write target (Phase 2) - TelegramIdentity no longer written.
           {
             const verifiedAt = new Date();
             if (genericIdentity) {

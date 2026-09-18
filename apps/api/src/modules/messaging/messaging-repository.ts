@@ -495,7 +495,7 @@ export type OperationalTelegramIdentity = {
 
 type TelegramIdentityReadDatabase = Pick<
   Prisma.TransactionClient,
-  'telegramIdentity' | 'messagingIdentity'
+  'messagingIdentity'
 >;
 
 function operationalGenericTelegramIdentity(identity: {
@@ -523,28 +523,15 @@ function operationalGenericTelegramIdentity(identity: {
 }
 
 /**
- * P10 read switch. Generic mode is authoritative and intentionally has no
- * legacy fallback: a missing, unverified or revoked generic row must never be
- * resurrected by an old TelegramIdentity record.
+ * Phase 2: MessagingIdentity is the only runtime source.
+ * The readFromGeneric flag is kept for signature compatibility but ignored.
+ * Legacy TelegramIdentity is no longer read.
  */
 export async function findOperationalTelegramIdentityByUserId(
   db: TelegramIdentityReadDatabase,
   userId: string,
-  readFromGeneric: boolean,
+  _readFromGeneric: boolean,
 ): Promise<OperationalTelegramIdentity | null> {
-  if (!readFromGeneric) {
-    const legacy = await db.telegramIdentity.findUnique({
-      where: { userId },
-      select: { telegramUserId: true, userId: true },
-    });
-    return legacy
-      ? {
-          ...legacy,
-          messagingIdentityId: null,
-          identityVersion: null,
-        }
-      : null;
-  }
   const identity = await db.messagingIdentity.findUnique({
     where: {
       userId_channel: { userId, channel: MessagingChannel.TELEGRAM },
@@ -565,21 +552,8 @@ export async function findOperationalTelegramIdentityByUserId(
 export async function findOperationalTelegramIdentityByExternalId(
   db: TelegramIdentityReadDatabase,
   telegramUserId: string,
-  readFromGeneric: boolean,
+  _readFromGeneric: boolean,
 ): Promise<OperationalTelegramIdentity | null> {
-  if (!readFromGeneric) {
-    const legacy = await db.telegramIdentity.findUnique({
-      where: { telegramUserId },
-      select: { telegramUserId: true, userId: true },
-    });
-    return legacy
-      ? {
-          ...legacy,
-          messagingIdentityId: null,
-          identityVersion: null,
-        }
-      : null;
-  }
   const identity = await db.messagingIdentity.findUnique({
     where: {
       channel_externalUserId: {

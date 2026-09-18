@@ -6,7 +6,6 @@ import { prisma } from '../../lib/prisma.js';
 import { parseWith } from '../../lib/validation.js';
 import { conflict, notFound } from '../../lib/errors.js';
 import { normalizeMobile } from '../auth/auth-service.js';
-import { config } from '../../config.js';
 
 const createCompanySchema = z.object({
   name: z.string().min(2).max(100),
@@ -62,7 +61,6 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           include: {
             user: {
               include: {
-                telegramIdentity: true,
                 messagingIdentities: {
                   where: { channel: MessagingChannel.TELEGRAM },
                 },
@@ -89,13 +87,11 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           mobile: m.user.mobile,
           jobTitle: m.jobTitle,
           isActive: m.isActive,
-          telegramConnected: config.messagingIdentityReadEnabled
-            ? m.user.messagingIdentities.some(
-                (identity) =>
-                  identity.status === MessagingIdentityStatus.ACTIVE &&
-                  Boolean(identity.verifiedAt),
-              )
-            : Boolean(m.user.telegramIdentity),
+          telegramConnected: m.user.messagingIdentities.some(
+            (identity) =>
+              identity.status === MessagingIdentityStatus.ACTIVE &&
+              Boolean(identity.verifiedAt),
+          ),
           hasPassword: Boolean(m.user.passwordHash),
         })),
         memberCount: c._count.memberships,

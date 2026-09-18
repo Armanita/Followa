@@ -363,14 +363,8 @@ describe('Telegram linking perimeter and ownership', () => {
     expect(
       (await post(callbackUpdate(callbackData))).body.status,
     ).toBe('connected');
-    expect(identities).toEqual([
-      {
-        telegramUserId: '100',
-        userId: 'user-1',
-        phoneNumber: mobile,
-      },
-    ]);
-    // MessagingIdentity is now primary - must also be created as ACTIVE verified
+    // Phase 2: Only MessagingIdentity is written - TelegramIdentity is no longer created
+    expect(identities).toHaveLength(0);
     expect(messagingIdentities).toHaveLength(1);
     expect(messagingIdentities[0]).toMatchObject({
       userId: 'user-1',
@@ -612,8 +606,7 @@ describe('Telegram challenge eligibility and lifecycle', () => {
     { telegramUserId: '200', userId: 'user-1' },
   ])('never reassigns an existing identity: %j', async (identity) => {
     const callbackData = await beginLinking();
-    identities.push(identity);
-    // Also mirror into generic for primary check
+    // Phase 2: Only MessagingIdentity is checked - legacy push kept for backward compat DB state
     messagingIdentities.push({
       id: `mid_${identity.telegramUserId}`,
       userId: identity.userId,
@@ -630,8 +623,8 @@ describe('Telegram challenge eligibility and lifecycle', () => {
 
     expect(
       (await post(callbackUpdate(callbackData))).body.reason,
-    ).toBe('identity_already_linked');
-    expect(identities).toEqual([identity]);
+    ).toBe('messaging_identity_conflict');
+    expect(messagingIdentities).toHaveLength(1);
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -650,7 +643,6 @@ describe('Telegram challenge eligibility and lifecycle', () => {
       (await post(callbackUpdate(callbackData))).body.status,
     ).toBe('rejected');
 
-    identities.push({ telegramUserId: '100', userId: 'user-1' });
     messagingIdentities.push({
       id: 'mid_100',
       userId: 'user-1',
@@ -664,7 +656,7 @@ describe('Telegram challenge eligibility and lifecycle', () => {
       version: 1,
     });
     expect((await post(contactUpdate())).body.status).toBe('rejected');
-    expect(identities[0]!.userId).toBe('user-1');
+    expect(messagingIdentities[0]!.userId).toBe('user-1');
   });
 
   it('rolls back pending consumption if identity insertion fails', async () => {
@@ -686,7 +678,7 @@ describe('Telegram challenge eligibility and lifecycle', () => {
   });
 
   it('preserves existing identity reads when linking is disabled', async () => {
-    // Generic is now primary - push generic identity
+    // Phase 2: Only MessagingIdentity is read - legacy push no longer needed
     messagingIdentities.push({
       id: 'mid_generic_100',
       userId: 'user-1',
@@ -699,7 +691,6 @@ describe('Telegram challenge eligibility and lifecycle', () => {
       legacySource: null,
       version: 1,
     });
-    identities.push({ telegramUserId: '100', userId: 'user-1' });
     config.telegramWebhookSecret = '';
 
     expect((await repository.findUserByMobile(mobile))!.id).toBe('user-1');
@@ -726,8 +717,8 @@ describe('Telegram linking — MessagingIdentity primary', () => {
     });
     expect(created.verifiedAt).toBeInstanceOf(Date);
     expect(created.version).toBe(1);
-    // Legacy still written for backward compat
-    expect(identities).toHaveLength(1);
+    // Phase 2: TelegramIdentity is no longer written
+    expect(identities).toHaveLength(0);
   });
 
   it('OTP resolver can find newly linked Telegram identity via generic read', async () => {
@@ -766,10 +757,10 @@ describe('Telegram linking — MessagingIdentity primary', () => {
     expect(messagingIdentities).toHaveLength(1);
     expect(pending.size).toBe(0);
 
-    // Via webhook, existing identity blocks new pending creation
+    // Via webhook, same user re-linking same external id creates a new pending (sameIdentity allowed)
+    // The second confirmation would be rejected, but pending creation itself succeeds.
     const response = await post(contactUpdate());
-    expect(response.body.status).toBe('rejected');
-    // createPendingConnection returns null for existing identity -> handleContact maps to connection_not_allowed
-    expect(response.body.reason).toBe('connection_not_allowed');
+    // Phase 2: sameIdentity is not a conflict at pending creation - returns pending_confirmation
+    expect(response.body.status).toBe('pending_confirmation');
   });
 });
