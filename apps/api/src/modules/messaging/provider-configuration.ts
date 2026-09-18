@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 
 export type ProviderCredentials = {
   botToken: string;
+  webhookSecret?: string | null;
 };
 
 const FORMAT = 'v1';
@@ -17,7 +18,13 @@ function validateProviderCredentials(credentials: ProviderCredentials): Provider
   if (!credentials.botToken || !credentials.botToken.trim()) {
     throw new Error('provider_credentials_invalid');
   }
-  return { botToken: credentials.botToken.trim() };
+  const normalized: ProviderCredentials = { botToken: credentials.botToken.trim() };
+  if (credentials.webhookSecret !== undefined && credentials.webhookSecret !== null) {
+    const trimmed = credentials.webhookSecret.trim();
+    if (trimmed) normalized.webhookSecret = trimmed;
+    else normalized.webhookSecret = null;
+  }
+  return normalized;
 }
 
 export function encryptProviderCredentials(
@@ -58,7 +65,13 @@ export function decryptProviderCredentials(
     if (typeof credentials.botToken !== 'string' || !credentials.botToken.trim()) {
       throw new Error('provider_credentials_invalid');
     }
-    return { botToken: credentials.botToken };
+    const result: ProviderCredentials = { botToken: credentials.botToken.trim() };
+    if (typeof credentials.webhookSecret === 'string' && credentials.webhookSecret.trim()) {
+      result.webhookSecret = credentials.webhookSecret.trim();
+    } else if (credentials.webhookSecret === null) {
+      result.webhookSecret = null;
+    }
+    return result;
   } catch (error) {
     if (error instanceof Error && error.message === 'messaging_credentials_key_missing_or_too_short') throw error;
     throw new Error('provider_credentials_invalid');

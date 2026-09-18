@@ -1,10 +1,11 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { config } from '../../config.js';
 import { prisma } from '../../lib/prisma.js';
 import { createTelegramClient } from './telegram-client.js';
 import { createTelegramRepository } from './telegram-repository.js';
 import { createTelegramService } from './telegram-service.js';
+import { getTelegramWebhookSecret } from '../messaging/provider-config-service.js';
+import { config } from '../../config.js';
 
 type TelegramChat = { id: number; type: string };
 type TelegramWebhookUpdate = {
@@ -37,11 +38,11 @@ export async function telegramRoutes(app: FastifyInstance) {
   const service = createTelegramService(repository, telegramClient);
 
   app.post('/telegram/webhook', async (request, reply) => {
-    const secret = config.telegramWebhookSecret;
+    const secret = (await getTelegramWebhookSecret()) ?? config.telegramWebhookSecret;
 
     // This route only links identities. Missing configuration disables new linking,
     // while existing outgoing Telegram OTP and notifications remain untouched.
-    if (!secret.trim()) {
+    if (!secret?.trim()) {
       return reply.code(503).send({
         status: 'rejected',
         reason: 'telegram_linking_disabled',

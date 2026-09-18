@@ -22,6 +22,7 @@ const systemBodySchema = z.object({
     displayName: z.string().trim().min(2).max(50),
     botUsername: z.string().trim().max(100).nullable(),
     botToken: z.string().trim().min(8).max(500).nullable().optional(),
+    webhookSecret: z.string().trim().min(8).max(500).nullable().optional(),
   })).length(MESSAGING_SETTINGS_CHANNELS.length),
 }).superRefine((body, ctx) => {
   if (new Set(body.channels.map((item) => item.channel)).size !== body.channels.length) {
@@ -62,7 +63,7 @@ export async function messagingSettingsRoutes(app: FastifyInstance): Promise<voi
     const body = systemBodySchema.parse(request.body);
     const existing = await findAllProviderConfigs(MESSAGING_SETTINGS_CHANNELS);
 
-    if (body.channels.some((item) => item.botToken !== undefined) && !isMasterKeyConfigured()) {
+    if (body.channels.some((item) => item.botToken !== undefined || (item as { webhookSecret?: unknown }).webhookSecret !== undefined) && !isMasterKeyConfigured()) {
       throw badRequest('کلید اصلی رمزنگاری تنظیمات پیام‌رسان روی سرور تنظیم نشده است');
     }
     for (const item of body.channels) {
@@ -73,10 +74,11 @@ export async function messagingSettingsRoutes(app: FastifyInstance): Promise<voi
     }
 
     await saveProviderConfigs(
-      body.channels.map(({ botToken, ...rest }) => ({
+      body.channels.map(({ botToken, webhookSecret, ...rest }) => ({
         ...rest,
         channel: rest.channel as MessagingChannel,
-        botToken,
+        botToken: botToken as string | null | undefined,
+        webhookSecret: webhookSecret as string | null | undefined,
       })),
     );
 

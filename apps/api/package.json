@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:notification-worker": "tsx src/modules/messaging/delivery-worker.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "worker:notifications": "node dist/modules/messaging/delivery-worker.js",

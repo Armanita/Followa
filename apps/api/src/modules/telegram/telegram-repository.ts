@@ -10,6 +10,7 @@ import {
   findOperationalTelegramIdentityByExternalId,
   findOperationalTelegramIdentityByUserId,
 } from '../messaging/messaging-repository.js';
+import { getTelegramWebhookSecret } from '../messaging/provider-config-service.js';
 
 export type TelegramIdentityRecord = {
   telegramUserId: string;
@@ -47,11 +48,20 @@ const eligibleMembership = {
   },
 };
 
-function confirmationToken(
+async function getWebhookSecretForHmac(): Promise<string | null> {
+  const dbSecret = await getTelegramWebhookSecret();
+  if (dbSecret?.trim()) return dbSecret.trim();
+  if (config.telegramWebhookSecret.trim()) return config.telegramWebhookSecret.trim();
+  return null;
+}
+
+async function confirmationToken(
   pending: TelegramPendingConnection,
   mobile: string,
-): string {
-  return createHmac('sha256', config.telegramWebhookSecret)
+): Promise<string> {
+  const secret = await getWebhookSecretForHmac();
+  if (!secret) throw new Error('telegram_webhook_secret_missing');
+  return createHmac('sha256', secret)
     .update(
       JSON.stringify([
         'followa:telegram-link:v1',
@@ -111,7 +121,8 @@ export function createTelegramRepository(db: TelegramDatabase) {
       userId: string;
       mobile: string;
     }) {
-      if (!config.telegramWebhookSecret.trim()) {
+      const webhookSecret = await getWebhookSecretForHmac();
+      if (!webhookSecret?.trim()) {
         return null;
       }
 
@@ -184,15 +195,16 @@ export function createTelegramRepository(db: TelegramDatabase) {
           create: { telegramUserId: input.telegramUserId, ...data },
         });
 
-        return { token: confirmationToken(pending, user.mobile) };
+        return { token: await confirmationToken(pending, user.mobile) };
       });
     },
 
     async confirmPendingConnection(telegramUserId: string, token: string) {
-      if (
-        !config.telegramWebhookSecret.trim() ||
-        !/^[a-f0-9]{32}$/.test(token)
-      ) {
+      if (!/^[a-f0-9]{32}$/.test(token)) {
+        return { status: 'rejected', reason: 'invalid_confirmation' };
+      }
+      const webhookSecret = await getWebhookSecretForHmac();
+      if (!webhookSecret?.trim()) {
         return { status: 'rejected', reason: 'invalid_confirmation' };
       }
 
@@ -223,7 +235,7 @@ export function createTelegramRepository(db: TelegramDatabase) {
 
           // The proof is bound to this pending generation, Telegram sender,
           // Followa user and the user's current mobile.
-          const expected = confirmationToken(pending, user.mobile);
+          const expected = await confirmationToken(pending, user.mobile);
           if (
             !timingSafeEqual(
               Buffer.from(token, 'hex'),

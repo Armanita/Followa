@@ -151,6 +151,11 @@ function databaseFake() {
     }),
   };
 
+  const messagingSystemPolicy = {
+    findUnique: vi.fn(async () => null),
+    findMany: vi.fn(async () => []),
+  };
+
   const telegramPendingConnection = {
     findUnique: vi.fn(
       async ({ where }: { where: { telegramUserId: string } }) =>
@@ -204,6 +209,7 @@ function databaseFake() {
     user,
     messagingIdentity,
     telegramPendingConnection,
+    messagingSystemPolicy,
   };
 
   return {
@@ -713,5 +719,100 @@ describe('Telegram linking — MessagingIdentity primary', () => {
     const response = await post(contactUpdate());
     // Phase 2: sameIdentity is not a conflict at pending creation - returns pending_confirmation
     expect(response.body.status).toBe('pending_confirmation');
+  });
+});
+
+describe('Telegram DB-backed configuration (Phase 3)', () => {
+  const dbSecret = 'test-db-webhook-secret-12345';
+  const dbToken = '1234567890:TEST_DB_BOT_TOKEN_ABC';
+  const testKey = 'test-only-master-key-with-at-least-32-characters';
+
+  beforeEach(async () => {
+    config.messagingCredentialsKey = testKey;
+    process.env.MESSAGING_CREDENTIALS_KEY = testKey;
+    // Mock DB provider config to return DB secret/token
+    const { encryptProviderCredentials } = await import('../src/modules/messaging/provider-configuration.js');
+    const encrypted = encryptProviderCredentials({ botToken: dbToken, webhookSecret: dbSecret }, testKey);
+    // Mock prisma.messagingSystemPolicy.findUnique to return DB config
+    (mocks.db as unknown as { messagingSystemPolicy: { findUnique: ReturnType<typeof vi.fn> } }).messagingSystemPolicy = {
+      findUnique: vi.fn(async ({ where }: { where: { channel: string } }) => {
+        if (where.channel === 'TELEGRAM') {
+          return {
+            channel: 'TELEGRAM',
+            displayName: 'تلگرام',
+            botUsername: 'test_bot',
+            credentialsEncrypted: encrypted,
+            enabled: true,
+            notificationEnabled: true,
+            otpEnabled: true,
+          };
+        }
+        return null;
+      }),
+      findMany: vi.fn(async () => []),
+    } as unknown as never;
+    // Also need to ensure findAllProviderConfigs works via findMany
+    (mocks.db as unknown as Record<string, unknown>).messagingSystemPolicy = (mocks.db as unknown as Record<string, unknown>).messagingSystemPolicy;
+  });
+
+  afterEach(() => {
+    config.messagingCredentialsKey = 'test-only-master-key-with-at-least-32-characters';
+  });
+
+  it('Telegram webhook accepts valid DB secret', async () => {
+    // DB secret is dbSecret, not env secret
+    config.telegramWebhookSecret = 'env-wrong-secret';
+    const response = await post(contactUpdate(), dbSecret);
+    // Should be pending_confirmation because DB secret matches
+    expect(response.body.status).toBe('pending_confirmation');
+  });
+
+  it('Invalid DB secret is rejected', async () => {
+    const response = await post(contactUpdate(), 'invalid-secret-123');
+    expect(response.code).toBe(403);
+    expect(response.body.reason).toBe('invalid_webhook_secret');
+  });
+
+  it('Telegram client uses DB token', async () => {
+    // Use actual implementation, bypassing the file-level vi.mock for telegram-client
+    const { createTelegramClient: createRealTelegramClient } = await vi.importActual<typeof import('../src/modules/telegram/telegram-client.js')>(
+      '../src/modules/telegram/telegram-client.js',
+    );
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: {} }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    try {
+      const client = createRealTelegramClient();
+      await client.sendMessage('123', 'test');
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining(dbToken),
+        expect.any(Object),
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('No TELEGRAM_BOT_TOKEN env dependency in runtime', async () => {
+    const originalEnv = process.env.TELEGRAM_BOT_TOKEN;
+    const originalConfigToken = config.telegramBotToken;
+    process.env.TELEGRAM_BOT_TOKEN = '';
+    config.telegramBotToken = '';
+    // DB still has token, client should still work
+    const { createTelegramClient: createRealTelegramClient } = await vi.importActual<typeof import('../src/modules/telegram/telegram-client.js')>(
+      '../src/modules/telegram/telegram-client.js',
+    );
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: {} }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    try {
+      const client = createRealTelegramClient();
+      await expect(client.sendMessage('123', 'test')).resolves.toBeDefined();
+      expect(fetchMock).toHaveBeenCalled();
+    } finally {
+      fetchMock.mockRestore();
+      process.env.TELEGRAM_BOT_TOKEN = originalEnv;
+      config.telegramBotToken = originalConfigToken;
+    }
   });
 });

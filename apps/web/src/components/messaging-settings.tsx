@@ -19,8 +19,10 @@ type ChannelView = {
   displayName?: string;
   botUsername?: string | null;
   botToken?: string | null;
+  webhookSecret?: string | null;
   credentialConfigured?: boolean;
   botTokenMasked?: string | null;
+  webhookSecretMasked?: string | null;
 };
 type Response = {
   enforcementStatus: 'NOT_ACTIVE_UNTIL_P8_P9';
@@ -119,7 +121,7 @@ export function MessagingSettings({ mode, isManager = false }: { mode: 'system' 
               <div key={row.channel} className="space-y-4 rounded-xl border border-workspace-border bg-workspace-elevated/45 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <strong className="text-sm text-workspace-ink">{row.displayName || labels[row.channel]}</strong>
-                  <span className="text-[10px] text-workspace-soft">توکن: {row.botTokenMasked || (row.credentialConfigured ? 'تنظیم‌شده' : 'تنظیم نشده')}</span>
+                  <span className="text-[10px] text-workspace-soft">توکن: {row.botTokenMasked || (row.credentialConfigured ? 'تنظیم‌شده' : 'تنظیم نشده')}{row.channel === 'TELEGRAM' ? ` · وب‌هوک: ${row.webhookSecretMasked || 'تنظیم نشده'}` : ''}</span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="text-xs text-workspace-muted">نام نمایشی
@@ -132,6 +134,14 @@ export function MessagingSettings({ mode, isManager = false }: { mode: 'system' 
                     <input dir="ltr" type="password" autoComplete="new-password" className="mt-2 w-full rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-3 py-2 text-left text-white" placeholder={row.credentialConfigured ? 'برای حفظ توکن خالی بگذارید' : 'توکن را وارد کنید'} value={row.botToken || ''} onChange={(event) => update(system, setSystem, row.channel, { botToken: event.target.value || undefined })} />
                   </label>
                 </div>
+                {row.channel === 'TELEGRAM' ? (
+                  <div className="grid gap-3 sm:grid-cols-1">
+                    <label className="text-xs text-workspace-muted">Webhook Secret
+                      <span className="mt-1 block text-[10px] text-workspace-soft">Secret token used for Telegram webhook validation.</span>
+                      <input dir="ltr" type="password" autoComplete="new-password" className="mt-2 w-full rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-3 py-2 text-left text-white" placeholder={row.webhookSecretMasked ? `مقدار فعلی: ${row.webhookSecretMasked} — برای حفظ خالی بگذارید` : 'وب‌هوک سکرت را وارد کنید (حداقل ۸ کاراکتر)'} value={row.webhookSecret || ''} onChange={(event) => update(system, setSystem, row.channel, { webhookSecret: event.target.value || undefined })} />
+                    </label>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap gap-4">
                 {([
                   ['enabled', 'فعال بودن پیام‌رسان'],
