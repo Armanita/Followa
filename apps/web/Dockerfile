@@ -27,13 +27,15 @@ ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 RUN cd apps/web && npx next build
 
 FROM node:22-alpine AS runner
+
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000
-# full workspace tree at /app so apps/web resolves its deps normally
-COPY --from=builder --chown=node:node /app ./
+
+ENV NODE_ENV=production
+
+COPY --from=builder --chown=node:node /app /app
+
+WORKDIR /app/apps/web
 
 EXPOSE 3000
-# direct execution of the pinned Next binary shipped in the image —
-# never touches npx/npm or the registry at runtime. Absolute path so it
-# works with any container working directory.
-CMD ["node", "/app/apps/web/node_modules/next/dist/bin/next", "start", "-p", "3000"]
+
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3000"]
