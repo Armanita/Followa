@@ -3,7 +3,7 @@ import {
   NotificationDeliveryAttemptOutcome,
   NotificationDeliveryStatus,
 } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '../src/lib/prisma.js';
 import { createDeliveryRepository } from '../src/modules/messaging/delivery-repository.js';
 import { cleanup, closeTestApp, getTestApp, seedFixture } from './helpers.js';
@@ -16,6 +16,9 @@ describe('notification delivery ledger', () => {
   beforeAll(async () => {
     await getTestApp();
     fixture = await seedFixture(1);
+  });
+
+  beforeEach(async () => {
     const notification = await prisma.notification.create({
       data: {
         userId: fixture.employees[0]!.id,
@@ -33,6 +36,11 @@ describe('notification delivery ledger', () => {
     await closeTestApp();
   });
 
+  async function createJobs() {
+    await repository.create({ notificationId, channel: MessagingChannel.TELEGRAM, destinationId: 'telegram-100' });
+    await repository.create({ notificationId, channel: MessagingChannel.BALE, destinationId: 'bale-200' });
+  }
+
   it('keeps legacy notifications valid with nullable company context', async () => {
     const legacy = await prisma.notification.create({
       data: {
@@ -48,8 +56,7 @@ describe('notification delivery ledger', () => {
   });
 
   it('creates independent Telegram and Bale deliveries', async () => {
-    await repository.create({ notificationId, channel: MessagingChannel.TELEGRAM, destinationId: 'telegram-100' });
-    await repository.create({ notificationId, channel: MessagingChannel.BALE, destinationId: 'bale-200' });
+    await createJobs();
     const deliveries = await repository.listForNotification(notificationId);
     expect(deliveries).toHaveLength(2);
     expect(deliveries.map((row) => row.channel)).toEqual([MessagingChannel.TELEGRAM, MessagingChannel.BALE]);
@@ -57,24 +64,37 @@ describe('notification delivery ledger', () => {
   });
 
   it('does not duplicate or retarget an existing channel job', async () => {
+    const identity = await prisma.messagingIdentity.create({ data: {
+      userId: fixture.employees[0]!.id,
+      channel: MessagingChannel.TELEGRAM,
+      externalUserId: 'telegram-100',
+      destinationId: 'telegram-100',
+      status: 'ACTIVE',
+      verifiedAt: new Date(),
+      verificationMethod: 'TEST',
+    } });
     const original = await repository.create({
       notificationId,
       channel: MessagingChannel.TELEGRAM,
       destinationId: 'telegram-100',
-      identityVersion: 1,
+      messagingIdentityId: identity.id,
+      identityVersion: identity.version,
     });
     const duplicate = await repository.create({
       notificationId,
       channel: MessagingChannel.TELEGRAM,
       destinationId: 'attacker-controlled-destination',
-      identityVersion: 99,
+      messagingIdentityId: identity.id,
+      identityVersion: identity.version + 1,
     });
     expect(duplicate.id).toBe(original.id);
     expect(duplicate.destinationId).toBe('telegram-100');
+    expect(duplicate.identityVersion).toBe(identity.version);
     expect(await prisma.notificationDelivery.count({ where: { notificationId, channel: MessagingChannel.TELEGRAM } })).toBe(1);
   });
 
   it('records immutable attempt history and channel status independently', async () => {
+    await createJobs();
     const telegram = await prisma.notificationDelivery.findUniqueOrThrow({
       where: { notificationId_channel: { notificationId, channel: MessagingChannel.TELEGRAM } },
     });
@@ -107,6 +127,7 @@ describe('notification delivery ledger', () => {
   });
 
   it('cancels only pending or failed deliveries without erasing history', async () => {
+    await createJobs();
     const telegram = await prisma.notificationDelivery.findUniqueOrThrow({
       where: { notificationId_channel: { notificationId, channel: MessagingChannel.TELEGRAM } },
     });

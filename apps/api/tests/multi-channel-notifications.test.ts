@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../src/lib/prisma.js';
 import { createDeliveryWorker } from '../src/modules/messaging/delivery-worker.js';
 import { createNotificationDispatcher } from '../src/modules/messaging/notification-dispatcher.js';
+import { encryptProviderCredentials } from '../src/modules/messaging/provider-configuration.js';
 import type { MessagingProvider } from '../src/modules/messaging/messaging-types.js';
 import { cleanup, closeTestApp, getTestApp, seedFixture } from './helpers.js';
 
@@ -29,8 +30,8 @@ describe('P8 multi-channel notifications', () => {
     baleCalls = [];
     await prisma.messagingSystemPolicy.deleteMany({ where: { channel: { in: [MessagingChannel.TELEGRAM, MessagingChannel.BALE] } } });
     await prisma.messagingSystemPolicy.createMany({ data: [
-      { channel: MessagingChannel.TELEGRAM, enabled: true, notificationEnabled: true, otpEnabled: false },
-      { channel: MessagingChannel.BALE, enabled: true, notificationEnabled: true, otpEnabled: false },
+      { channel: MessagingChannel.TELEGRAM, enabled: true, notificationEnabled: true, otpEnabled: false, credentialsEncrypted: encryptProviderCredentials({ botToken: 'test-telegram-token' }, 'test-only-master-key-with-at-least-32-characters') },
+      { channel: MessagingChannel.BALE, enabled: true, notificationEnabled: true, otpEnabled: false, credentialsEncrypted: encryptProviderCredentials({ botToken: 'test-bale-token' }, 'test-only-master-key-with-at-least-32-characters') },
     ] });
     const userId = fixture.employees[0]!.id;
     await prisma.messagingIdentity.create({ data: { userId, channel: MessagingChannel.TELEGRAM, externalUserId: `tg-${userId}`, destinationId: `tg-${userId}`, verifiedAt: new Date(), status: 'ACTIVE', verificationMethod: 'TEST' } });

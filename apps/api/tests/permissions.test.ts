@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { randomInt } from 'node:crypto';
+import { MessagingChannel } from '@prisma/client';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { getTestApp, closeTestApp, seedFixture } from './helpers.js';
+import { config } from '../src/config.js';
 import { prisma } from '../src/lib/prisma.js';
+import { encryptProviderCredentials } from '../src/modules/messaging/provider-configuration.js';
 
 let fixture: Awaited<ReturnType<typeof seedFixture>>;
 let otherFixture: Awaited<ReturnType<typeof seedFixture>>;
@@ -128,22 +132,69 @@ describe('Auth & permission tests', () => {
     });
     expect(unknown.statusCode).toBe(400);
 
+    const mobile = `0916${String(randomInt(0, 10_000_000)).padStart(7, '0')}`;
     // create a password-less member
     const created = await api(fixture.manager.token, 'POST', '/members', {
       firstName: 'بدون',
       lastName: 'رمز',
-      mobile: '09163334444',
+      mobile,
       role: 'EMPLOYEE',
     });
     expect(created.statusCode).toBe(200);
     expect(created.json().requiresOtpSignup).toBe(true);
 
-    const otpReq = await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/otp/request',
-      payload: { mobile: '09163334444' },
-    });
-    expect(otpReq.statusCode).toBe(200);
+    const user = await prisma.user.findUniqueOrThrow({ where: { mobile } });
+    const previousPolicy = await prisma.messagingSystemPolicy.findUnique({ where: { channel: MessagingChannel.TELEGRAM } });
+    const originalKey = config.messagingCredentialsKey;
+    const testKey = 'test-only-master-key-with-at-least-32-characters';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 }),
+    );
+    try {
+      config.messagingCredentialsKey = testKey;
+      await prisma.messagingSystemPolicy.upsert({
+        where: { channel: MessagingChannel.TELEGRAM },
+        create: {
+          channel: MessagingChannel.TELEGRAM, enabled: true, notificationEnabled: false, otpEnabled: true,
+          displayName: 'Telegram', botUsername: 'test_telegram',
+          credentialsEncrypted: encryptProviderCredentials({ botToken: 'test-telegram-token' }, testKey),
+        },
+        update: {
+          enabled: true, otpEnabled: true, displayName: 'Telegram', botUsername: 'test_telegram',
+          credentialsEncrypted: encryptProviderCredentials({ botToken: 'test-telegram-token' }, testKey),
+        },
+      });
+      await prisma.messagingIdentity.create({ data: {
+        userId: user.id, channel: MessagingChannel.TELEGRAM,
+        externalUserId: `otp-${user.id}`, destinationId: `otp-${user.id}`,
+        status: 'ACTIVE', verifiedAt: new Date(), verificationMethod: 'TEST_OTP',
+      } });
+      await prisma.userMessagingPreference.create({ data: { userId: user.id, otpChannel: MessagingChannel.TELEGRAM } });
+
+      const otpReq = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/otp/request',
+        payload: { mobile },
+      });
+      expect(otpReq.statusCode).toBe(200);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchMock.mockRestore();
+      config.messagingCredentialsKey = originalKey;
+      await prisma.user.delete({ where: { id: user.id } });
+      if (previousPolicy) {
+        await prisma.messagingSystemPolicy.update({
+          where: { channel: MessagingChannel.TELEGRAM },
+          data: {
+            enabled: previousPolicy.enabled, notificationEnabled: previousPolicy.notificationEnabled,
+            otpEnabled: previousPolicy.otpEnabled, displayName: previousPolicy.displayName,
+            botUsername: previousPolicy.botUsername, credentialsEncrypted: previousPolicy.credentialsEncrypted,
+          },
+        });
+      } else {
+        await prisma.messagingSystemPolicy.delete({ where: { channel: MessagingChannel.TELEGRAM } });
+      }
+    }
   });
 
   it('input validation: invalid mobile and short titles rejected', async () => {

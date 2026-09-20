@@ -1,7 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { config } from '../src/config.js';
 import { prisma } from '../src/lib/prisma.js';
 import { resolveNotificationPolicy } from '../src/modules/messaging/messaging-policy.js';
+import { encryptProviderCredentials } from '../src/modules/messaging/provider-configuration.js';
 import { cleanup, closeTestApp, getTestApp, seedFixture } from './helpers.js';
+
+const testKey = 'test-only-master-key-with-at-least-32-characters';
 
 describe('messaging policy precedence', () => {
   it.each([
@@ -32,11 +36,16 @@ describe('messaging settings routes', () => {
   let app: Awaited<ReturnType<typeof getTestApp>>;
   let fixture: Awaited<ReturnType<typeof seedFixture>>;
   let adminToken: string;
+  const originalKey = config.messagingCredentialsKey;
 
   beforeAll(async () => {
+    config.messagingCredentialsKey = testKey;
     app = await getTestApp();
     fixture = await seedFixture(2);
     adminToken = app.jwt.sign({ sub: 'policy-test-admin', kind: 'SYSTEM_ADMIN' });
+  });
+
+  beforeEach(async () => {
     await prisma.messagingSystemPolicy.deleteMany({ where: { channel: { in: ['TELEGRAM', 'BALE'] } } });
   });
 
@@ -44,12 +53,13 @@ describe('messaging settings routes', () => {
     await prisma.messagingSystemPolicy.deleteMany({ where: { channel: { in: ['TELEGRAM', 'BALE'] } } });
     await cleanup();
     await closeTestApp();
+    config.messagingCredentialsKey = originalKey;
   });
 
   it('allows only system admin to save global policy', async () => {
     const payload = { channels: [
-      { channel: 'TELEGRAM', enabled: true, notificationEnabled: true, otpEnabled: true },
-      { channel: 'BALE', enabled: true, notificationEnabled: true, otpEnabled: false },
+      { channel: 'TELEGRAM', enabled: true, notificationEnabled: true, otpEnabled: true, displayName: 'Telegram', botUsername: 'test_telegram', botToken: 'test-telegram-token' },
+      { channel: 'BALE', enabled: true, notificationEnabled: true, otpEnabled: false, displayName: 'Bale', botUsername: 'test_bale', botToken: 'test-bale-token' },
     ] };
     const forbidden = await app.inject({ method: 'PATCH', url: '/api/v1/admin/messaging-settings', headers: { authorization: `Bearer ${fixture.employees[0]!.token}` }, payload });
     expect(forbidden.statusCode).toBe(403);
@@ -72,6 +82,11 @@ describe('messaging settings routes', () => {
   });
 
   it('stores both explicit none and unset for the authenticated membership only', async () => {
+    await prisma.messagingSystemPolicy.create({ data: {
+      channel: 'TELEGRAM', enabled: true, notificationEnabled: true, otpEnabled: true,
+      displayName: 'Telegram', botUsername: 'test_telegram',
+      credentialsEncrypted: encryptProviderCredentials({ botToken: 'test-telegram-token' }, testKey),
+    } });
     const token = fixture.employees[0]!.token;
     const none = await app.inject({ method: 'PATCH', url: '/api/v1/messaging/settings/me', headers: { authorization: `Bearer ${token}` }, payload: {
       channels: [
