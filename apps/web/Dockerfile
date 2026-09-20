@@ -24,6 +24,10 @@ COPY packages/shared-types packages/shared-types
 
 ARG NEXT_PUBLIC_API_BASE=/api/v1
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+
+ARG API_PROXY_URL=https://followa-914y.onrender.com
+ENV API_PROXY_URL=$API_PROXY_URL
+
 RUN cd apps/web && npx next build
 
 FROM node:22-alpine AS runner
