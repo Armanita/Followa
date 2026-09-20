@@ -12,6 +12,7 @@ export const config = {
   // Bootstrap fallback only. Runtime enablement comes from MessagingSystemPolicy.enabled (see isBaleLinkingEnabled).
   baleLinkingEnabled: enabled('BALE_LINKING_ENABLED'),
   messagingIdentityBackfillEnabled: enabled('MESSAGING_IDENTITY_BACKFILL_ENABLED'),
+  notificationWorkerEnabled: enabled('NOTIFICATION_WORKER_ENABLED'),
   notificationWorkerPollMs: Number(process.env.NOTIFICATION_WORKER_POLL_MS ?? 2000), notificationWorkerLeaseMs: Number(process.env.NOTIFICATION_WORKER_LEASE_MS ?? 30000), notificationMaxAttempts: Number(process.env.NOTIFICATION_MAX_ATTEMPTS ?? 5),
   storageDir: process.env.STORAGE_DIR ?? './storage/files', maxFileSizeMb: Number(process.env.MAX_FILE_SIZE_MB ?? 20),
   databaseUrl: required('DATABASE_URL', 'postgresql://followa:followa_dev_password@localhost:5433/followa?schema=public'),

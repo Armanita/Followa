@@ -2,6 +2,8 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { config } from './config.js';
+import { prisma } from './lib/prisma.js';
+import { runNotificationWorker } from './modules/messaging/delivery-worker.js';
 import { registerErrorHandler } from './lib/errors.js';
 import { registerAuth } from './plugins/auth.js';
 import { authRoutes } from './modules/auth/auth-routes.js';
@@ -74,6 +76,30 @@ if (isDirectRun || process.env.START_SERVER === 'true') {
     .listen({ port: config.port, host: config.host })
     .then(() => {
       app.log.info(`Followa API listening on ${config.host}:${config.port}`);
+      if (!config.notificationWorkerEnabled) return;
+
+      const worker = runNotificationWorker();
+      let stopping = false;
+      const shutdown = async () => {
+        if (stopping) return;
+        stopping = true;
+        const results = await Promise.allSettled([app.close(), worker]);
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            app.log.error(result.reason);
+            process.exitCode = 1;
+          }
+        }
+        try {
+          await prisma.$disconnect();
+        } catch (error) {
+          app.log.error(error);
+          process.exitCode = 1;
+        }
+      };
+      process.once('SIGTERM', () => { void shutdown(); });
+      process.once('SIGINT', () => { void shutdown(); });
+      void worker.catch(() => { void shutdown(); });
     })
     .catch((err) => {
       app.log.error(err);

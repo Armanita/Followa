@@ -64,6 +64,11 @@ NODE_ENV=production node apps/api/dist/server.js
 ```
 Run behind a reverse proxy with TLS (Caddy/Nginx). Restrict CORS to the web origin. Provide persistent volume for `storage/files/`.
 
+For a single Render API instance without a separate notification worker, set
+`NOTIFICATION_WORKER_ENABLED=true` on the API service. The default is `false`.
+Keep it disabled wherever the standalone worker runs, and do not scale the
+embedded worker to multiple API instances without reviewing delivery leases.
+
 ### Database
 Managed PostgreSQL or the bundled compose service. Backups: standard `pg_dump` schedule; uploaded files need a filesystem backup too.
 
