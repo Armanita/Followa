@@ -2,17 +2,13 @@ import { prisma } from '../../lib/prisma.js';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { assertCanViewCase, type Actor } from '../cases/case-service.js';
 import { notificationService } from '../notifications/notification-service.js';
+import type { NotificationEvent } from '../notifications/notification-context-loader.js';
 
 async function notifyHistoricalSenderIfStillActive(
   companyId: string,
   actor: Actor,
   senderUserId: string | null,
-  input: {
-    type: 'CASE_ACCEPTED' | 'CASE_REJECTED';
-    title: string;
-    body: string;
-    caseId: string;
-  },
+  event: Extract<NotificationEvent, { kind: 'ASSIGNMENT_ACCEPTED' | 'ASSIGNMENT_REJECTED' }>,
 ): Promise<void> {
   if (!senderUserId || senderUserId === actor.userId) return;
 
@@ -31,13 +27,9 @@ async function notifyHistoricalSenderIfStillActive(
   // (and for manager-originated flows) without duplicating manager notifications.
   if (actor.role === 'EMPLOYEE' && membership.role === 'COMPANY_MANAGER') return;
 
-  await notificationService.notify({
+  await notificationService.notifyEvent({
     userId: senderUserId,
-    type: input.type,
-    title: input.title,
-    body: input.body,
-    linkType: 'CASE',
-    linkId: input.caseId,
+    event,
   });
 }
 
@@ -98,24 +90,51 @@ export const assignmentService = {
       return assignment;
     });
 
-    await notificationService.notify({
+    await notificationService.notifyEvent({
       userId: toUserId,
-      type: 'CASE_ASSIGNED',
-      title: 'پرونده‌ای به شما ارجاع شد',
-      body: c.title,
-      linkType: 'CASE',
-      linkId: caseId,
+      event: {
+        kind: 'CASE_TRANSFERRED',
+        caseId,
+        actorUserId: actor.userId,
+        assignmentId: result.id,
+        previousOwnerId: c.currentOwnerId,
+      },
     });
 
+    if (c.currentOwnerId && c.currentOwnerId !== actor.userId && c.currentOwnerId !== toUserId) {
+      const previousOwnerIsActive = await prisma.companyMembership.findFirst({
+        where: {
+          companyId: actor.companyId,
+          userId: c.currentOwnerId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      if (previousOwnerIsActive) {
+        await notificationService.notifyEvent({
+          userId: c.currentOwnerId,
+          event: {
+            kind: 'CASE_TRANSFERRED',
+            caseId,
+            actorUserId: actor.userId,
+            assignmentId: result.id,
+            previousOwnerId: c.currentOwnerId,
+          },
+        });
+      }
+    }
+
     if (actor.role === 'EMPLOYEE') {
-      await notificationService.notifyActiveCompanyManagers({
+      await notificationService.notifyEventToActiveCompanyManagers({
         companyId: actor.companyId,
         excludeUserId: actor.userId,
-        type: 'CASE_UPDATED',
-        title: 'پرونده منتقل شد',
-        body: c.title,
-        linkType: 'CASE',
-        linkId: caseId,
+        event: {
+          kind: 'CASE_TRANSFERRED',
+          caseId,
+          actorUserId: actor.userId,
+          assignmentId: result.id,
+          previousOwnerId: c.currentOwnerId,
+        },
       });
     }
     return result;
@@ -147,22 +166,19 @@ export const assignmentService = {
       }),
     ]);
 
-    await notifyHistoricalSenderIfStillActive(c.companyId, actor, pending.fromUserId, {
-      type: 'CASE_ACCEPTED',
-      title: 'ارجاع پرونده پذیرفته شد',
-      body: c.title,
+    const acceptedEvent = {
+      kind: 'ASSIGNMENT_ACCEPTED' as const,
       caseId,
-    });
+      actorUserId: actor.userId,
+      assignmentId: pending.id,
+    };
+    await notifyHistoricalSenderIfStillActive(c.companyId, actor, pending.fromUserId, acceptedEvent);
 
     if (actor.role === 'EMPLOYEE') {
-      await notificationService.notifyActiveCompanyManagers({
+      await notificationService.notifyEventToActiveCompanyManagers({
         companyId: c.companyId,
         excludeUserId: actor.userId,
-        type: 'CASE_ACCEPTED',
-        title: 'ارجاع پرونده پذیرفته شد',
-        body: c.title,
-        linkType: 'CASE',
-        linkId: caseId,
+        event: acceptedEvent,
       });
     }
     return updated;
@@ -245,23 +261,19 @@ export const assignmentService = {
       return canReturnToSender;
     });
 
-    const body = `${c.title} — دلیل: ${rejectReason}`;
-    await notifyHistoricalSenderIfStillActive(c.companyId, actor, senderUserId, {
-      type: 'CASE_REJECTED',
-      title: 'ارجاع پرونده رد شد',
-      body,
+    const rejectedEvent = {
+      kind: 'ASSIGNMENT_REJECTED' as const,
       caseId,
-    });
+      actorUserId: actor.userId,
+      assignmentId: pending.id,
+    };
+    await notifyHistoricalSenderIfStillActive(c.companyId, actor, senderUserId, rejectedEvent);
 
     if (actor.role === 'EMPLOYEE') {
-      await notificationService.notifyActiveCompanyManagers({
+      await notificationService.notifyEventToActiveCompanyManagers({
         companyId: c.companyId,
         excludeUserId: actor.userId,
-        type: 'CASE_REJECTED',
-        title: 'ارجاع پرونده رد شد',
-        body,
-        linkType: 'CASE',
-        linkId: caseId,
+        event: rejectedEvent,
       });
     }
     return {

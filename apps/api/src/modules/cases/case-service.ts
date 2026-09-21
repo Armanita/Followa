@@ -99,7 +99,7 @@ export const caseService = {
       assigneeId = input.assignToUserId;
     }
 
-    const created = await prisma.$transaction(async (tx) => {
+    const { created, assignmentId } = await prisma.$transaction(async (tx) => {
       const c = await tx.case.create({
         data: {
           companyId: actor.companyId,
@@ -117,8 +117,9 @@ export const caseService = {
       await tx.caseActivity.create({
         data: { caseId: c.id, type: 'CREATE', actorId: actor.userId },
       });
+      let assignmentId: string | null = null;
       if (assigneeId) {
-        await tx.caseAssignment.create({
+        const assignment = await tx.caseAssignment.create({
           data: {
             caseId: c.id,
             fromUserId: actor.userId,
@@ -127,6 +128,7 @@ export const caseService = {
             note: input.assignNote,
           },
         });
+        assignmentId = assignment.id;
         await tx.caseActivity.create({
           data: {
             caseId: c.id,
@@ -136,17 +138,18 @@ export const caseService = {
           },
         });
       }
-      return c;
+      return { created: c, assignmentId };
     });
 
-    if (assigneeId && assigneeId !== actor.userId) {
-      await notificationService.notify({
+    if (assigneeId && assigneeId !== actor.userId && assignmentId) {
+      await notificationService.notifyEvent({
         userId: assigneeId,
-        type: 'CASE_ASSIGNED',
-        title: 'پرونده جدید به شما ارجاع شد',
-        body: input.title,
-        linkType: 'CASE',
-        linkId: created.id,
+        event: {
+          kind: 'CASE_ASSIGNED',
+          caseId: created.id,
+          actorUserId: actor.userId,
+          assignmentId,
+        },
       });
     }
     return created;
@@ -182,14 +185,16 @@ export const caseService = {
     });
 
     if (actor.role === 'EMPLOYEE' && hasChanges) {
-      await notificationService.notifyActiveCompanyManagers({
+      await notificationService.notifyEventToActiveCompanyManagers({
         companyId: actor.companyId,
         excludeUserId: actor.userId,
-        type: 'CASE_UPDATED',
-        title: 'پرونده به‌روزرسانی شد',
-        body: updated.title,
-        linkType: 'CASE',
-        linkId: caseId,
+        event: {
+          kind: 'CASE_UPDATED',
+          caseId,
+          actorUserId: actor.userId,
+          changedFields: (Object.keys(input) as Array<keyof typeof input>)
+            .filter((field) => input[field] !== undefined),
+        },
       });
     }
     return updated;
@@ -288,14 +293,14 @@ export const caseService = {
     });
 
     if (actor.role === 'EMPLOYEE') {
-      await notificationService.notifyActiveCompanyManagers({
+      await notificationService.notifyEventToActiveCompanyManagers({
         companyId: actor.companyId,
         excludeUserId: actor.userId,
-        type: complete ? 'CASE_COMPLETED' : 'CASE_UPDATED',
-        title: complete ? 'پرونده تکمیل شد' : 'نتیجه پرونده ثبت شد',
-        body: c.title,
-        linkType: 'CASE',
-        linkId: caseId,
+        event: {
+          kind: complete ? 'CASE_COMPLETED' : 'RESULT_REGISTERED',
+          caseId,
+          actorUserId: actor.userId,
+        },
       });
     }
 
@@ -311,13 +316,9 @@ export const caseService = {
       const coveredByManagerBroadcast =
         actor.role === 'EMPLOYEE' && creatorMembership?.role === 'COMPANY_MANAGER';
       if (creatorMembership && !coveredByManagerBroadcast) {
-        await notificationService.notify({
+        await notificationService.notifyEvent({
           userId: c.createdById,
-          type: 'CASE_COMPLETED',
-          title: 'پرونده تکمیل شد',
-          body: c.title,
-          linkType: 'CASE',
-          linkId: caseId,
+          event: { kind: 'CASE_COMPLETED', caseId, actorUserId: actor.userId },
         });
       }
     }

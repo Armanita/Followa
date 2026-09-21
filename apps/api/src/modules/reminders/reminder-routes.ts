@@ -167,13 +167,9 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
         },
       });
       if (!already) {
-        await notificationService.notify({
+        await notificationService.notifyEvent({
           userId,
-          type: 'REMINDER_DUE',
-          title: 'یادآوری سررسید شد',
-          body: r.note ?? r.case.title,
-          linkType: 'REMINDER',
-          linkId: r.id,
+          event: { kind: 'REMINDER_DUE', reminderId: r.id },
         });
       }
     }

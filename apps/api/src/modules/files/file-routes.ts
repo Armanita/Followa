@@ -125,14 +125,15 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     });
 
     if (request.actor.role === 'EMPLOYEE') {
-      await notificationService.notifyActiveCompanyManagers({
+      await notificationService.notifyEventToActiveCompanyManagers({
         companyId: request.actor.companyId!,
         excludeUserId: userId,
-        type: 'CASE_UPDATED',
-        title: 'فایل جدید به پرونده افزوده شد',
-        body: c.title,
-        linkType: 'CASE',
-        linkId: caseId,
+        event: {
+          kind: 'FILE_UPLOADED',
+          caseId,
+          actorUserId: userId,
+          fileId: record.id,
+        },
       });
     }
 
