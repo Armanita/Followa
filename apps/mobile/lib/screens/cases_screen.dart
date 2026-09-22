@@ -52,14 +52,15 @@ class _CasesScreenState extends State<CasesScreen> {
         params.add('search=${Uri.encodeComponent(_search)}');
       }
       if (_status.isNotEmpty) params.add('status=$_status');
-      final response = await AuthService.instance.get('/cases?${params.join('&')}');
+      final response =
+          await AuthService.instance.get('/cases?${params.join('&')}');
       if (!mounted) return;
       setState(() {
         _items = response['items'] as List<dynamic>? ?? const [];
         _total = (response['total'] as num?)?.toInt() ?? _items.length;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userMessage(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -103,7 +104,9 @@ class _CasesScreenState extends State<CasesScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.mineOnly ? 'فضای اجرای من' : 'مرکز پرونده‌ها',
+                              widget.mineOnly
+                                  ? 'فضای اجرای من'
+                                  : 'مرکز پرونده‌ها',
                               style: const TextStyle(
                                 color: FollowaColors.soft,
                                 fontSize: 10,
@@ -137,10 +140,12 @@ class _CasesScreenState extends State<CasesScreen> {
                         label: const Text('پرونده جدید'),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(0, 44),
-                          backgroundColor: FollowaColors.brand.withOpacity(.16),
+                          backgroundColor:
+                              FollowaColors.brand.withValues(alpha: .16),
                           foregroundColor: FollowaColors.brandSoft,
                           side: BorderSide(
-                            color: FollowaColors.brandSoft.withOpacity(.20),
+                            color:
+                                FollowaColors.brandSoft.withValues(alpha: .20),
                           ),
                         ),
                       ),
@@ -174,7 +179,8 @@ class _CasesScreenState extends State<CasesScreen> {
                     ),
                     dropdownColor: FollowaColors.elevated,
                     items: [
-                      const DropdownMenuItem(value: '', child: Text('همه وضعیت‌ها')),
+                      const DropdownMenuItem(
+                          value: '', child: Text('همه وضعیت‌ها')),
                       for (final entry in statusLabels.entries)
                         DropdownMenuItem(
                           value: entry.key,
@@ -198,33 +204,40 @@ class _CasesScreenState extends State<CasesScreen> {
                 child: _error != null
                     ? ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        children: [ErrorState(message: _error!, onRetry: _load)],
+                        children: [
+                          ErrorState(message: _error!, onRetry: _load)
+                        ],
                       )
                     : _loading
                         ? const Center(child: CircularProgressIndicator())
                         : _items.isEmpty
                             ? ListView(
                                 physics: const AlwaysScrollableScrollPhysics(),
-                                padding: const EdgeInsets.fromLTRB(16, 10, 16, 108),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 10, 16, 108),
                                 children: const [
                                   PremiumPanel(
                                     child: EmptyState(
                                       title: 'پرونده‌ای یافت نشد',
-                                      hint: 'جستجو یا فیلتر را تغییر دهید یا پرونده جدید ایجاد کنید.',
+                                      hint:
+                                          'جستجو یا فیلتر را تغییر دهید یا پرونده جدید ایجاد کنید.',
                                     ),
                                   ),
                                 ],
                               )
                             : ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 8, 16, 108),
                                 itemCount: _items.length + 1,
-                                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
                                   if (index == _items.length) {
                                     return Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           OutlinedButton(
                                             onPressed: hasPrev
@@ -236,7 +249,8 @@ class _CasesScreenState extends State<CasesScreen> {
                                             child: const Text('قبلی'),
                                           ),
                                           Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12),
                                             child: Text(
                                               'صفحه ${Fa.num(_page)}',
                                               style: const TextStyle(
@@ -259,7 +273,8 @@ class _CasesScreenState extends State<CasesScreen> {
                                       ),
                                     );
                                   }
-                                  final item = _items[index] as Map<String, dynamic>;
+                                  final item =
+                                      _items[index] as Map<String, dynamic>;
                                   return _CaseCard(
                                     item: item,
                                     onTap: () async {
@@ -306,8 +321,8 @@ class _CaseCard extends StatelessWidget {
         : '${owner['firstName'] ?? ''} ${owner['lastName'] ?? ''}'.trim();
     final dueDate = DateTime.tryParse(item['dueDate']?.toString() ?? '');
     final customer = item['customer'] as Map?;
-    final customerName = customer?['displayName']?.toString() ??
-        customer?['name']?.toString();
+    final customerName =
+        customer?['displayName']?.toString() ?? customer?['name']?.toString();
 
     return Material(
       color: Colors.transparent,
@@ -319,7 +334,7 @@ class _CaseCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: FollowaColors.surface,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: accent.withOpacity(.18)),
+            border: Border.all(color: accent.withValues(alpha: .18)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,7 +342,8 @@ class _CaseCard extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: FollowaColors.elevated,
                       borderRadius: BorderRadius.circular(9),
@@ -345,11 +361,13 @@ class _CaseCard extends StatelessWidget {
                   if (isUrgent || isHigh) ...[
                     const SizedBox(width: 7),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: accent.withOpacity(.09),
+                        color: accent.withValues(alpha: .09),
                         borderRadius: BorderRadius.circular(9),
-                        border: Border.all(color: accent.withOpacity(.18)),
+                        border:
+                            Border.all(color: accent.withValues(alpha: .18)),
                       ),
                       child: Text(
                         priorityLabels[priority] ?? priority,

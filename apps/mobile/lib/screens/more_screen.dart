@@ -23,9 +23,15 @@ class MoreScreen extends StatelessWidget {
             ),
             const _MoreItem(
               title: 'تنظیمات',
-              subtitle: 'شرکت و انواع پرونده',
+              subtitle: 'شرکت، انواع پرونده و پیام‌رسان‌ها',
               icon: Icons.settings_outlined,
               page: SettingsScreen(),
+            ),
+            const _MoreItem(
+              title: 'اعلان‌ها',
+              subtitle: 'رویدادها و تغییرات مرتبط با پرونده‌ها',
+              icon: Icons.notifications_outlined,
+              page: NotificationsScreen(),
             ),
             const _MoreItem(
               title: 'پروفایل',
@@ -40,6 +46,12 @@ class MoreScreen extends StatelessWidget {
               subtitle: 'رویدادها و تغییرات مرتبط با پرونده‌ها',
               icon: Icons.notifications_outlined,
               page: NotificationsScreen(),
+            ),
+            const _MoreItem(
+              title: 'تنظیمات پیام‌رسان',
+              subtitle: 'اعلان‌های تلگرام، بله و کد یکبارمصرف',
+              icon: Icons.settings_outlined,
+              page: SettingsScreen(),
             ),
             const _MoreItem(
               title: 'پروفایل',

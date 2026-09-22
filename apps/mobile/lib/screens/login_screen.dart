@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
+import 'forgot_password_screen.dart';
 import 'home_shell.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -54,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const HomeShell()),
       );
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userMessage(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -74,7 +75,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   const _BrandHeader(
                     eyebrow: 'فضای عملیاتی سازمان',
                     title: 'فالوآ',
-                    subtitle: 'مدیریت پرونده، مسئولیت و پیگیری در یک فضای کاری یکپارچه',
+                    subtitle:
+                        'مدیریت پرونده، مسئولیت و پیگیری در یک فضای کاری یکپارچه',
                   ),
                   const SizedBox(height: 26),
                   Container(
@@ -141,7 +143,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               size: 19,
                             ),
                             suffixIcon: IconButton(
-                              tooltip: _obscure ? 'نمایش رمز' : 'پنهان کردن رمز',
+                              tooltip:
+                                  _obscure ? 'نمایش رمز' : 'پنهان کردن رمز',
                               onPressed: () =>
                                   setState(() => _obscure = !_obscure),
                               icon: Icon(
@@ -157,10 +160,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           Container(
                             padding: const EdgeInsets.all(11),
                             decoration: BoxDecoration(
-                              color: FollowaColors.red.withOpacity(.07),
+                              color: FollowaColors.red.withValues(alpha: .07),
                               borderRadius: BorderRadius.circular(13),
                               border: Border.all(
-                                color: FollowaColors.red.withOpacity(.18),
+                                color: FollowaColors.red.withValues(alpha: .18),
                               ),
                             ),
                             child: Text(
@@ -199,6 +202,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: const Text(
                             'ورود اول / تعیین رمز با کد یکبارمصرف',
                           ),
+                        ),
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const ForgotPasswordScreen(),
+                                    ),
+                                  ),
+                          child: const Text('رمز عبور را فراموش کرده‌اید؟'),
                         ),
                       ],
                     ),
@@ -276,7 +290,7 @@ class _OtpSignupScreenState extends State<OtpSignupScreen> {
         );
       }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userMessage(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -438,7 +452,7 @@ class _BrandHeader extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: FollowaColors.brand.withOpacity(.28),
+                color: FollowaColors.brand.withValues(alpha: .28),
                 blurRadius: 24,
                 offset: const Offset(0, 10),
               ),
@@ -517,9 +531,9 @@ class _StepIndicator extends StatelessWidget {
           height: 30,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: color.withOpacity(.10),
+            color: color.withValues(alpha: .10),
             shape: BoxShape.circle,
-            border: Border.all(color: color.withOpacity(.26)),
+            border: Border.all(color: color.withValues(alpha: .26)),
           ),
           child: Icon(
             complete ? Icons.check_rounded : Icons.circle,

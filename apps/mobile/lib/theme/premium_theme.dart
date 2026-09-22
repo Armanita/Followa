@@ -43,8 +43,8 @@ ThemeData buildFollowaPremiumTheme() {
     fontFamily: 'Estedad',
     scaffoldBackgroundColor: FollowaColors.shell,
     dividerColor: FollowaColors.border,
-    splashColor: FollowaColors.brand.withOpacity(.08),
-    highlightColor: FollowaColors.brand.withOpacity(.04),
+    splashColor: FollowaColors.brand.withValues(alpha: .08),
+    highlightColor: FollowaColors.brand.withValues(alpha: .04),
     appBarTheme: const AppBarTheme(
       backgroundColor: FollowaColors.shell,
       foregroundColor: FollowaColors.ink,
@@ -90,7 +90,8 @@ ThemeData buildFollowaPremiumTheme() {
       enabledBorder: outline,
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: FollowaColors.brandSoft, width: 1.4),
+        borderSide:
+            const BorderSide(color: FollowaColors.brandSoft, width: 1.4),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -128,7 +129,7 @@ ThemeData buildFollowaPremiumTheme() {
       height: 72,
       backgroundColor: const Color(0xFF0A111D),
       surfaceTintColor: Colors.transparent,
-      indicatorColor: FollowaColors.brand.withOpacity(.18),
+      indicatorColor: FollowaColors.brand.withValues(alpha: .18),
       labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
             fontFamily: 'Estedad',
             color: states.contains(WidgetState.selected)

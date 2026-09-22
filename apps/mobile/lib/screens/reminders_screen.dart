@@ -41,17 +41,19 @@ class _RemindersScreenState extends State<RemindersScreen> {
           : '/reminders?status=$_tab';
       final response = await AuthService.instance.get(path);
       if (mounted) {
-        setState(() => _items = response['items'] as List<dynamic>? ?? const []);
+        setState(
+            () => _items = response['items'] as List<dynamic>? ?? const []);
       }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userMessage(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _complete(Map<String, dynamic> reminder) async {
-    final controller = TextEditingController(text: reminder['note']?.toString() ?? '');
+    final controller =
+        TextEditingController(text: reminder['note']?.toString() ?? '');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -116,14 +118,15 @@ class _RemindersScreenState extends State<RemindersScreen> {
       _message('یادآوری انجام شد');
       await _load();
     } catch (error) {
-      _message(error.toString());
+      _message(userMessage(error));
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
   }
 
   Future<void> _openCase(Map<String, dynamic> reminder) async {
-    final caseId = reminder['caseId']?.toString() ?? reminder['case']?['id']?.toString();
+    final caseId =
+        reminder['caseId']?.toString() ?? reminder['case']?['id']?.toString();
     if (caseId == null || !mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => CaseDetailScreen(caseId: caseId)),
@@ -142,7 +145,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
     final overdue = _items.where((raw) {
       final item = raw as Map<String, dynamic>;
       final date = DateTime.tryParse(item['remindAt']?.toString() ?? '');
-      return item['status'] == 'ACTIVE' && date != null && date.isBefore(DateTime.now());
+      return item['status'] == 'ACTIVE' &&
+          date != null &&
+          date.isBefore(DateTime.now());
     }).length;
 
     return Scaffold(
@@ -177,7 +182,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     ? '${Fa.num(overdue)} مورد از سررسید عبور کرده'
                     : 'وضعیت پیگیری‌های شما',
                 style: TextStyle(
-                  color: overdue > 0 ? const Color(0xFFFCA5A5) : FollowaColors.muted,
+                  color: overdue > 0
+                      ? const Color(0xFFFCA5A5)
+                      : FollowaColors.muted,
                   fontSize: 10.5,
                   fontWeight: overdue > 0 ? FontWeight.w800 : FontWeight.w500,
                 ),
@@ -221,7 +228,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 ..._items.map((raw) {
                   final reminder = raw as Map<String, dynamic>;
                   final date = DateTime.parse(reminder['remindAt'].toString());
-                  final isOverdue = reminder['status'] == 'ACTIVE' && date.isBefore(DateTime.now());
+                  final isOverdue = reminder['status'] == 'ACTIVE' &&
+                      date.isBefore(DateTime.now());
                   final done = reminder['status'] == 'DONE';
                   final accent = isOverdue
                       ? FollowaColors.red
@@ -245,12 +253,15 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                 height: 40,
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: accent.withOpacity(.08),
+                                  color: accent.withValues(alpha: .08),
                                   borderRadius: BorderRadius.circular(13),
-                                  border: Border.all(color: accent.withOpacity(.18)),
+                                  border: Border.all(
+                                      color: accent.withValues(alpha: .18)),
                                 ),
                                 child: Icon(
-                                  done ? Icons.check_rounded : Icons.alarm_rounded,
+                                  done
+                                      ? Icons.check_rounded
+                                      : Icons.alarm_rounded,
                                   color: accent,
                                   size: 20,
                                 ),
@@ -261,7 +272,10 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      (reminder['note'] ?? c?['title'] ?? 'یادآوری').toString(),
+                                      (reminder['note'] ??
+                                              c?['title'] ??
+                                              'یادآوری')
+                                          .toString(),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -308,12 +322,17 @@ class _RemindersScreenState extends State<RemindersScreen> {
                           if (reminder['status'] == 'ACTIVE') ...[
                             const SizedBox(height: 12),
                             OutlinedButton.icon(
-                              onPressed: busy ? null : () => _complete(reminder),
-                              icon: const Icon(Icons.task_alt_rounded, size: 18),
-                              label: Text(busy ? 'در حال ثبت…' : 'انجام شد + ثبت نتیجه'),
+                              onPressed:
+                                  busy ? null : () => _complete(reminder),
+                              icon:
+                                  const Icon(Icons.task_alt_rounded, size: 18),
+                              label: Text(busy
+                                  ? 'در حال ثبت…'
+                                  : 'انجام شد + ثبت نتیجه'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF86EFAC),
-                                side: const BorderSide(color: Color(0x4434D399)),
+                                side:
+                                    const BorderSide(color: Color(0x4434D399)),
                               ),
                             ),
                           ],

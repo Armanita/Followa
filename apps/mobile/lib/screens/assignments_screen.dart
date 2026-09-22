@@ -33,15 +33,15 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
     }
     try {
       final response = await AuthService.instance.get('/assignments/pending');
-      final items = (response['items'] as List<dynamic>? ?? const [])
-          .where((raw) {
+      final items =
+          (response['items'] as List<dynamic>? ?? const []).where((raw) {
         final item = raw as Map<String, dynamic>;
         final c = item['case'] as Map<String, dynamic>?;
         return c?['status'] == 'WAITING_ACCEPTANCE';
       }).toList();
       if (mounted) setState(() => _items = items);
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userMessage(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -57,7 +57,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
       _message('پرونده پذیرفته شد');
       await _load();
     } catch (error) {
-      _message(error.toString());
+      _message(userMessage(error));
     } finally {
       if (mounted) setState(() => _busyCaseId = null);
     }
@@ -102,7 +102,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
       _message('ارجاع رد و به فرستنده بازگشت داده شد');
       await _load();
     } catch (error) {
-      _message(error.toString());
+      _message(userMessage(error));
     } finally {
       if (mounted) setState(() => _busyCaseId = null);
     }
@@ -165,7 +165,8 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                 const PremiumPanel(
                   child: EmptyState(
                     title: 'ارجاع در انتظاری ندارید',
-                    hint: 'پرونده‌های جدیدی که نیازمند پذیرش شما باشند اینجا ظاهر می‌شوند.',
+                    hint:
+                        'پرونده‌های جدیدی که نیازمند پذیرش شما باشند اینجا ظاهر می‌شوند.',
                   ),
                 )
               else
@@ -175,7 +176,8 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                   final busy = _busyCaseId == c['id'];
                   final from = item['fromUser'] ?? item['fromUs'];
                   final fromName = from is Map
-                      ? '${from['firstName'] ?? ''} ${from['lastName'] ?? ''}'.trim()
+                      ? '${from['firstName'] ?? ''} ${from['lastName'] ?? ''}'
+                          .trim()
                       : '';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -194,7 +196,8 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                                 decoration: BoxDecoration(
                                   color: FollowaColors.elevated,
                                   borderRadius: BorderRadius.circular(9),
-                                  border: Border.all(color: FollowaColors.border),
+                                  border:
+                                      Border.all(color: FollowaColors.border),
                                 ),
                                 child: Text(
                                   '#${Fa.num(c['number'] ?? '—')}',
@@ -232,7 +235,10 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                               ),
                             ),
                           ],
-                          if ((item['note'] ?? '').toString().trim().isNotEmpty) ...[
+                          if ((item['note'] ?? '')
+                              .toString()
+                              .trim()
+                              .isNotEmpty) ...[
                             const SizedBox(height: 9),
                             Container(
                               width: double.infinity,
@@ -258,7 +264,8 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                               Expanded(
                                 child: FilledButton.icon(
                                   onPressed: busy ? null : () => _accept(c),
-                                  icon: const Icon(Icons.check_rounded, size: 18),
+                                  icon:
+                                      const Icon(Icons.check_rounded, size: 18),
                                   label: Text(busy ? 'در حال ثبت…' : 'پذیرش'),
                                   style: FilledButton.styleFrom(
                                     backgroundColor: FollowaColors.emerald,
@@ -269,11 +276,13 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: busy ? null : () => _reject(c),
-                                  icon: const Icon(Icons.close_rounded, size: 18),
+                                  icon:
+                                      const Icon(Icons.close_rounded, size: 18),
                                   label: const Text('رد کردن'),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: const Color(0xFFFCA5A5),
-                                    side: const BorderSide(color: Color(0x44F87171)),
+                                    side: const BorderSide(
+                                        color: Color(0x44F87171)),
                                   ),
                                 ),
                               ),

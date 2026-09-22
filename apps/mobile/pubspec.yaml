@@ -12,10 +12,13 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   http: ^1.2.2
+  http_parser: ^4.1.2
   shared_preferences: ^2.3.3
+  flutter_secure_storage: ^11.2.0
   intl: ^0.20.3
   shamsi_date: ^1.0.4
   file_picker: 12.1.2
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

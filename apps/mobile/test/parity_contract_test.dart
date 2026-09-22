@@ -6,7 +6,9 @@ String source(String path) => File(path).readAsStringSync();
 
 void main() {
   group('Web/mobile parity regression guards', () {
-    test('case execution uses effort results, safe transfer and no work sessions', () {
+    test(
+        'case execution uses effort results, safe transfer and no work sessions',
+        () {
       final text = source('lib/screens/case_detail_screen.dart');
       expect(text, contains("'effortMinutes'"));
       expect(text, contains("'nextReminder'"));
@@ -16,7 +18,8 @@ void main() {
       expect(text, isNot(contains("AuthService.instance.get('/members')")));
     });
 
-    test('case creation keeps customer context and employee-safe member access', () {
+    test('case creation keeps customer context and employee-safe member access',
+        () {
       final text = source('lib/screens/new_case_screen.dart');
       expect(text, contains("'customerId'"));
       expect(text, contains('/customers'));
@@ -32,7 +35,8 @@ void main() {
       expect(text, isNot(contains('sessions30d')));
     });
 
-    test('profile keeps personnel finalization and authenticated photo flow', () {
+    test('profile keeps personnel finalization and authenticated photo flow',
+        () {
       final text = source('lib/screens/profile_screen.dart');
       expect(text, contains('/profile/finalize'));
       expect(text, contains('/profile/photo'));

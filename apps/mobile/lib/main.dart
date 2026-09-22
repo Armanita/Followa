@@ -5,8 +5,16 @@ import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'theme/premium_theme.dart';
 
+final navigatorKey = GlobalKey<NavigatorState>();
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  AuthService.instance.onSessionInvalidated = () async {
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  };
   runApp(const FollowaApp());
 }
 
@@ -16,6 +24,7 @@ class FollowaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'فالوآ',
       debugShowCheckedModeBanner: false,
       theme: buildFollowaPremiumTheme(),

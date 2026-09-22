@@ -30,7 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       setState(() => _data = response as Map<String, dynamic>);
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userMessage(error));
     }
   }
 
@@ -75,13 +75,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (isManager) ...[
           _StatusPanel(data: _data!),
           const SizedBox(height: 14),
-          _UrgentCasesPanel(items: (_data!['urgentCases'] as List?) ?? const []),
+          _UrgentCasesPanel(
+              items: (_data!['urgentCases'] as List?) ?? const []),
           const SizedBox(height: 14),
         ] else ...[
-          _TodayReminders(items: (_data!['remindersToday'] as List?) ?? const []),
+          _TodayReminders(
+              items: (_data!['remindersToday'] as List?) ?? const []),
           const SizedBox(height: 14),
         ],
-        _RecentActivity(items: (_data!['recentActivities'] as List?) ?? const []),
+        _RecentActivity(
+            items: (_data!['recentActivities'] as List?) ?? const []),
       ],
     );
   }
@@ -143,9 +146,10 @@ class _WorkspaceHeader extends StatelessWidget {
           height: 48,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: FollowaColors.brand.withOpacity(.12),
+            color: FollowaColors.brand.withValues(alpha: .12),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: FollowaColors.brandSoft.withOpacity(.25)),
+            border: Border.all(
+                color: FollowaColors.brandSoft.withValues(alpha: .25)),
           ),
           child: Text(
             initial,
@@ -311,7 +315,7 @@ class _StatusPanel extends StatelessWidget {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: color.withOpacity(.35),
+                              color: color.withValues(alpha: .35),
                               blurRadius: 8,
                             ),
                           ],
@@ -384,12 +388,13 @@ class _UrgentCasesPanel extends StatelessWidget {
               final owner = row['currentOwner'] as Map?;
               final ownerName = owner == null
                   ? 'بدون مسئول'
-                  : '${owner['firstName'] ?? ''} ${owner['lastName'] ?? ''}'.trim();
+                  : '${owner['firstName'] ?? ''} ${owner['lastName'] ?? ''}'
+                      .trim();
               return Container(
                 margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: FollowaColors.elevated.withOpacity(.72),
+                  color: FollowaColors.elevated.withValues(alpha: .72),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: FollowaColors.border),
                 ),
@@ -400,7 +405,7 @@ class _UrgentCasesPanel extends StatelessWidget {
                       height: 34,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: FollowaColors.red.withOpacity(.09),
+                        color: FollowaColors.red.withValues(alpha: .09),
                         borderRadius: BorderRadius.circular(11),
                       ),
                       child: const Icon(
@@ -477,12 +482,13 @@ class _TodayReminders extends StatelessWidget {
             ...items.take(5).map((item) {
               final row = item as Map<String, dynamic>;
               final caseData = (row['case'] as Map?)?.cast<String, dynamic>();
-              final remindAt = DateTime.tryParse(row['remindAt']?.toString() ?? '');
+              final remindAt =
+                  DateTime.tryParse(row['remindAt']?.toString() ?? '');
               return Container(
                 margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: FollowaColors.elevated.withOpacity(.72),
+                  color: FollowaColors.elevated.withValues(alpha: .72),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: FollowaColors.border),
                 ),
@@ -502,7 +508,8 @@ class _TodayReminders extends StatelessWidget {
                           Text(
                             row['note']?.toString().trim().isNotEmpty == true
                                 ? row['note'].toString()
-                                : caseData?['title']?.toString() ?? 'یادآوری پرونده',
+                                : caseData?['title']?.toString() ??
+                                    'یادآوری پرونده',
                             style: const TextStyle(
                               color: FollowaColors.ink,
                               fontSize: 11.5,
@@ -562,15 +569,18 @@ class _RecentActivity extends StatelessWidget {
               final row = item as Map<String, dynamic>;
               final caseData = (row['case'] as Map?)?.cast<String, dynamic>();
               final actor = (row['actor'] as Map?)?.cast<String, dynamic>();
-              final createdAt = DateTime.tryParse(row['createdAt']?.toString() ?? '');
+              final createdAt =
+                  DateTime.tryParse(row['createdAt']?.toString() ?? '');
               final actorName = actor == null
                   ? 'سیستم'
-                  : '${actor['firstName'] ?? ''} ${actor['lastName'] ?? ''}'.trim();
+                  : '${actor['firstName'] ?? ''} ${actor['lastName'] ?? ''}'
+                      .trim();
               final type = row['type']?.toString() ?? '';
               return Container(
                 padding: const EdgeInsets.symmetric(vertical: 11),
                 decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: FollowaColors.border)),
+                  border:
+                      Border(bottom: BorderSide(color: FollowaColors.border)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -580,7 +590,7 @@ class _RecentActivity extends StatelessWidget {
                       height: 30,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: FollowaColors.brand.withOpacity(.09),
+                        color: FollowaColors.brand.withValues(alpha: .09),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
@@ -657,9 +667,9 @@ class _PanelTitle extends StatelessWidget {
           height: 38,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: color.withOpacity(.10),
+            color: color.withValues(alpha: .10),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(.18)),
+            border: Border.all(color: color.withValues(alpha: .18)),
           ),
           child: Icon(icon, size: 18, color: color),
         ),

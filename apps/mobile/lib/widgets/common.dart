@@ -6,14 +6,25 @@ import '../theme/premium_theme.dart';
 class Fa {
   static const digits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
 
-  static String num(Object n) => n.toString().replaceAllMapped(
-      RegExp(r'\d'), (m) => digits[int.parse(m.group(0)!)]);
+  static String num(Object n) => n
+      .toString()
+      .replaceAllMapped(RegExp(r'\d'), (m) => digits[int.parse(m.group(0)!)]);
 
   static String date(DateTime dt) {
     final j = dt.toJalali();
     const months = [
-      'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
-      'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+      'فروردین',
+      'اردیبهشت',
+      'خرداد',
+      'تیر',
+      'مرداد',
+      'شهریور',
+      'مهر',
+      'آبان',
+      'آذر',
+      'دی',
+      'بهمن',
+      'اسفند'
     ];
     return '${num(j.day)} ${months[j.month - 1]} ${num(j.year)}';
   }
@@ -84,9 +95,9 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(.10),
+        color: color.withValues(alpha: .10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(.22)),
+        border: Border.all(color: color.withValues(alpha: .22)),
       ),
       child: Text(
         statusLabels[status] ?? status,
@@ -120,7 +131,7 @@ class PremiumPanel extends StatelessWidget {
         color: FollowaColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: accent?.withOpacity(.24) ?? FollowaColors.border,
+          color: accent?.withValues(alpha: .24) ?? FollowaColors.border,
         ),
         boxShadow: const [
           BoxShadow(
@@ -158,7 +169,7 @@ class MetricTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: FollowaColors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(.18)),
+        border: Border.all(color: color.withValues(alpha: .18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,9 +180,9 @@ class MetricTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(.11),
+                  color: color.withValues(alpha: .11),
                   borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: color.withOpacity(.20)),
+                  border: Border.all(color: color.withValues(alpha: .20)),
                 ),
                 child: Icon(icon, size: 17, color: color),
               ),
