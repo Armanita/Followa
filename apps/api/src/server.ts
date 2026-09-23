@@ -4,6 +4,7 @@ import multipart from '@fastify/multipart';
 import { config } from './config.js';
 import { prisma } from './lib/prisma.js';
 import { runNotificationWorker } from './modules/messaging/delivery-worker.js';
+import { runReminderDueWorker } from './modules/reminders/reminder-due-worker.js';
 import { registerErrorHandler } from './lib/errors.js';
 import { registerAuth } from './plugins/auth.js';
 import { authRoutes } from './modules/auth/auth-routes.js';
@@ -68,6 +69,39 @@ export async function buildServer() {
   return app;
 }
 
+export type EmbeddedWorkerName = 'notification' | 'reminderDue';
+
+export interface EmbeddedWorkerFlags {
+  notificationWorkerEnabled: boolean;
+  reminderDueWorkerEnabled: boolean;
+}
+
+export interface EmbeddedWorkerRunners {
+  notification: () => Promise<void>;
+  reminderDue: () => Promise<void>;
+}
+
+/** Selects embedded workers from flags; order is stable (notification first). */
+export function resolveEmbeddedWorkers(
+  flags: EmbeddedWorkerFlags,
+): EmbeddedWorkerName[] {
+  const workers: EmbeddedWorkerName[] = [];
+  if (flags.notificationWorkerEnabled) workers.push('notification');
+  if (flags.reminderDueWorkerEnabled) workers.push('reminderDue');
+  return workers;
+}
+
+/** Starts each enabled embedded worker exactly once; disabled flags start nothing. */
+export function startEmbeddedWorkers(
+  flags: EmbeddedWorkerFlags = config,
+  runners: EmbeddedWorkerRunners = {
+    notification: runNotificationWorker,
+    reminderDue: runReminderDueWorker,
+  },
+): Promise<void>[] {
+  return resolveEmbeddedWorkers(flags).map((name) => runners[name]());
+}
+
 const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].split(/[\\/]/).pop() ?? '');
 
 if (isDirectRun || process.env.START_SERVER === 'true') {
@@ -76,14 +110,14 @@ if (isDirectRun || process.env.START_SERVER === 'true') {
     .listen({ port: config.port, host: config.host })
     .then(() => {
       app.log.info(`Followa API listening on ${config.host}:${config.port}`);
-      if (!config.notificationWorkerEnabled) return;
+      const workers = startEmbeddedWorkers();
+      if (workers.length === 0) return;
 
-      const worker = runNotificationWorker();
       let stopping = false;
       const shutdown = async () => {
         if (stopping) return;
         stopping = true;
-        const results = await Promise.allSettled([app.close(), worker]);
+        const results = await Promise.allSettled([app.close(), ...workers]);
         for (const result of results) {
           if (result.status === 'rejected') {
             app.log.error(result.reason);
@@ -99,7 +133,9 @@ if (isDirectRun || process.env.START_SERVER === 'true') {
       };
       process.once('SIGTERM', () => { void shutdown(); });
       process.once('SIGINT', () => { void shutdown(); });
-      void worker.catch(() => { void shutdown(); });
+      for (const worker of workers) {
+        void worker.catch(() => { void shutdown(); });
+      }
     })
     .catch((err) => {
       app.log.error(err);

@@ -73,7 +73,7 @@ Mobile normalisation accepts `09…`, `+98…`, `0098…`, Persian digits.
 | POST | `/reminders/:id/complete` | `{result?}` → DONE (+writes case result, stays IN_PROGRESS); idempotence-guarded |
 | GET | `/reminders/due-check` | idempotent via atomic `Reminder.notifiedAt` claim; `{dueCount, notifiedCount}`; primary source of truth is `reminder-due-worker` |
 
-Reminder due notifications are produced by the dedicated `reminder-due-worker` process (`apps/api/src/modules/reminders/reminder-due-worker.ts`), which polls every `REMINDER_DUE_WORKER_POLL_MS` (default 15000), claims due rows with `notifiedAt IS NULL`, enqueues `REMINDER_DUE`, and expires rows older than `REMINDER_DUE_MAX_AGE_HOURS` (default 24) without notifying. Env: `REMINDER_DUE_WORKER_POLL_MS`, `REMINDER_DUE_WORKER_BATCH_SIZE`, `REMINDER_DUE_MAX_AGE_HOURS`.
+Reminder due notifications are produced by `reminder-due-worker` (`apps/api/src/modules/reminders/reminder-due-worker.ts`), which polls every `REMINDER_DUE_WORKER_POLL_MS` (default 15000), claims due rows with `notifiedAt IS NULL`, enqueues `REMINDER_DUE`, and expires rows older than `REMINDER_DUE_MAX_AGE_HOURS` (default 24) without notifying. Env: `REMINDER_DUE_WORKER_ENABLED` (embed inside a single API instance; default false), `REMINDER_DUE_WORKER_POLL_MS`, `REMINDER_DUE_WORKER_BATCH_SIZE`, `REMINDER_DUE_MAX_AGE_HOURS`. Standalone process entry: `apps/api/dist/modules/reminders/reminder-due-worker.js`.
 
 ## Notifications
 

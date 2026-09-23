@@ -64,10 +64,17 @@ NODE_ENV=production node apps/api/dist/server.js
 ```
 Run behind a reverse proxy with TLS (Caddy/Nginx). Restrict CORS to the web origin. Provide persistent volume for `storage/files/`.
 
-For a single Render API instance without a separate notification worker, set
-`NOTIFICATION_WORKER_ENABLED=true` on the API service. The default is `false`.
-Keep it disabled wherever the standalone worker runs, and do not scale the
-embedded worker to multiple API instances without reviewing delivery leases.
+For a single Render API instance without separate worker services, set both
+embedded-worker flags on the API service (defaults are `false`):
+
+- `NOTIFICATION_WORKER_ENABLED=true` — delivery worker loop inside the API process
+- `REMINDER_DUE_WORKER_ENABLED=true` — reminder due worker loop inside the API process
+
+They can run together in one API process; each loop starts at most once per
+process. Keep a flag `false` wherever the matching standalone worker already
+runs (`docker-compose` services `notification-worker` / `reminder-due-worker`),
+and do not scale the API to multiple instances with embedded workers enabled
+without reviewing delivery leases and reminder claims.
 
 ### Database
 Managed PostgreSQL or the bundled compose service. Backups: standard `pg_dump` schedule; uploaded files need a filesystem backup too.
