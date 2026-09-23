@@ -56,12 +56,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       } catch (_) {}
     }
     if (!mounted) return;
-    if (notification['linkType'] == 'CASE' && notification['linkId'] != null) {
+    final targetCaseId = notification['linkType'] == 'CASE'
+        ? notification['linkId']?.toString()
+        : notification['linkType'] == 'REMINDER'
+            ? notification['caseId']?.toString()
+            : null;
+    if (targetCaseId != null && targetCaseId.isNotEmpty) {
       await Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (_) =>
-                  CaseDetailScreen(caseId: notification['linkId'].toString())));
+              builder: (_) => CaseDetailScreen(caseId: targetCaseId)));
     }
     await _load();
   }

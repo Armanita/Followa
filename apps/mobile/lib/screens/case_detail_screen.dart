@@ -558,7 +558,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   'زمان یادآوری نمی‌تواند در گذشته باشد');
             }
             nextReminder = {
-              'remindAt': dt.toIso8601String(),
+              'remindAt': dt.toUtc().toIso8601String(),
               if (note.text.trim().isNotEmpty) 'note': note.text.trim()
             };
           }

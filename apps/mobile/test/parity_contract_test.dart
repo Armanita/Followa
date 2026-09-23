@@ -47,6 +47,8 @@ void main() {
     test('notifications navigate independently from unread state', () {
       final text = source('lib/screens/notifications_screen.dart');
       expect(text, contains("notification['linkType'] == 'CASE'"));
+      expect(text, contains("notification['linkType'] == 'REMINDER'"));
+      expect(text, contains("notification['caseId']"));
       expect(text, isNot(contains('if (!unread) return')));
     });
 
@@ -81,6 +83,36 @@ void main() {
     test('bodyless JSON requests omit content-type header', () {
       final text = source('lib/services/auth_service.dart');
       expect(text, contains('_headers(json: body != null)'));
+    });
+
+    test('API datetime payloads are UTC with trailing Z', () {
+      final detail = source('lib/screens/case_detail_screen.dart');
+      expect(detail, contains('dt.toUtc().toIso8601String()'));
+      expect(detail, isNot(contains("'remindAt': dt.toIso8601String()")));
+
+      final profile = source('lib/screens/profile_screen.dart');
+      expect(profile, contains('.toUtc()'));
+
+      final employees = source('lib/screens/employees_tab.dart');
+      expect(employees, contains('.toUtc()'));
+    });
+
+    test('API errors forward server Persian message when present', () {
+      final text = source('lib/services/auth_service.dart');
+      expect(text, contains("decoded['message']"));
+      expect(text, contains('serverMessage.isNotEmpty'));
+    });
+
+    test('android launcher label resolves to Followa string resource', () {
+      final manifest = source('android/app/src/main/AndroidManifest.xml');
+      expect(manifest, contains('android:label="@string/app_name"'));
+      expect(manifest, isNot(contains('فالوآ')));
+
+      final strings = source('android/app/src/main/res/values/strings.xml');
+      expect(strings, contains('<string name="app_name">Followa</string>'));
+
+      final main = source('lib/main.dart');
+      expect(main, contains("title: 'Followa'"));
     });
   });
 }

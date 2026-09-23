@@ -14,6 +14,7 @@ export const config = {
   messagingIdentityBackfillEnabled: enabled('MESSAGING_IDENTITY_BACKFILL_ENABLED'),
   notificationWorkerEnabled: enabled('NOTIFICATION_WORKER_ENABLED'),
   notificationWorkerPollMs: Number(process.env.NOTIFICATION_WORKER_POLL_MS ?? 2000), notificationWorkerLeaseMs: Number(process.env.NOTIFICATION_WORKER_LEASE_MS ?? 30000), notificationMaxAttempts: Number(process.env.NOTIFICATION_MAX_ATTEMPTS ?? 5),
+  reminderDueWorkerPollMs: Number(process.env.REMINDER_DUE_WORKER_POLL_MS ?? 15000), reminderDueWorkerBatchSize: Number(process.env.REMINDER_DUE_WORKER_BATCH_SIZE ?? 50), reminderDueMaxAgeHours: Number(process.env.REMINDER_DUE_MAX_AGE_HOURS ?? 24),
   storageDir: process.env.STORAGE_DIR ?? './storage/files', maxFileSizeMb: Number(process.env.MAX_FILE_SIZE_MB ?? 20),
   databaseUrl: required('DATABASE_URL', 'postgresql://followa:followa_dev_password@localhost:5433/followa?schema=public'),
 };

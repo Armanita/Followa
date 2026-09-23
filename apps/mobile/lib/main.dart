@@ -25,7 +25,7 @@ class FollowaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: 'فالوآ',
+      title: 'Followa',
       debugShowCheckedModeBanner: false,
       theme: buildFollowaPremiumTheme(),
       localizationsDelegates: const [

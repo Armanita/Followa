@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:notification-worker": "tsx src/modules/messaging/delivery-worker.ts",
+    "dev:reminder-due-worker": "tsx src/modules/reminders/reminder-due-worker.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "worker:notifications": "node dist/modules/messaging/delivery-worker.js",
     "start:notification-worker": "node dist/modules/messaging/delivery-worker.js",
+    "worker:reminders": "node dist/modules/reminders/reminder-due-worker.js",
+    "start:reminder-due-worker": "node dist/modules/reminders/reminder-due-worker.js",
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

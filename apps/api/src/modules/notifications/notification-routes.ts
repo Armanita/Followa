@@ -14,10 +14,28 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { createdAt: 'desc' },
       take,
     });
+    const reminderIds = items
+      .filter((item) => item.linkType === 'REMINDER' && item.linkId)
+      .map((item) => item.linkId!);
+    const reminders = reminderIds.length > 0
+      ? await prisma.reminder.findMany({
+          where: { id: { in: reminderIds } },
+          select: { id: true, caseId: true },
+        })
+      : [];
+    const reminderCaseById = new Map(reminders.map((row) => [row.id, row.caseId]));
+    const enriched = items.map((item) => ({
+      ...item,
+      caseId: item.linkType === 'CASE'
+        ? item.linkId
+        : item.linkType === 'REMINDER' && item.linkId
+          ? reminderCaseById.get(item.linkId) ?? null
+          : null,
+    }));
     const unreadCount = await prisma.notification.count({
       where: { userId, readAt: null },
     });
-    return { items, unreadCount };
+    return { items: enriched, unreadCount };
   });
 
   app.post('/notifications/:id/read', async (request) => {

@@ -68,14 +68,16 @@ Mobile normalisation accepts `09…`, `+98…`, `0098…`, Persian digits.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/reminders` | `{caseId, remindAt(ISO), note?}`; future-only |
+| POST | `/reminders` | `{caseId, remindAt(ISO with Z), note?}`; future-only; closed cases rejected |
 | GET | `/reminders?status=ACTIVE\|DONE\|EXPIRED&today=true&upcoming=true` | my reminders with case info |
 | POST | `/reminders/:id/complete` | `{result?}` → DONE (+writes case result, stays IN_PROGRESS); idempotence-guarded |
-| GET | `/reminders/due-check` | generates REMINDER_DUE notifications once per reminder |
+| GET | `/reminders/due-check` | idempotent via atomic `Reminder.notifiedAt` claim; `{dueCount, notifiedCount}`; primary source of truth is `reminder-due-worker` |
+
+Reminder due notifications are produced by the dedicated `reminder-due-worker` process (`apps/api/src/modules/reminders/reminder-due-worker.ts`), which polls every `REMINDER_DUE_WORKER_POLL_MS` (default 15000), claims due rows with `notifiedAt IS NULL`, enqueues `REMINDER_DUE`, and expires rows older than `REMINDER_DUE_MAX_AGE_HOURS` (default 24) without notifying. Env: `REMINDER_DUE_WORKER_POLL_MS`, `REMINDER_DUE_WORKER_BATCH_SIZE`, `REMINDER_DUE_MAX_AGE_HOURS`.
 
 ## Notifications
 
-GET `/notifications?unread=true&limit=` → `{items, unreadCount}` ·
+GET `/notifications?unread=true&limit=` → `{items, unreadCount}` · each item includes `caseId` (resolved for `linkType=REMINDER`) for deep-linking ·
 POST `/notifications/:id/read` · POST `/notifications/read-all`
 
 ## Dashboards

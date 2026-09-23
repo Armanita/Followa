@@ -64,6 +64,21 @@ services:
       NOTIFICATION_WORKER_LEASE_MS: ${NOTIFICATION_WORKER_LEASE_MS:-30000}
       NOTIFICATION_MAX_ATTEMPTS: ${NOTIFICATION_MAX_ATTEMPTS:-5}
     depends_on: { migrate: { condition: service_completed_successfully } }
+  reminder-due-worker:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    container_name: followa-reminder-due-worker
+    restart: unless-stopped
+    command: ["node", "apps/api/dist/modules/reminders/reminder-due-worker.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-followa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-followa}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?set in .env}
+      MESSAGING_CREDENTIALS_KEY: ${MESSAGING_CREDENTIALS_KEY:?set in .env}
+      REMINDER_DUE_WORKER_POLL_MS: ${REMINDER_DUE_WORKER_POLL_MS:-15000}
+      REMINDER_DUE_WORKER_BATCH_SIZE: ${REMINDER_DUE_WORKER_BATCH_SIZE:-50}
+      REMINDER_DUE_MAX_AGE_HOURS: ${REMINDER_DUE_MAX_AGE_HOURS:-24}
+      TZ: ${TZ:-Asia/Tehran}
+    depends_on: { migrate: { condition: service_completed_successfully } }
   web:
     build:
       context: .

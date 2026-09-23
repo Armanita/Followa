@@ -509,6 +509,7 @@ class _PersonnelDialogState extends State<_PersonnelDialog> {
           'birthDate': birth.text.trim().isEmpty
               ? null
               : JalaliInput.parseDateTime(birth.text, '00:00')
+                  .toUtc()
                   .toIso8601String(),
           'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
           'address': address.text.trim().isEmpty ? null : address.text.trim(),

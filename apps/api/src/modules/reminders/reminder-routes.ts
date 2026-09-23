@@ -5,20 +5,13 @@ import { parseWith } from '../../lib/validation.js';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { assertCanViewCase, logActivity } from '../cases/case-service.js';
 import { notificationService } from '../notifications/notification-service.js';
+import { claimReminderForNotification, releaseReminderClaim } from './reminder-claim.js';
 
 const createReminderSchema = z.object({
   caseId: z.string().min(1),
   remindAt: z.string().datetime(),
   note: z.string().max(1000).optional(),
 });
-
-/** Marks due ACTIVE reminders as EXPIRED lazily (no scheduler needed for MVP). */
-async function expireOverdue() {
-  await prisma.reminder.updateMany({
-    where: { status: 'ACTIVE', remindAt: { lt: new Date(Date.now() - 24 * 3600 * 1000) } },
-    data: { status: 'EXPIRED' },
-  });
-}
 
 export async function reminderRoutes(app: FastifyInstance): Promise<void> {
   app.post('/reminders', async (request) => {
@@ -66,7 +59,6 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
 
   /** My reminders with optional status filter; "today" via query. */
   app.get('/reminders', async (request) => {
-    await expireOverdue();
     const userId = request.actor.id;
     const query = request.query as Record<string, string | undefined>;
 
@@ -148,31 +140,34 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     return { message: 'یادآوری انجام شد' };
   });
 
-  // Reminder-due notifications are generated on dashboard fetch (MVP approach):
-  // This lazy mechanism will be replaced by the approved persistent worker in
-  // the Bale/notification reliability phase.
+  /**
+   * Request-driven due-check retained for backward compatibility with the
+   * dashboard/mobile flows. The dedicated reminder-due-worker is the primary
+   * source of truth; both paths share the same atomic notifiedAt claim so a
+   * reminder can only produce one REMINDER_DUE notification.
+   */
   app.get('/reminders/due-check', async (request) => {
     const userId = request.actor.id;
     const now = new Date();
     const due = await prisma.reminder.findMany({
       where: { assigneeId: userId, status: 'ACTIVE', remindAt: { lte: now } },
-      include: { case: { select: { title: true } } },
+      select: { id: true },
     });
-    for (const r of due) {
-      const already = await prisma.notification.findFirst({
-        where: {
-          userId,
-          type: 'REMINDER_DUE',
-          linkId: r.id,
-        },
-      });
-      if (!already) {
+    let notifiedCount = 0;
+    for (const { id } of due) {
+      const claimed = await claimReminderForNotification(prisma, id);
+      if (!claimed) continue;
+      try {
         await notificationService.notifyEvent({
           userId,
-          event: { kind: 'REMINDER_DUE', reminderId: r.id },
+          event: { kind: 'REMINDER_DUE', reminderId: id },
         });
+        notifiedCount += 1;
+      } catch (error) {
+        await releaseReminderClaim(prisma, id);
+        throw error;
       }
     }
-    return { dueCount: due.length };
+    return { dueCount: due.length, notifiedCount };
   });
 }

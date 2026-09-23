@@ -185,6 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   if (birthDate.text.trim().isNotEmpty) {
                                     birthIso = JalaliInput.parseDateTime(
                                             birthDate.text, '00:00')
+                                        .toUtc()
                                         .toIso8601String();
                                   }
                                   await AuthService.instance.patch('/profile', {

@@ -163,6 +163,9 @@ class AuthService {
     final code = decoded is Map && decoded['code'] != null
         ? decoded['code'].toString()
         : 'ERROR';
+    final serverMessage = decoded is Map && decoded['message'] is String
+        ? (decoded['message'] as String).trim()
+        : '';
     final hadAuthenticatedSession = _token != null;
     if (statusCode == 401 && hadAuthenticatedSession) {
       await logout();
@@ -171,7 +174,9 @@ class AuthService {
     throw ApiException(
       statusCode: statusCode,
       code: code,
-      message: safeApiMessage(statusCode, code),
+      message: serverMessage.isNotEmpty
+          ? serverMessage
+          : safeApiMessage(statusCode, code),
     );
   }
 

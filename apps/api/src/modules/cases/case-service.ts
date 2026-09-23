@@ -210,6 +210,7 @@ export const caseService = {
   ) {
     const c = await assertCanEditCase(caseId, actor);
     if (c.status === 'DONE') throw conflict('پرونده قبلاً تکمیل شده است');
+    if (c.status === 'CANCELLED') throw conflict('پرونده لغو شده است و قابل ویرایش نیست');
     if (complete && nextReminder) throw badRequest('برای پرونده تکمیل‌شده یادآوری بعدی ثبت نمی‌شود');
     if (nextReminder && nextReminder.remindAt.getTime() < Date.now() - 60 * 1000) {
       throw badRequest('زمان یادآوری نمی‌تواند در گذشته باشد');
