@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { Card, ErrorState, Spinner } from '@/components/ui';
 import { ReportsIcon } from '@/components/workspace/icons';
 import { Avatar, PageHeader, PanelHeader } from '@/components/workspace/page';
+import { CustomerCaseReport } from '@/components/workspace/customer-case-report';
 import { toFa } from '@/lib/jalali';
 
 interface ReportRow {
@@ -17,7 +18,47 @@ interface ReportRow {
   pendingAssignments: number;
 }
 
+type ReportsTab = 'employees' | 'customer';
+
 export default function ReportsPage() {
+  const [tab, setTab] = useState<ReportsTab>('employees');
+
+  const tabs = [
+    { key: 'employees' as const, label: 'گزارش کارکنان' },
+    { key: 'customer' as const, label: 'گزارش مشتری' },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="تحلیل سازمان"
+        title={tab === 'employees' ? 'گزارش کارکنان' : 'گزارش مشتری'}
+        description={
+          tab === 'employees'
+            ? 'نمای عملیاتی تیم بر پایه پرونده‌های فعال، تکمیل‌شده و ارجاع‌های در انتظار پذیرش.'
+            : 'پرونده‌های هر مشتری به تفکیک وضعیت، بازه زمانی، کارمند و نوع پرونده.'
+        }
+        icon={<ReportsIcon className="h-5 w-5" />}
+      />
+
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-workspace-border bg-workspace-surface p-2 shadow-card">
+        {tabs.map((item) => (
+          <button
+            key={item.key}
+            onClick={() => setTab(item.key)}
+            className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition ${tab === item.key ? 'bg-brand-600 text-white shadow-[0_8px_20px_rgba(109,54,237,.18)]' : 'text-workspace-muted hover:bg-workspace-hover hover:text-white'}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'customer' ? <CustomerCaseReport /> : <EmployeesReport />}
+    </div>
+  );
+}
+
+function EmployeesReport() {
   const [items, setItems] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -44,14 +85,6 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="تحلیل سازمان"
-        title="گزارش کارکنان"
-        description="نمای عملیاتی تیم بر پایه پرونده‌های فعال، تکمیل‌شده و ارجاع‌های در انتظار پذیرش."
-        icon={<ReportsIcon className="h-5 w-5" />}
-        meta={`${toFa(employees.length)} کارمند در گزارش`}
-      />
-
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-4">
           <p className="text-[10px] text-workspace-soft">پرونده فعال تیم</p>

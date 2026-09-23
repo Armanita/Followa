@@ -130,7 +130,7 @@ class AuthService {
   Future<dynamic> _send(String method, String path, [Object? body]) async {
     try {
       final request = http.Request(method, _uri(path))
-        ..headers.addAll(await _headers());
+        ..headers.addAll(await _headers(json: body != null));
       if (body != null) request.body = jsonEncode(body);
       _debug('$method $path');
       final response =

@@ -7,6 +7,9 @@ export const CASE_STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'لغو شده',
 };
 
+export const ACTIVE_CASE_STATUSES = ['OPEN', 'WAITING_ACCEPTANCE', 'IN_PROGRESS', 'WAITING_APPROVAL'] as const;
+export const ARCHIVED_CASE_STATUSES = ['DONE', 'CANCELLED'] as const;
+
 export const CASE_STATUS_STYLES: Record<string, string> = {
   OPEN: 'bg-sky-50 text-sky-700 ring-sky-200',
   WAITING_ACCEPTANCE: 'bg-amber-50 text-amber-700 ring-amber-200',

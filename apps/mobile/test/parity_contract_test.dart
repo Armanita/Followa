@@ -57,6 +57,30 @@ void main() {
       expect(more, contains('SettingsScreen'));
       expect(more, contains('ReportsTab'));
       expect(more, contains('ProfileScreen'));
+      expect(more, contains('CustomerReportScreen'));
+    });
+
+    test('case archive tabs and customer report filters stay wired', () {
+      final cases = source('lib/screens/cases_screen.dart');
+      expect(cases, contains("'archive=\$_archive'"));
+      expect(cases, contains('پرونده‌های فعال'));
+      expect(cases, contains('پرونده‌های بایگانی شده'));
+      expect(cases, contains('_archivedStatuses'));
+
+      final report = source('lib/screens/customer_report_screen.dart');
+      expect(report, contains("'customerId=\$_customerId'"));
+      expect(report, contains("value: 'active', child: Text('در حال انجام')"));
+      expect(report, contains("value: 'archived', child: Text('بایگانی شده')"));
+      expect(report, contains('resultAt'));
+      expect(report, contains('ownerId'));
+      expect(report, contains('caseTypeId'));
+      expect(report, contains('from='));
+      expect(report, contains('to='));
+    });
+
+    test('bodyless JSON requests omit content-type header', () {
+      final text = source('lib/services/auth_service.dart');
+      expect(text, contains('_headers(json: body != null)'));
     });
   });
 }

@@ -14,6 +14,8 @@ class CasesScreen extends StatefulWidget {
   State<CasesScreen> createState() => _CasesScreenState();
 }
 
+const _archivedStatuses = {'DONE', 'CANCELLED'};
+
 class _CasesScreenState extends State<CasesScreen> {
   static const _pageSize = 15;
   final _searchController = TextEditingController();
@@ -21,6 +23,7 @@ class _CasesScreenState extends State<CasesScreen> {
   String? _error;
   String _search = '';
   String _status = '';
+  String _archive = 'active';
   int _page = 1;
   int _total = 0;
   bool _loading = true;
@@ -46,6 +49,7 @@ class _CasesScreenState extends State<CasesScreen> {
       final params = <String>[
         'page=$_page',
         'pageSize=$_pageSize',
+        'archive=$_archive',
       ];
       if (widget.mineOnly) params.add('mine=true');
       if (_search.isNotEmpty) {
@@ -64,6 +68,16 @@ class _CasesScreenState extends State<CasesScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _switchArchive(String value) {
+    if (value == _archive) return;
+    setState(() {
+      _archive = value;
+      _status = '';
+      _page = 1;
+    });
+    _load();
   }
 
   void _applySearch(String value) {
@@ -152,6 +166,26 @@ class _CasesScreenState extends State<CasesScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final tab in const [
+                          ('active', 'پرونده‌های فعال'),
+                          ('archived', 'پرونده‌های بایگانی شده'),
+                        ])
+                          Padding(
+                            padding: const EdgeInsets.only(left: 7),
+                            child: ChoiceChip(
+                              label: Text(tab.$2),
+                              selected: _archive == tab.$1,
+                              onSelected: (_) => _switchArchive(tab.$1),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _searchController,
                     textInputAction: TextInputAction.search,
@@ -182,10 +216,13 @@ class _CasesScreenState extends State<CasesScreen> {
                       const DropdownMenuItem(
                           value: '', child: Text('همه وضعیت‌ها')),
                       for (final entry in statusLabels.entries)
-                        DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
+                        if (_archive == 'archived'
+                            ? _archivedStatuses.contains(entry.key)
+                            : !_archivedStatuses.contains(entry.key))
+                          DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
                     ],
                     onChanged: (value) {
                       setState(() {
@@ -215,15 +252,17 @@ class _CasesScreenState extends State<CasesScreen> {
                                 physics: const AlwaysScrollableScrollPhysics(),
                                 padding:
                                     const EdgeInsets.fromLTRB(16, 10, 16, 108),
-                                children: const [
-                                  PremiumPanel(
-                                    child: EmptyState(
-                                      title: 'پرونده‌ای یافت نشد',
-                                      hint:
-                                          'جستجو یا فیلتر را تغییر دهید یا پرونده جدید ایجاد کنید.',
-                                    ),
-                                  ),
-                                ],
+                                    children: [
+                                      PremiumPanel(
+                                        child: EmptyState(
+                                          title: _archive == 'archived'
+                                              ? 'پرونده بایگانی‌شده‌ای نیست'
+                                              : 'پرونده‌ای یافت نشد',
+                                          hint:
+                                              'جستجو یا فیلتر را تغییر دهید یا پرونده جدید ایجاد کنید.',
+                                        ),
+                                      ),
+                                    ],
                               )
                             : ListView.separated(
                                 padding:

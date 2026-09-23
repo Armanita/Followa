@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { CaseStatus } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { parseWith } from '../../lib/validation.js';
@@ -37,11 +38,46 @@ const updateCaseSchema = z.object({
   dueDate: z.string().datetime().nullable().optional(),
 });
 
+const CLOSED_STATUSES: CaseStatus[] = ['DONE', 'CANCELLED'];
+
+const CASE_STATUS_VALUES: CaseStatus[] = [
+  'OPEN',
+  'WAITING_ACCEPTANCE',
+  'IN_PROGRESS',
+  'WAITING_APPROVAL',
+  'DONE',
+  'CANCELLED',
+];
+
+function dateBoundary(value: string, end: boolean): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (match) {
+    const y = Number(match[1]);
+    const m = Number(match[2]);
+    const d = Number(match[3]);
+    return end ? new Date(y, m - 1, d, 23, 59, 59, 999) : new Date(y, m - 1, d, 0, 0, 0, 0);
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export async function caseRoutes(app: FastifyInstance): Promise<void> {
   app.get('/cases', async (request) => {
     const actor = actorFrom(request);
     const query = request.query as Record<string, string | undefined>;
     const { skip, take, page, pageSize } = normalizePagination(query);
+
+    const statusFilter =
+      query.status && CASE_STATUS_VALUES.includes(query.status as CaseStatus)
+        ? { status: query.status as CaseStatus }
+        : query.archive === 'active'
+          ? { status: { notIn: CLOSED_STATUSES } }
+          : query.archive === 'archived'
+            ? { status: { in: CLOSED_STATUSES } }
+            : {};
+
+    const createdAtFrom = query.from ? dateBoundary(query.from, false) : null;
+    const createdAtTo = query.to ? dateBoundary(query.to, true) : null;
 
     const where = {
       companyId: actor.companyId,
@@ -55,22 +91,23 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
             ],
           }
         : {}),
-      ...(query.status
-        ? {
-            status: query.status as
-              | 'OPEN'
-              | 'WAITING_ACCEPTANCE'
-              | 'IN_PROGRESS'
-              | 'WAITING_APPROVAL'
-              | 'DONE'
-              | 'CANCELLED',
-          }
-        : {}),
+      ...statusFilter,
       ...(query.priority
         ? { priority: query.priority as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' }
         : {}),
       ...(query.search ? { title: { contains: query.search, mode: 'insensitive' as const } } : {}),
       ...(query.mine === 'true' ? { currentOwnerId: actor.userId } : {}),
+      ...(query.customerId ? { customerId: query.customerId } : {}),
+      ...(query.caseTypeId ? { caseTypeId: query.caseTypeId } : {}),
+      ...(query.ownerId ? { currentOwnerId: query.ownerId } : {}),
+      ...(createdAtFrom || createdAtTo
+        ? {
+            createdAt: {
+              ...(createdAtFrom ? { gte: createdAtFrom } : {}),
+              ...(createdAtTo ? { lte: createdAtTo } : {}),
+            },
+          }
+        : {}),
     };
 
     const [items, total] = await Promise.all([

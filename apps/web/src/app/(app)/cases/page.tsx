@@ -22,7 +22,7 @@ import {
 import { CasesIcon, PlusIcon, SearchIcon } from '@/components/workspace/icons';
 import { PageHeader, Toolbar } from '@/components/workspace/page';
 import { faDate, isLate, toFa } from '@/lib/jalali';
-import { CASE_STATUS_LABELS } from '@/lib/labels';
+import { ACTIVE_CASE_STATUSES, ARCHIVED_CASE_STATUSES, CASE_STATUS_LABELS } from '@/lib/labels';
 
 interface CaseRow {
   id: string;
@@ -38,6 +38,8 @@ interface CaseRow {
   customer?: { id: string; type: 'INDIVIDUAL' | 'LEGAL'; name: string; isActive: boolean } | null;
 }
 
+type ArchiveTab = 'active' | 'archived';
+
 function CasesPageInner() {
   const searchParams = useSearchParams();
   const [items, setItems] = useState<CaseRow[]>([]);
@@ -47,6 +49,11 @@ function CasesPageInner() {
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [status, setStatus] = useState(searchParams.get('status') ?? '');
   const [mine, setMine] = useState(searchParams.get('mine') === 'true');
+  const [archive, setArchive] = useState<ArchiveTab>(() => {
+    const requested = searchParams.get('archive');
+    if (requested === 'active' || requested === 'archived') return requested;
+    return status === 'DONE' || status === 'CANCELLED' ? 'archived' : 'active';
+  });
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -57,6 +64,7 @@ function CasesPageInner() {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
       if (status) params.set('status', status);
+      params.set('archive', archive);
       if (mine) params.set('mine', 'true');
       params.set('page', String(page));
       params.set('pageSize', '15');
@@ -68,11 +76,24 @@ function CasesPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [search, status, mine, page]);
+  }, [search, status, archive, mine, page]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const archiveTabs = [
+    { key: 'active' as const, label: 'پرونده‌های فعال' },
+    { key: 'archived' as const, label: 'پرونده‌های بایگانی شده' },
+  ];
+  const statusOptions = archive === 'active' ? ACTIVE_CASE_STATUSES : ARCHIVED_CASE_STATUSES;
+
+  const switchArchive = (next: ArchiveTab) => {
+    if (next === archive) return;
+    setArchive(next);
+    setStatus('');
+    setPage(1);
+  };
 
   return (
     <div className="space-y-5">
@@ -89,6 +110,18 @@ function CasesPageInner() {
           </button>
         }
       />
+
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-workspace-border bg-workspace-surface p-2 shadow-card">
+        {archiveTabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => switchArchive(tab.key)}
+            className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition ${archive === tab.key ? 'bg-brand-600 text-white shadow-[0_8px_20px_rgba(109,54,237,.18)]' : 'text-workspace-muted hover:bg-workspace-hover hover:text-white'}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       <Toolbar>
         <label className="relative min-w-[220px] flex-1 sm:max-w-sm">
@@ -112,7 +145,7 @@ function CasesPageInner() {
           }}
         >
           <option value="">همه وضعیت‌ها</option>
-          {Object.entries(CASE_STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          {statusOptions.map((key) => <option key={key} value={key}>{CASE_STATUS_LABELS[key]}</option>)}
         </select>
         <label className="flex min-h-10 items-center gap-2 rounded-xl border border-workspace-borderStrong bg-workspace-elevated px-3.5 text-xs font-semibold text-workspace-muted">
           <input
@@ -134,7 +167,7 @@ function CasesPageInner() {
         <ErrorState message={error} onRetry={load} />
       ) : items.length === 0 ? (
         <Card>
-          <EmptyState title="پرونده‌ای یافت نشد" hint="فیلترها را تغییر دهید یا پرونده جدیدی ثبت کنید." action={<button onClick={() => setCreateOpen(true)} className="mt-3 text-xs font-bold text-brand-300 hover:text-brand-200">ساخت اولین پرونده ←</button>} />
+          <EmptyState title={archive === 'archived' ? 'پرونده بایگانی‌شده‌ای نیست' : 'پرونده‌ای یافت نشد'} hint="فیلترها را تغییر دهید یا پرونده جدیدی ثبت کنید." action={archive === 'active' ? <button onClick={() => setCreateOpen(true)} className="mt-3 text-xs font-bold text-brand-300 hover:text-brand-200">ساخت اولین پرونده ←</button> : undefined} />
         </Card>
       ) : (
         <Card className="overflow-hidden">

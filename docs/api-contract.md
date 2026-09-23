@@ -38,7 +38,7 @@ Mobile normalisation accepts `09…`, `+98…`, `0098…`, Persian digits.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/cases?search&status&priority&mine=true&page&pageSize&sort=dueDate` | visibility-filtered, paginated `{items,total,page,pageSize}` |
+| GET | `/cases?search&status&priority&archive=active|archived&customerId&caseTypeId&ownerId&from&to&mine=true&page&pageSize&sort=dueDate` | visibility-filtered, paginated `{items,total,page,pageSize}`; `archive` splits active (`OPEN/WAITING_ACCEPTANCE/IN_PROGRESS/WAITING_APPROVAL`) vs archived (`DONE/CANCELLED`); `from`/`to` filter `createdAt` (date-only or ISO) |
 | POST | `/cases` | `{title, description?, caseTypeId?, priority?, dueDate?(ISO), assignToUserId?, assignNote?}` → assign puts case in WAITING_ACCEPTANCE |
 | GET | `/cases/:id` | detail + files + workSessions + reminders + `canEdit` + `hasPendingAcceptanceForMe` + `totalWorkSeconds` |
 | PATCH | `/cases/:id` | edit fields (manager or current owner) |

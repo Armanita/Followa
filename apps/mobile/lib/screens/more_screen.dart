@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
+import 'customer_report_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'reports_tab.dart';
@@ -20,6 +21,12 @@ class MoreScreen extends StatelessWidget {
               subtitle: 'بار عملیاتی و وضعیت پرونده‌های تیم',
               icon: Icons.bar_chart_rounded,
               page: ReportsTab(),
+            ),
+            const _MoreItem(
+              title: 'گزارش مشتری',
+              subtitle: 'پرونده‌های هر مشتری با فیلتر وضعیت و تاریخ',
+              icon: Icons.person_search_outlined,
+              page: CustomerReportScreen(),
             ),
             const _MoreItem(
               title: 'تنظیمات',
