@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
-
 import '../services/auth_service.dart';
-import '../theme/premium_theme.dart';
+import '../services/case_repository.dart';
 import '../widgets/common.dart';
+import '../widgets/workspace_visibility.dart';
+import '../widgets/case_widgets.dart';
 import 'case_detail_screen.dart';
 import 'new_case_screen.dart';
 
 class CasesScreen extends StatefulWidget {
   final bool mineOnly;
-  const CasesScreen({super.key, this.mineOnly = false});
-
+  final CaseRepository repository;
+  const CasesScreen(
+      {super.key,
+      this.mineOnly = false,
+      this.repository = const CaseRepository()});
   @override
   State<CasesScreen> createState() => _CasesScreenState();
 }
@@ -17,16 +21,25 @@ class CasesScreen extends StatefulWidget {
 const _archivedStatuses = {'DONE', 'CANCELLED'};
 
 class _CasesScreenState extends State<CasesScreen> {
-  static const _pageSize = 15;
   final _searchController = TextEditingController();
-  List<dynamic> _items = [];
-  String? _error;
-  String _search = '';
-  String _status = '';
-  String _archive = 'active';
-  int _page = 1;
-  int _total = 0;
+  final _scroll = ScrollController();
+  List<Map<String, dynamic>> _items = [];
+  String _archive = 'active', _status = '', _search = '';
+  late bool _mine = widget.mineOnly;
+  int _page = 1, _total = 0, _request = 0;
+  static const _pageSize = 15;
   bool _loading = true;
+  String? _error;
+  bool? _wasVisible;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = WorkspaceVisibility.of(context);
+    if (_wasVisible == false && visible) {
+      _load();
+    }
+    _wasVisible = visible;
+  }
 
   @override
   void initState() {
@@ -37,471 +50,243 @@ class _CasesScreenState extends State<CasesScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    final request = ++_request;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final params = <String>[
+      final params = [
         'page=$_page',
         'pageSize=$_pageSize',
         'archive=$_archive',
+        if (widget.mineOnly && _mine) 'mine=true',
+        if (_status.isNotEmpty) 'status=$_status',
+        if (_search.isNotEmpty) 'search=${Uri.encodeComponent(_search)}'
       ];
-      if (widget.mineOnly) params.add('mine=true');
-      if (_search.isNotEmpty) {
-        params.add('search=${Uri.encodeComponent(_search)}');
-      }
-      if (_status.isNotEmpty) params.add('status=$_status');
       final response =
-          await AuthService.instance.get('/cases?${params.join('&')}');
-      if (!mounted) return;
+          await widget.repository.get('/cases?${params.join('&')}');
+      if (!mounted || request != _request) return;
       setState(() {
-        _items = response['items'] as List<dynamic>? ?? const [];
+        _items = caseRows(response['items']);
         _total = (response['total'] as num?)?.toInt() ?? _items.length;
       });
-    } catch (error) {
-      if (mounted) setState(() => _error = userMessage(error));
+      if (_items.isEmpty && _page > 1 && (_page - 1) * _pageSize >= _total) {
+        _page--;
+        await _load();
+      }
+    } catch (e) {
+      if (mounted && request == _request) {
+        setState(() => _error = userMessage(e));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && request == _request) setState(() => _loading = false);
     }
   }
 
-  void _switchArchive(String value) {
-    if (value == _archive) return;
+  void _filter(VoidCallback change) {
     setState(() {
-      _archive = value;
-      _status = '';
+      change();
       _page = 1;
     });
     _load();
   }
 
-  void _applySearch(String value) {
-    _search = value.trim();
-    _page = 1;
-    _load();
-  }
-
-  Future<void> _openNewCase() async {
-    final created = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => const NewCaseScreen()),
-    );
-    if (created == true) {
-      _page = 1;
-      await _load();
-    }
+  Future<void> _new() async {
+    await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => NewCaseScreen(repository: widget.repository)));
+    if (mounted) await _load();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final hasPrev = _page > 1;
-    final hasNext = _page * _pageSize < _total;
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: Column(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.mineOnly
-                                  ? 'فضای اجرای من'
-                                  : 'مرکز پرونده‌ها',
-                              style: const TextStyle(
-                                color: FollowaColors.soft,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              widget.mineOnly ? 'پرونده‌های من' : 'پرونده‌ها',
-                              style: const TextStyle(
-                                color: FollowaColors.ink,
-                                fontSize: 21,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${Fa.num(_total)} پرونده در نتیجه فعلی',
-                              style: const TextStyle(
-                                color: FollowaColors.muted,
-                                fontSize: 10.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton.tonalIcon(
-                        onPressed: _openNewCase,
-                        icon: const Icon(Icons.add_rounded, size: 18),
-                        label: const Text('پرونده جدید'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 44),
-                          backgroundColor:
-                              FollowaColors.brand.withValues(alpha: .16),
-                          foregroundColor: FollowaColors.brandSoft,
-                          side: BorderSide(
-                            color:
-                                FollowaColors.brandSoft.withValues(alpha: .20),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const Text('پرونده‌ها'), actions: [
+        TextButton.icon(
+            onPressed: _new,
+            icon: const Icon(Icons.add),
+            label: const Text('پرونده جدید'))
+      ]),
+      body: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView.builder(
+              controller: _scroll,
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
+              itemCount: _items.length + 2,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        for (final tab in const [
-                          ('active', 'پرونده‌های فعال'),
-                          ('archived', 'پرونده‌های بایگانی شده'),
-                        ])
-                          Padding(
-                            padding: const EdgeInsets.only(left: 7),
-                            child: ChoiceChip(
-                              label: Text(tab.$2),
-                              selected: _archive == tab.$1,
-                              onSelected: (_) => _switchArchive(tab.$1),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _searchController,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: _applySearch,
-                    decoration: InputDecoration(
-                      hintText: 'جستجو در عنوان پرونده…',
-                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                      suffixIcon: _search.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () {
-                                _searchController.clear();
-                                _applySearch('');
-                              },
-                              icon: const Icon(Icons.close_rounded, size: 18),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 9),
-                  DropdownButtonFormField<String>(
-                    initialValue: _status,
-                    decoration: const InputDecoration(
-                      labelText: 'وضعیت پرونده',
-                      prefixIcon: Icon(Icons.filter_alt_outlined, size: 19),
-                    ),
-                    dropdownColor: FollowaColors.elevated,
-                    items: [
-                      const DropdownMenuItem(
-                          value: '', child: Text('همه وضعیت‌ها')),
-                      for (final entry in statusLabels.entries)
-                        if (_archive == 'archived'
-                            ? _archivedStatuses.contains(entry.key)
-                            : !_archivedStatuses.contains(entry.key))
-                          DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        _status = value ?? '';
-                        _page = 1;
-                      });
-                      _load();
-                    },
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _load,
-                child: _error != null
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: [
-                          ErrorState(message: _error!, onRetry: _load)
-                        ],
-                      )
-                    : _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _items.isEmpty
-                            ? ListView(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 10, 16, 108),
-                                    children: [
-                                      PremiumPanel(
-                                        child: EmptyState(
-                                          title: _archive == 'archived'
-                                              ? 'پرونده بایگانی‌شده‌ای نیست'
-                                              : 'پرونده‌ای یافت نشد',
-                                          hint:
-                                              'جستجو یا فیلتر را تغییر دهید یا پرونده جدید ایجاد کنید.',
-                                        ),
-                                      ),
-                                    ],
-                              )
-                            : ListView.separated(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 8, 16, 108),
-                                itemCount: _items.length + 1,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (context, index) {
-                                  if (index == _items.length) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          OutlinedButton(
-                                            onPressed: hasPrev
-                                                ? () {
-                                                    setState(() => _page--);
-                                                    _load();
-                                                  }
-                                                : null,
-                                            child: const Text('قبلی'),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 12),
-                                            child: Text(
-                                              'صفحه ${Fa.num(_page)}',
-                                              style: const TextStyle(
-                                                color: FollowaColors.muted,
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
-                                          ),
-                                          OutlinedButton(
-                                            onPressed: hasNext
-                                                ? () {
-                                                    setState(() => _page++);
-                                                    _load();
-                                                  }
-                                                : null,
-                                            child: const Text('بعدی'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
+                        if (widget.mineOnly)
+                          Wrap(spacing: 8, children: [
+                            ChoiceChip(
+                                label: const Text('مسئولیت من'),
+                                selected: _mine,
+                                onSelected: (_) => _filter(() => _mine = true)),
+                            ChoiceChip(
+                                label: const Text('پرونده‌های مرتبط با من'),
+                                selected: !_mine,
+                                onSelected: (_) =>
+                                    _filter(() => _mine = false)),
+                          ]),
+                        Wrap(spacing: 8, children: [
+                          for (final tab in const [
+                            ('active', 'پرونده‌های فعال'),
+                            ('archived', 'پرونده‌های بایگانی شده')
+                          ])
+                            ChoiceChip(
+                                label: Text(tab.$2),
+                                selected: _archive == tab.$1,
+                                onSelected: (_) => _filter(() {
+                                      _archive = tab.$1;
+                                      _status = '';
+                                    }))
+                        ]),
+                        const SizedBox(height: 12),
+                        TextField(
+                            controller: _searchController,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (v) =>
+                                _filter(() => _search = v.trim()),
+                            decoration: InputDecoration(
+                                hintText: 'جستجو در عنوان پرونده',
+                                prefixIcon: IconButton(
+                                    tooltip: 'جستجو',
+                                    onPressed: () => _filter(() => _search =
+                                        _searchController.text.trim()),
+                                    icon: const Icon(Icons.search)))),
+                        ExpansionTile(
+                            title: Text(_status.isEmpty
+                                ? 'فیلتر وضعیت'
+                                : 'وضعیت: ${statusLabels[_status]}'),
+                            tilePadding: EdgeInsets.zero,
+                            children: [
+                              DropdownButtonFormField<String>(
+                                  key: ValueKey('$_archive-$_status'),
+                                  initialValue: _status,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                      labelText: 'وضعیت پرونده'),
+                                  items: [
+                                    const DropdownMenuItem(
+                                        value: '', child: Text('همه وضعیت‌ها')),
+                                    for (final entry in statusLabels.entries)
+                                      if (_archive == 'archived'
+                                          ? _archivedStatuses
+                                              .contains(entry.key)
+                                          : !_archivedStatuses
+                                              .contains(entry.key))
+                                        DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value))
+                                  ],
+                                  onChanged: (v) =>
+                                      _filter(() => _status = v ?? '')),
+                            ]),
+                        if (_status.isNotEmpty || _search.isNotEmpty)
+                          TextButton(
+                              onPressed: () => _filter(() {
+                                    _status = '';
+                                    _search = '';
+                                    _searchController.clear();
+                                  }),
+                              child: const Text('حذف فیلترها و جستجو')),
+                        Text('${Fa.num(_total)} پرونده'),
+                        if (_loading) const LinearProgressIndicator(),
+                        if (_error != null)
+                          CaseError('به‌روزرسانی انجام نشد: $_error',
+                              retry: _load),
+                        if (!_loading && _error == null && _items.isEmpty)
+                          const EmptyState(
+                              title: 'پرونده‌ای یافت نشد',
+                              hint:
+                                  'جستجو یا فیلتر را تغییر دهید یا پرونده جدید ایجاد کنید.'),
+                      ]);
+                }
+                if (index == _items.length + 1) {
+                  return Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      children: [
+                        OutlinedButton(
+                            onPressed: _page > 1 && !_loading
+                                ? () {
+                                    setState(() => _page--);
+                                    _load();
                                   }
-                                  final item =
-                                      _items[index] as Map<String, dynamic>;
-                                  return _CaseCard(
-                                    item: item,
-                                    onTap: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => CaseDetailScreen(
-                                            caseId: item['id'] as String,
-                                          ),
-                                        ),
-                                      );
-                                      await _load();
-                                    },
-                                  );
-                                },
-                              ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CaseCard extends StatelessWidget {
-  final Map<String, dynamic> item;
-  final VoidCallback onTap;
-  const _CaseCard({required this.item, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final priority = item['priority']?.toString() ?? 'NORMAL';
-    final isUrgent = priority == 'URGENT';
-    final isHigh = priority == 'HIGH';
-    final accent = isUrgent
-        ? FollowaColors.red
-        : isHigh
-            ? FollowaColors.amber
-            : statusColors[item['status']] ?? FollowaColors.brandSoft;
-    final owner = item['currentOwner'] as Map?;
-    final ownerName = owner == null
-        ? 'در انتظار تعیین مسئول'
-        : '${owner['firstName'] ?? ''} ${owner['lastName'] ?? ''}'.trim();
-    final dueDate = DateTime.tryParse(item['dueDate']?.toString() ?? '');
-    final customer = item['customer'] as Map?;
-    final customerName =
-        customer?['displayName']?.toString() ?? customer?['name']?.toString();
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: FollowaColors.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: accent.withValues(alpha: .18)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: FollowaColors.elevated,
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(color: FollowaColors.border),
-                    ),
-                    child: Text(
-                      '#${Fa.num(item['number'] ?? '—')}',
-                      style: const TextStyle(
-                        color: FollowaColors.muted,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  if (isUrgent || isHigh) ...[
-                    const SizedBox(width: 7),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: .09),
-                        borderRadius: BorderRadius.circular(9),
-                        border:
-                            Border.all(color: accent.withValues(alpha: .18)),
-                      ),
-                      child: Text(
-                        priorityLabels[priority] ?? priority,
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
-                  StatusChip(status: item['status']?.toString() ?? ''),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                item['title']?.toString() ?? 'پرونده',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: FollowaColors.ink,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13.5,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 11),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.person_outline_rounded,
-                    color: FollowaColors.soft,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      ownerName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: FollowaColors.muted,
-                        fontSize: 10.5,
-                      ),
-                    ),
-                  ),
-                  if (dueDate != null) ...[
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.event_outlined,
-                      color: FollowaColors.soft,
-                      size: 15,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      Fa.date(dueDate),
-                      style: const TextStyle(
-                        color: FollowaColors.soft,
-                        fontSize: 9.5,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              if (customerName != null && customerName.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.business_center_outlined,
-                      color: FollowaColors.soft,
-                      size: 15,
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        customerName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: customer?['isActive'] == false
-                              ? const Color(0xFFFDE68A)
-                              : FollowaColors.soft,
-                          fontSize: 9.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+                                : null,
+                            child: const Text('قبلی')),
+                        Text('صفحه ${Fa.num(_page)}'),
+                        OutlinedButton(
+                            onPressed: _page * _pageSize < _total && !_loading
+                                ? () {
+                                    setState(() => _page++);
+                                    _load();
+                                  }
+                                : null,
+                            child: const Text('بعدی')),
+                      ]);
+                }
+                final item = _items[index - 1];
+                return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Card(
+                        child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () async {
+                              await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => CaseDetailScreen(
+                                          caseId: item['id'].toString(),
+                                          repository: widget.repository)));
+                              if (mounted) await _load();
+                            },
+                            child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          crossAxisAlignment:
+                                              WrapCrossAlignment.center,
+                                          children: [
+                                            Text(
+                                                '#${Fa.num(item['number'] ?? '—')}'),
+                                            StatusChip(
+                                                status: item['status']
+                                                        ?.toString() ??
+                                                    ''),
+                                            Text(
+                                                'اولویت: ${priorityLabels[item['priority']] ?? item['priority'] ?? 'معمولی'}')
+                                          ]),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                          item['title']?.toString() ?? 'پرونده',
+                                          style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700)),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                          'مسئول: ${personName(item['currentOwner'], fallback: item['status'] == 'WAITING_ACCEPTANCE' ? 'در انتظار پذیرش' : 'تعیین نشده')}'),
+                                      if (item['dueDate'] != null)
+                                        Text(
+                                            'سررسید: ${Fa.date(DateTime.parse(item['dueDate'].toString()))}'),
+                                      if (item['customer'] != null)
+                                        Text(
+                                            'مشتری: ${item['customer']['name']}${item['customer']['isActive'] == false ? ' · بایگانی' : ''}'),
+                                    ])))));
+              })));
 }

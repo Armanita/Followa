@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
 import '../widgets/common.dart';
+import 'case_detail_screen.dart';
 
 class CustomerReportScreen extends StatefulWidget {
   const CustomerReportScreen({super.key});
@@ -58,11 +59,10 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
       try {
         final response = await AuthService.instance.get('/members');
         if (mounted) {
-          setState(() =>
-              _members = (response['items'] as List<dynamic>? ?? const [])
-                  .where((raw) =>
-                      (raw as Map<String, dynamic>)['isActive'] == true)
-                  .toList());
+          setState(() => _members = (response['items'] as List<dynamic>? ??
+                  const [])
+              .where((raw) => (raw as Map<String, dynamic>)['isActive'] == true)
+              .toList());
         }
       } catch (_) {}
     }
@@ -174,7 +174,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                   const Text(
                     'مشتری را انتخاب کنید تا پرونده‌های مرتبط نمایش داده شود.',
                     style: TextStyle(
-                        color: FollowaColors.soft, fontSize: 9.5, height: 1.5),
+                        color: FollowaColors.soft, fontSize: 12, height: 1.5),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -205,8 +205,8 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                             child: Text('— مشتری را انتخاب کنید —')),
                         for (final raw in _customers)
                           DropdownMenuItem(
-                              value:
-                                  (raw as Map<String, dynamic>)['id'].toString(),
+                              value: (raw as Map<String, dynamic>)['id']
+                                  .toString(),
                               child: Text(
                                   '${raw['name']}${(raw['mobile'] ?? '').toString().isEmpty ? '' : ' — ${raw['mobile']}'}'))
                       ],
@@ -238,7 +238,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                       items: const [
                         DropdownMenuItem(value: '', child: Text('همه')),
                         DropdownMenuItem(
-                            value: 'active', child: Text('در حال انجام')),
+                            value: 'active', child: Text('پرونده‌های فعال')),
                         DropdownMenuItem(
                             value: 'archived', child: Text('بایگانی شده')),
                       ],
@@ -255,9 +255,8 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                         child: OutlinedButton.icon(
                             onPressed: () => _pickDate(isFrom: true),
                             icon: const Icon(Icons.event_outlined, size: 17),
-                            label: Text(_from == null
-                                ? 'از تاریخ'
-                                : Fa.date(_from!)),
+                            label: Text(
+                                _from == null ? 'از تاریخ' : Fa.date(_from!)),
                             style: OutlinedButton.styleFrom(
                                 minimumSize: const Size(0, 48),
                                 foregroundColor: FollowaColors.muted))),
@@ -266,8 +265,8 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                         child: OutlinedButton.icon(
                             onPressed: () => _pickDate(isFrom: false),
                             icon: const Icon(Icons.event_outlined, size: 17),
-                            label: Text(
-                                _to == null ? 'تا تاریخ' : Fa.date(_to!)),
+                            label:
+                                Text(_to == null ? 'تا تاریخ' : Fa.date(_to!)),
                             style: OutlinedButton.styleFrom(
                                 minimumSize: const Size(0, 48),
                                 foregroundColor: FollowaColors.muted))),
@@ -383,76 +382,82 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                 final priority = item['priority']?.toString() ?? 'NORMAL';
                 return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: PremiumPanel(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Row(children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                  color: FollowaColors.elevated,
-                                  borderRadius: BorderRadius.circular(9),
-                                  border:
-                                      Border.all(color: FollowaColors.border)),
-                              child: Text(
-                                  '#${Fa.num(item['number'] ?? '—')}',
-                                  style: const TextStyle(
-                                      color: FollowaColors.muted,
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w900)),
-                            ),
-                            const SizedBox(width: 7),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                  color: FollowaColors.amber
-                                      .withValues(alpha: .09),
-                                  borderRadius: BorderRadius.circular(9),
-                                  border: Border.all(
+                    child: InkWell(
+                        onTap: () async {
+                          await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => CaseDetailScreen(
+                                      caseId: item['id'].toString())));
+                          if (mounted) await _load();
+                        },
+                        child: PremiumPanel(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Row(children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                      color: FollowaColors.elevated,
+                                      borderRadius: BorderRadius.circular(9),
+                                      border: Border.all(
+                                          color: FollowaColors.border)),
+                                  child: Text(
+                                      '#${Fa.num(item['number'] ?? '—')}',
+                                      style: const TextStyle(
+                                          color: FollowaColors.muted,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900)),
+                                ),
+                                const SizedBox(width: 7),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
                                       color: FollowaColors.amber
-                                          .withValues(alpha: .18))),
-                              child: Text(
-                                  priorityLabels[priority] ?? priority,
+                                          .withValues(alpha: .09),
+                                      borderRadius: BorderRadius.circular(9),
+                                      border: Border.all(
+                                          color: FollowaColors.amber
+                                              .withValues(alpha: .18))),
+                                  child: Text(
+                                      priorityLabels[priority] ?? priority,
+                                      style: const TextStyle(
+                                          color: FollowaColors.amber,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900)),
+                                ),
+                                const Spacer(),
+                                StatusChip(
+                                    status: item['status']?.toString() ?? ''),
+                              ]),
+                              const SizedBox(height: 11),
+                              Text(item['title']?.toString() ?? 'پرونده',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                      color: FollowaColors.amber,
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w900)),
-                            ),
-                            const Spacer(),
-                            StatusChip(
-                                status: item['status']?.toString() ?? ''),
-                          ]),
-                          const SizedBox(height: 11),
-                          Text(item['title']?.toString() ?? 'پرونده',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: FollowaColors.ink,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 13.5,
-                                  height: 1.5)),
-                          const SizedBox(height: 10),
-                          _metaRow(
-                              Icons.category_outlined,
-                              'نوع: ${caseType?['name'] ?? '—'}'),
-                          const SizedBox(height: 5),
-                          _metaRow(Icons.person_outline_rounded,
-                              'مسئول: $ownerName'),
-                          const SizedBox(height: 5),
-                          _metaRow(Icons.event_outlined,
-                              'ایجاد: ${createdAt == null ? '—' : Fa.date(createdAt)}'),
-                          const SizedBox(height: 5),
-                          _metaRow(
-                              Icons.check_circle_outline_rounded,
-                              'تکمیل: ${resultAt == null ? '—' : Fa.date(resultAt)}'),
-                          const SizedBox(height: 5),
-                          _metaRow(
-                              Icons.update_rounded,
-                              'آخرین بروزرسانی: ${updatedAt == null ? '—' : Fa.date(updatedAt)}'),
-                        ])));
+                                      color: FollowaColors.ink,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13.5,
+                                      height: 1.5)),
+                              const SizedBox(height: 10),
+                              _metaRow(Icons.category_outlined,
+                                  'نوع: ${caseType?['name'] ?? '—'}'),
+                              const SizedBox(height: 5),
+                              _metaRow(Icons.person_outline_rounded,
+                                  'مسئول: $ownerName'),
+                              const SizedBox(height: 5),
+                              _metaRow(Icons.event_outlined,
+                                  'ایجاد: ${createdAt == null ? '—' : Fa.date(createdAt)}'),
+                              const SizedBox(height: 5),
+                              _metaRow(Icons.check_circle_outline_rounded,
+                                  'آخرین نتیجه: ${resultAt == null ? '—' : Fa.date(resultAt)}'),
+                              const SizedBox(height: 5),
+                              _metaRow(Icons.update_rounded,
+                                  'آخرین بروزرسانی: ${updatedAt == null ? '—' : Fa.date(updatedAt)}'),
+                            ]))));
               }),
               if (_total > _pageSize)
                 Padding(
@@ -474,7 +479,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                               child: Text('صفحه ${Fa.num(_page)}',
                                   style: const TextStyle(
                                       color: FollowaColors.muted,
-                                      fontSize: 10.5,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800))),
                           OutlinedButton(
                               onPressed: hasNext
@@ -500,8 +505,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
           child: Text(text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style:
-                  const TextStyle(color: FollowaColors.muted, fontSize: 10.5)))
+              style: const TextStyle(color: FollowaColors.muted, fontSize: 12)))
     ]);
   }
 }

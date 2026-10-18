@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/case_widgets.dart';
+import '../widgets/workspace_visibility.dart';
 import 'case_detail_screen.dart';
+import 'reminder_detail_screen.dart';
 
 class RemindersScreen extends StatefulWidget {
   const RemindersScreen({super.key});
@@ -17,7 +20,17 @@ class _RemindersScreenState extends State<RemindersScreen> {
   String _tab = 'ACTIVE';
   String? _error;
   bool _loading = true;
-  String? _busyId;
+
+  bool? _wasVisible;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = WorkspaceVisibility.of(context);
+    if (_wasVisible == false && visible) {
+      _load();
+    }
+    _wasVisible = visible;
+  }
 
   @override
   void initState() {
@@ -25,7 +38,10 @@ class _RemindersScreenState extends State<RemindersScreen> {
     _load();
   }
 
+  int _loadGeneration = 0;
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
+    final tab = _tab;
     setState(() {
       _error = null;
       _loading = true;
@@ -36,92 +52,35 @@ class _RemindersScreenState extends State<RemindersScreen> {
             .get('/reminders/due-check')
             .timeout(const Duration(seconds: 5));
       } catch (_) {}
-      final path = _tab == 'TODAY'
+      final path = tab == 'TODAY'
           ? '/reminders?today=true&status=ACTIVE'
-          : '/reminders?status=$_tab';
+          : '/reminders?status=$tab';
       final response = await AuthService.instance.get(path);
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(
             () => _items = response['items'] as List<dynamic>? ?? const []);
       }
     } catch (error) {
-      if (mounted) setState(() => _error = userMessage(error));
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _error = userMessage(error));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   Future<void> _complete(Map<String, dynamic> reminder) async {
-    final controller =
-        TextEditingController(text: reminder['note']?.toString() ?? '');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('ثبت نتیجه یادآوری'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: FollowaColors.elevated,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: FollowaColors.border),
-              ),
-              child: Text(
-                'نتیجه در تاریخچه پرونده «${reminder['case']?['title'] ?? ''}» نیز ثبت می‌شود.',
-                style: const TextStyle(
-                  color: FollowaColors.muted,
-                  fontSize: 9.5,
-                  height: 1.6,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: controller,
-              maxLines: 4,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'نتیجه پیگیری',
-                hintText: 'نتیجه انجام پیگیری را بنویسید…',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('انصراف'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('ثبت نتیجه و تکمیل'),
-          ),
-        ],
-      ),
-    );
-    final result = controller.text.trim();
-    controller.dispose();
-    if (ok != true) return;
-
-    final id = reminder['id'].toString();
-    setState(() => _busyId = id);
-    try {
-      await AuthService.instance.post(
-        '/reminders/$id/complete',
-        {if (result.isNotEmpty) 'result': result},
-      );
-      if (!mounted) return;
-      _message('یادآوری انجام شد');
-      await _load();
-    } catch (error) {
-      _message(userMessage(error));
-    } finally {
-      if (mounted) setState(() => _busyId = null);
-    }
+    final caseId =
+        reminder['caseId']?.toString() ?? reminder['case']?['id']?.toString();
+    if (caseId == null) return;
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => ReminderDetailScreen(
+                caseId: caseId, reminderId: reminder['id']?.toString())));
+    if (mounted) await _load();
   }
 
   Future<void> _openCase(Map<String, dynamic> reminder) async {
@@ -140,7 +99,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
       ('ACTIVE', 'فعال'),
       ('TODAY', 'امروز'),
       ('DONE', 'انجام‌شده'),
-      ('EXPIRED', 'گذشته'),
+      ('EXPIRED', 'منقضی‌شده'),
     ];
     final overdue = _items.where((raw) {
       final item = raw as Map<String, dynamic>;
@@ -163,7 +122,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 'پیگیری شخصی',
                 style: TextStyle(
                   color: FollowaColors.soft,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -185,7 +144,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   color: overdue > 0
                       ? const Color(0xFFFCA5A5)
                       : FollowaColors.muted,
-                  fontSize: 10.5,
+                  fontSize: 12,
                   fontWeight: overdue > 0 ? FontWeight.w800 : FontWeight.w500,
                 ),
               ),
@@ -210,12 +169,16 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              if (_loading)
+              if (_items.isNotEmpty && _loading)
+                const LinearProgressIndicator(),
+              if (_items.isNotEmpty && _error != null)
+                CaseError('به‌روزرسانی انجام نشد: $_error', retry: _load),
+              if (_loading && _items.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(48),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (_error != null)
+              else if (_error != null && _items.isEmpty)
                 ErrorState(message: _error!, onRetry: _load)
               else if (_items.isEmpty)
                 const PremiumPanel(
@@ -236,7 +199,6 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       : done
                           ? FollowaColors.emerald
                           : FollowaColors.amber;
-                  final busy = _busyId == reminder['id'];
                   final c = reminder['case'] as Map<String, dynamic>?;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -280,7 +242,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         color: FollowaColors.ink,
-                                        fontSize: 11.5,
+                                        fontSize: 12,
                                         height: 1.5,
                                         fontWeight: FontWeight.w900,
                                       ),
@@ -288,18 +250,25 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                     const SizedBox(height: 4),
                                     InkWell(
                                       onTap: () => _openCase(reminder),
-                                      child: Text(
-                                        c == null
-                                            ? 'پرونده'
-                                            : '#${Fa.num(c['number'] ?? '—')} · ${c['title']}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: FollowaColors.brandSoft,
-                                          fontSize: 9.5,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
+                                      child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                              minHeight: 48),
+                                          child: Align(
+                                              alignment: AlignmentDirectional
+                                                  .centerStart,
+                                              child: Text(
+                                                c == null
+                                                    ? 'پرونده'
+                                                    : '#${Fa.num(c['number'] ?? '—')} · ${c['title']}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color:
+                                                      FollowaColors.brandSoft,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ))),
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
@@ -308,7 +277,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                         color: isOverdue
                                             ? const Color(0xFFFCA5A5)
                                             : FollowaColors.soft,
-                                        fontSize: 9,
+                                        fontSize: 12,
                                         fontWeight: isOverdue
                                             ? FontWeight.w800
                                             : FontWeight.w500,
@@ -319,16 +288,13 @@ class _RemindersScreenState extends State<RemindersScreen> {
                               ),
                             ],
                           ),
-                          if (reminder['status'] == 'ACTIVE') ...[
+                          ...[
                             const SizedBox(height: 12),
                             OutlinedButton.icon(
-                              onPressed:
-                                  busy ? null : () => _complete(reminder),
+                              onPressed: () => _complete(reminder),
                               icon:
                                   const Icon(Icons.task_alt_rounded, size: 18),
-                              label: Text(busy
-                                  ? 'در حال ثبت…'
-                                  : 'انجام شد + ثبت نتیجه'),
+                              label: const Text('مشاهده و پیگیری یادآوری'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF86EFAC),
                                 side:
@@ -346,10 +312,5 @@ class _RemindersScreenState extends State<RemindersScreen> {
         ),
       ),
     );
-  }
-
-  void _message(String text) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 }

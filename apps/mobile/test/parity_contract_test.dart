@@ -2,14 +2,21 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-String source(String path) => File(path).readAsStringSync();
+String source(String path) =>
+    File(path).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
 
 void main() {
   group('Web/mobile parity regression guards', () {
     test(
         'case execution uses effort results, safe transfer and no work sessions',
         () {
-      final text = source('lib/screens/case_detail_screen.dart');
+      final text = [
+        'lib/screens/case_detail_screen.dart',
+        'lib/services/case_drafts.dart',
+        'lib/screens/result_composer_screen.dart',
+        'lib/screens/case_transfer_screen.dart',
+        'lib/screens/case_documents_screen.dart',
+      ].map(source).join('\n');
       expect(text, contains("'effortMinutes'"));
       expect(text, contains("'nextReminder'"));
       expect(text, contains('/members/transfer-candidates'));
@@ -71,7 +78,8 @@ void main() {
 
       final report = source('lib/screens/customer_report_screen.dart');
       expect(report, contains("'customerId=\$_customerId'"));
-      expect(report, contains("value: 'active', child: Text('در حال انجام')"));
+      expect(
+          report, contains("value: 'active', child: Text('پرونده‌های فعال')"));
       expect(report, contains("value: 'archived', child: Text('بایگانی شده')"));
       expect(report, contains('resultAt'));
       expect(report, contains('ownerId'));
@@ -86,7 +94,7 @@ void main() {
     });
 
     test('API datetime payloads are UTC with trailing Z', () {
-      final detail = source('lib/screens/case_detail_screen.dart');
+      final detail = source('lib/services/case_drafts.dart');
       expect(detail, contains('dt.toUtc().toIso8601String()'));
       expect(detail, isNot(contains("'remindAt': dt.toIso8601String()")));
 

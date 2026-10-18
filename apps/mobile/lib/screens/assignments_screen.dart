@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/case_widgets.dart';
+import '../widgets/workspace_visibility.dart';
+import '../widgets/reject_assignment_sheet.dart';
 import 'case_detail_screen.dart';
 
 class AssignmentsScreen extends StatefulWidget {
@@ -18,14 +21,27 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
   bool _loading = true;
   String? _busyCaseId;
 
+  bool? _wasVisible;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = WorkspaceVisibility.of(context);
+    if (_wasVisible == false && visible) {
+      _load();
+    }
+    _wasVisible = visible;
+  }
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
+  int _loadGeneration = 0;
   Future<void> _load() async {
-    if (mounted) {
+    final generation = ++_loadGeneration;
+    if (mounted && generation == _loadGeneration) {
       setState(() {
         _error = null;
         _loading = true;
@@ -39,11 +55,17 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
         final c = item['case'] as Map<String, dynamic>?;
         return c?['status'] == 'WAITING_ACCEPTANCE';
       }).toList();
-      if (mounted) setState(() => _items = items);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _items = items);
+      }
     } catch (error) {
-      if (mounted) setState(() => _error = userMessage(error));
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _error = userMessage(error));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -64,48 +86,9 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
   }
 
   Future<void> _reject(Map<String, dynamic> c) async {
-    final controller = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('رد کردن ارجاع'),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'دلیل رد *',
-            hintText: 'دلیل مشخص و قابل پیگیری را ثبت کنید…',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('انصراف'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('ثبت رد'),
-          ),
-        ],
-      ),
-    );
-    final reason = controller.text.trim();
-    controller.dispose();
-    if (ok != true || reason.length < 3) return;
-
-    final id = c['id'].toString();
-    setState(() => _busyCaseId = id);
-    try {
-      await AuthService.instance.post('/cases/$id/reject', {'reason': reason});
-      if (!mounted) return;
-      _message('ارجاع رد و به فرستنده بازگشت داده شد');
-      await _load();
-    } catch (error) {
-      _message(userMessage(error));
-    } finally {
-      if (mounted) setState(() => _busyCaseId = null);
-    }
+    if (_busyCaseId != null) return;
+    final changed = await showRejectAssignment(context, c['id'].toString());
+    if (changed == true && mounted) await _load();
   }
 
   Future<void> _openCase(Map<String, dynamic> c) async {
@@ -132,7 +115,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                 'صندوق مسئولیت',
                 style: TextStyle(
                   color: FollowaColors.soft,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -150,16 +133,20 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                 '${Fa.num(_items.length)} پرونده منتظر پذیرش یا رد',
                 style: const TextStyle(
                   color: FollowaColors.muted,
-                  fontSize: 10.5,
+                  fontSize: 12,
                 ),
               ),
               const SizedBox(height: 16),
-              if (_loading)
+              if (_items.isNotEmpty && _loading)
+                const LinearProgressIndicator(),
+              if (_items.isNotEmpty && _error != null)
+                CaseError('به‌روزرسانی انجام نشد: $_error', retry: _load),
+              if (_loading && _items.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(48),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (_error != null)
+              else if (_error != null && _items.isEmpty)
                 ErrorState(message: _error!, onRetry: _load)
               else if (_items.isEmpty)
                 const PremiumPanel(
@@ -174,7 +161,8 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                   final item = raw as Map<String, dynamic>;
                   final c = item['case'] as Map<String, dynamic>;
                   final busy = _busyCaseId == c['id'];
-                  final from = item['fromUser'] ?? item['fromUs'];
+                  final from =
+                      item['from'] ?? item['fromUser'] ?? item['fromUs'];
                   final fromName = from is Map
                       ? '${from['firstName'] ?? ''} ${from['lastName'] ?? ''}'
                           .trim()
@@ -203,7 +191,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                                   '#${Fa.num(c['number'] ?? '—')}',
                                   style: const TextStyle(
                                     color: FollowaColors.muted,
-                                    fontSize: 9.5,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
@@ -231,7 +219,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                               'ارجاع از: $fromName',
                               style: const TextStyle(
                                 color: FollowaColors.soft,
-                                fontSize: 9.5,
+                                fontSize: 12,
                               ),
                             ),
                           ],
@@ -252,7 +240,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                                 item['note'].toString(),
                                 style: const TextStyle(
                                   color: FollowaColors.muted,
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   height: 1.6,
                                 ),
                               ),

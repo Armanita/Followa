@@ -102,7 +102,7 @@ class StatusChip extends StatelessWidget {
       child: Text(
         statusLabels[status] ?? status,
         style: TextStyle(
-          fontSize: 10.5,
+          fontSize: 12,
           fontWeight: FontWeight.w800,
           color: color,
         ),
@@ -202,7 +202,7 @@ class MetricTile extends StatelessWidget {
             label,
             style: const TextStyle(
               color: FollowaColors.muted,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -214,7 +214,7 @@ class MetricTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: FollowaColors.soft,
-                fontSize: 9.5,
+                fontSize: 12,
               ),
             ),
           ],
@@ -268,7 +268,7 @@ class EmptyState extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: FollowaColors.soft,
-                  fontSize: 11.5,
+                  fontSize: 12,
                   height: 1.6,
                 ),
               ),

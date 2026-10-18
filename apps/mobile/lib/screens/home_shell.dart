@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
+import '../widgets/workspace_visibility.dart';
 import 'assignments_screen.dart';
 import 'cases_screen.dart';
 import 'customers_screen.dart';
@@ -11,14 +12,15 @@ import 'more_screen.dart';
 import 'reminders_screen.dart';
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  final int initialIndex;
+  const HomeShell({super.key, this.initialIndex = 0});
 
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _index = 0;
+  late int _index = widget.initialIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +97,10 @@ class _HomeShellState extends State<HomeShell> {
       extendBody: true,
       body: IndexedStack(
         index: _index,
-        children: [for (final tab in tabs) tab.$4],
+        children: [
+          for (var i = 0; i < tabs.length; i++)
+            WorkspaceVisibility(visible: _index == i, child: tabs[i].$4),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),

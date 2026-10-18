@@ -41,6 +41,12 @@ ThemeData buildFollowaPremiumTheme() {
     colorScheme: scheme,
     useMaterial3: true,
     fontFamily: 'Estedad',
+    textTheme: const TextTheme(
+        bodyMedium: TextStyle(fontSize: 16, height: 1.6),
+        bodyLarge: TextStyle(fontSize: 16, height: 1.6),
+        bodySmall: TextStyle(fontSize: 12, height: 1.5)),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48))),
     scaffoldBackgroundColor: FollowaColors.shell,
     dividerColor: FollowaColors.border,
     splashColor: FollowaColors.brand.withValues(alpha: .08),
@@ -135,7 +141,7 @@ ThemeData buildFollowaPremiumTheme() {
             color: states.contains(WidgetState.selected)
                 ? FollowaColors.ink
                 : FollowaColors.soft,
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.w700
                 : FontWeight.w500,

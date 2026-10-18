@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
 import '../widgets/common.dart';
 import 'case_detail_screen.dart';
+import 'reminder_detail_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -65,7 +66,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (_) => CaseDetailScreen(caseId: targetCaseId)));
+              builder: (_) => notification['linkType'] == 'REMINDER' &&
+                      (notification['linkId'] ?? '').toString().isNotEmpty
+                  ? ReminderDetailScreen(
+                      caseId: targetCaseId,
+                      reminderId: notification['linkId'].toString())
+                  : CaseDetailScreen(caseId: targetCaseId)));
     }
     await _load();
   }
@@ -160,7 +166,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                               color:
                                                                   FollowaColors
                                                                       .ink,
-                                                              fontSize: 11.5,
+                                                              fontSize: 12,
                                                               fontWeight: unread
                                                                   ? FontWeight
                                                                       .w900
@@ -189,7 +195,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                       style: const TextStyle(
                                                           color: FollowaColors
                                                               .muted,
-                                                          fontSize: 9.5,
+                                                          fontSize: 12,
                                                           height: 1.5))
                                                 ],
                                                 const SizedBox(height: 5),
@@ -200,7 +206,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                     style: const TextStyle(
                                                         color:
                                                             FollowaColors.soft,
-                                                        fontSize: 8.5))
+                                                        fontSize: 12))
                                               ])),
                                         ])))));
                   }),

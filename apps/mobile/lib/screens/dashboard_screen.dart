@@ -2,9 +2,15 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/premium_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/workspace_visibility.dart';
+import '../widgets/case_widgets.dart';
+import '../services/case_repository.dart';
+import 'case_detail_screen.dart';
+import 'reminder_detail_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final CaseRepository repository;
+  const DashboardScreen({super.key, this.repository = const CaseRepository()});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -14,23 +20,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _data;
   String? _error;
 
+  bool? _wasVisible;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = WorkspaceVisibility.of(context);
+    if (_wasVisible == false && visible) {
+      _load();
+    }
+    _wasVisible = visible;
+  }
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
+  int _loadGeneration = 0;
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     setState(() => _error = null);
     try {
-      final path = AuthService.instance.isManager
+      final path = widget.repository.isManager
           ? '/dashboard/manager'
           : '/dashboard/employee';
-      final response = await AuthService.instance.get(path);
-      if (!mounted) return;
+      final response = await widget.repository.get(path);
+      if (!mounted || generation != _loadGeneration) return;
       setState(() => _data = response as Map<String, dynamic>);
     } catch (error) {
-      if (mounted) setState(() => _error = userMessage(error));
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _error = userMessage(error));
+      }
     }
   }
 
@@ -41,7 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bottom: false,
         child: RefreshIndicator(
           onRefresh: _load,
-          child: _error != null
+          child: _error != null && _data == null
               ? ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
@@ -58,13 +79,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildBody() {
-    final isManager = AuthService.instance.isManager;
+    final isManager = widget.repository.isManager;
     final cards = (_data!['cards'] as Map?)?.cast<String, dynamic>() ?? {};
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 108),
       children: [
+        if (_error != null)
+          CaseError('به‌روزرسانی انجام نشد: $_error', retry: _load),
         _WorkspaceHeader(isManager: isManager),
         const SizedBox(height: 18),
         if (isManager)
@@ -75,19 +98,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (isManager) ...[
           _StatusPanel(data: _data!),
           const SizedBox(height: 14),
-          _UrgentCasesPanel(
-              items: (_data!['urgentCases'] as List?) ?? const []),
+          _workPanel('پرونده‌های نیازمند توجه',
+              (_data!['urgentCases'] as List?) ?? const [], 'case'),
           const SizedBox(height: 14),
         ] else ...[
-          _TodayReminders(
-              items: (_data!['remindersToday'] as List?) ?? const []),
+          _workPanel('پیگیری‌های امروز',
+              (_data!['remindersToday'] as List?) ?? const [], 'reminder'),
           const SizedBox(height: 14),
         ],
-        _RecentActivity(
-            items: (_data!['recentActivities'] as List?) ?? const []),
+        _workPanel('فعالیت‌های اخیر',
+            (_data!['recentActivities'] as List?) ?? const [], 'activity'),
       ],
     );
   }
+
+  Widget _workPanel(String title, List items, String kind) => CaseSection(
+      title: title,
+      child: Column(children: [
+        if (items.isEmpty) const Text('موردی برای نمایش وجود ندارد.'),
+        for (final raw in items.take(kind == 'activity' ? 6 : 5))
+          Builder(builder: (context) {
+            final row = Map<String, dynamic>.from(raw as Map);
+            final caseId = (kind == 'case'
+                    ? row['id']
+                    : row['caseId'] ?? row['case']?['id'])
+                ?.toString();
+            return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(kind == 'case'
+                    ? (row['title']?.toString() ?? 'پرونده')
+                    : kind == 'reminder'
+                        ? ((row['note'] ?? row['case']?['title'])?.toString() ??
+                            'یادآوری')
+                        : (activityLabels[row['type']] ??
+                            row['type']?.toString() ??
+                            'فعالیت')),
+                subtitle: Text(kind == 'case'
+                    ? 'مسئول: ${personName(row['currentOwner'], fallback: 'تعیین نشده')}'
+                    : kind == 'reminder'
+                        ? caseTime(row['remindAt'])
+                        : '${row['case']?['title'] ?? ''} · ${personName(row['actor'])} · ${caseTime(row['createdAt'])}'),
+                trailing:
+                    caseId == null ? null : const Icon(Icons.chevron_left),
+                onTap: caseId == null
+                    ? null
+                    : () async {
+                        await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    kind == 'reminder' && row['id'] != null
+                                        ? ReminderDetailScreen(
+                                            caseId: caseId,
+                                            reminderId: row['id'].toString(),
+                                            repository: widget.repository)
+                                        : CaseDetailScreen(
+                                            caseId: caseId,
+                                            repository: widget.repository)));
+                        if (mounted) await _load();
+                      });
+          }),
+      ]));
 }
 
 class _WorkspaceHeader extends StatelessWidget {
@@ -110,7 +181,7 @@ class _WorkspaceHeader extends StatelessWidget {
                 'فضای کاری',
                 style: TextStyle(
                   color: FollowaColors.soft,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -133,7 +204,7 @@ class _WorkspaceHeader extends StatelessWidget {
                     : 'پرونده‌ها، ارجاع‌ها و پیگیری‌های مهم در یک نگاه',
                 style: const TextStyle(
                   color: FollowaColors.muted,
-                  fontSize: 11,
+                  fontSize: 12,
                   height: 1.6,
                 ),
               ),
@@ -171,13 +242,7 @@ class _ManagerMetrics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.25,
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
+    return _MetricWrap(
       children: [
         MetricTile(
           label: 'کل پرونده‌ها',
@@ -232,13 +297,7 @@ class _EmployeeMetrics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.25,
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
+    return _MetricWrap(
       children: [
         MetricTile(
           label: 'پرونده‌های من',
@@ -311,7 +370,7 @@ class _StatusPanel extends StatelessWidget {
                         width: 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: color,
+                          color: FollowaColors.brandSoft,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
@@ -327,7 +386,7 @@ class _StatusPanel extends StatelessWidget {
                           statusLabels[status] ?? status,
                           style: const TextStyle(
                             color: FollowaColors.muted,
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -336,7 +395,7 @@ class _StatusPanel extends StatelessWidget {
                         Fa.num(count),
                         style: const TextStyle(
                           color: FollowaColors.ink,
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -348,7 +407,7 @@ class _StatusPanel extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: fraction,
                       minHeight: 6,
-                      color: color,
+                      color: FollowaColors.brandSoft,
                       backgroundColor: FollowaColors.elevated,
                     ),
                   ),
@@ -362,299 +421,15 @@ class _StatusPanel extends StatelessWidget {
   }
 }
 
-class _UrgentCasesPanel extends StatelessWidget {
-  final List items;
-  const _UrgentCasesPanel({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return PremiumPanel(
-      accent: items.isEmpty ? null : FollowaColors.red,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _PanelTitle(
-            title: 'پرونده‌های نیازمند توجه',
-            subtitle: items.isEmpty
-                ? 'در حال حاضر مورد فوری فعالی وجود ندارد.'
-                : '${Fa.num(items.length)} پرونده با اولویت بالا یا فوری',
-            icon: Icons.crisis_alert_rounded,
-            color: items.isEmpty ? FollowaColors.soft : FollowaColors.red,
-          ),
-          if (items.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            ...items.take(5).map((item) {
-              final row = item as Map<String, dynamic>;
-              final owner = row['currentOwner'] as Map?;
-              final ownerName = owner == null
-                  ? 'بدون مسئول'
-                  : '${owner['firstName'] ?? ''} ${owner['lastName'] ?? ''}'
-                      .trim();
-              return Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: FollowaColors.elevated.withValues(alpha: .72),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: FollowaColors.border),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: FollowaColors.red.withValues(alpha: .09),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: const Icon(
-                        Icons.priority_high_rounded,
-                        size: 17,
-                        color: FollowaColors.red,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            row['title']?.toString() ?? 'پرونده',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: FollowaColors.ink,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'مسئول: $ownerName',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: FollowaColors.soft,
-                              fontSize: 9.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_left_rounded,
-                      color: FollowaColors.soft,
-                      size: 20,
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _TodayReminders extends StatelessWidget {
-  final List items;
-  const _TodayReminders({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return PremiumPanel(
-      accent: items.isEmpty ? null : FollowaColors.amber,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _PanelTitle(
-            title: 'پیگیری‌های امروز',
-            subtitle: items.isEmpty
-                ? 'برای امروز یادآوری فعالی ندارید.'
-                : '${Fa.num(items.length)} یادآوری برای امروز',
-            icon: Icons.alarm_on_rounded,
-            color: items.isEmpty ? FollowaColors.soft : FollowaColors.amber,
-          ),
-          if (items.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            ...items.take(5).map((item) {
-              final row = item as Map<String, dynamic>;
-              final caseData = (row['case'] as Map?)?.cast<String, dynamic>();
-              final remindAt =
-                  DateTime.tryParse(row['remindAt']?.toString() ?? '');
-              return Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: FollowaColors.elevated.withValues(alpha: .72),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: FollowaColors.border),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.notifications_active_outlined,
-                      color: FollowaColors.amber,
-                      size: 19,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            row['note']?.toString().trim().isNotEmpty == true
-                                ? row['note'].toString()
-                                : caseData?['title']?.toString() ??
-                                    'یادآوری پرونده',
-                            style: const TextStyle(
-                              color: FollowaColors.ink,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (remindAt != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              Fa.dateTime(remindAt),
-                              style: const TextStyle(
-                                color: FollowaColors.soft,
-                                fontSize: 9.5,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentActivity extends StatelessWidget {
-  final List items;
-  const _RecentActivity({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return PremiumPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _PanelTitle(
-            title: 'جریان فعالیت اخیر',
-            subtitle: 'آخرین تغییرات قابل مشاهده در پرونده‌ها',
-            icon: Icons.timeline_rounded,
-          ),
-          if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 18),
-              child: Text(
-                'هنوز فعالیتی برای نمایش وجود ندارد.',
-                style: TextStyle(color: FollowaColors.soft, fontSize: 11),
-              ),
-            )
-          else ...[
-            const SizedBox(height: 10),
-            ...items.take(6).map((item) {
-              final row = item as Map<String, dynamic>;
-              final caseData = (row['case'] as Map?)?.cast<String, dynamic>();
-              final actor = (row['actor'] as Map?)?.cast<String, dynamic>();
-              final createdAt =
-                  DateTime.tryParse(row['createdAt']?.toString() ?? '');
-              final actorName = actor == null
-                  ? 'سیستم'
-                  : '${actor['firstName'] ?? ''} ${actor['lastName'] ?? ''}'
-                      .trim();
-              final type = row['type']?.toString() ?? '';
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: const BoxDecoration(
-                  border:
-                      Border(bottom: BorderSide(color: FollowaColors.border)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 30,
-                      height: 30,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: FollowaColors.brand.withValues(alpha: .09),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.bolt_rounded,
-                        color: FollowaColors.brandSoft,
-                        size: 16,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            activityLabels[type] ?? type,
-                            style: const TextStyle(
-                              color: FollowaColors.ink,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '${caseData?['title'] ?? 'پرونده'} · $actorName',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: FollowaColors.soft,
-                              fontSize: 9.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (createdAt != null)
-                      Text(
-                        Fa.date(createdAt),
-                        style: const TextStyle(
-                          color: FollowaColors.soft,
-                          fontSize: 8.5,
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _PanelTitle extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
-  final Color color;
 
   const _PanelTitle({
     required this.title,
     required this.subtitle,
     required this.icon,
-    this.color = FollowaColors.brandSoft,
   });
 
   @override
@@ -667,11 +442,12 @@ class _PanelTitle extends StatelessWidget {
           height: 38,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: color.withValues(alpha: .10),
+            color: FollowaColors.brandSoft.withValues(alpha: .10),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: .18)),
+            border: Border.all(
+                color: FollowaColors.brandSoft.withValues(alpha: .18)),
           ),
-          child: Icon(icon, size: 18, color: color),
+          child: Icon(icon, size: 18, color: FollowaColors.brandSoft),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -691,7 +467,7 @@ class _PanelTitle extends StatelessWidget {
                 subtitle,
                 style: const TextStyle(
                   color: FollowaColors.soft,
-                  fontSize: 9.5,
+                  fontSize: 12,
                   height: 1.5,
                 ),
               ),
@@ -701,4 +477,23 @@ class _PanelTitle extends StatelessWidget {
       ],
     );
   }
+}
+
+class _MetricWrap extends StatelessWidget {
+  final List<Widget> children;
+  const _MetricWrap({required this.children});
+  @override
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final single = constraints.maxWidth < 330 ||
+            MediaQuery.textScalerOf(context).scale(14) > 20;
+        return Wrap(spacing: 10, runSpacing: 10, children: [
+          for (final child in children)
+            SizedBox(
+                width: single
+                    ? constraints.maxWidth
+                    : (constraints.maxWidth - 10) / 2,
+                child: child)
+        ]);
+      });
 }

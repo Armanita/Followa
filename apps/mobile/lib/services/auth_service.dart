@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_error.dart';
+import 'case_drafts.dart';
 import 'upload_policy.dart';
 
 class AuthService {
@@ -104,6 +105,7 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    CaseDrafts.clear();
     _token = null;
     _user = null;
     await _secureStorage.delete(key: _tokenKey);
